@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  plan         String    @default("free")
+  createdAt    DateTime  @default(now())
+
+  profile       AthleteProfile?
+  trainingPlans TrainingPlan[]
+  sessions      Session[]
+  chatMessages  ChatMessage[]
+}
+
+model AthleteProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectif            String
+  objectifDate         DateTime
+  tempsNatation       String   @default("")
+  tempsVelo           String   @default("")
+  tempsCourse         String   @default("")
+  heuresSemaine       Float
+  contraintes         String   @default("")
+  updatedAt           DateTime @updatedAt
+}
+
+model TrainingPlan {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart   DateTime
+  generatedAt DateTime  @default(now())
+  rawAiJson   String
+  debrief     String?
+  sessions    Session[]
+}
+
+model Session {
+  id          String        @id @default(cuid())
+  planId      String
+  plan        TrainingPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  sport       String
+  titre       String
+  dureeMin    Int
+  distanceKm  Float?
+  description String        @default("")
+  objectif    String?
+  structure   String?
+  status      String        @default("planifiee")
+  ressenti    String?
+  completedAt DateTime?
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+}

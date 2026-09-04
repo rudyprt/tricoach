@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+apps/server/prisma/dev.db
+apps/server/prisma/dev.db-journal
+dev-log.txt
