@@ -90,6 +90,53 @@ function ActivityChart({ days }: { days: AdminActivityDay[] }) {
 }
 
 /** Ce qui n'est pas branché échoue en silence : autant le dire ici. */
+/** Vérifie l'envoi de bout en bout, et remonte l'erreur exacte du serveur SMTP. */
+function TestEmail() {
+  const [state, setState] = useState<"repos" | "envoi">("repos");
+  const [resultat, setResultat] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function envoyer() {
+    setState("envoi");
+    setResultat(null);
+    try {
+      const { data } = await api.post<{ destinataire: string }>("/admin/test-email");
+      setResultat({ ok: true, message: `E-mail envoyé à ${data.destinataire}. Vérifiez aussi vos indésirables.` });
+    } catch (err) {
+      setResultat({ ok: false, message: apiErrorMessage(err, "L'envoi a échoué.") });
+    } finally {
+      setState("repos");
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-3">
+      <p className="text-sm font-semibold text-white">Envoi d'e-mails</p>
+      <p className="mt-0.5 text-xs text-zinc-500">
+        Envoie un message à votre propre adresse pour vérifier la configuration.
+      </p>
+      <button
+        onClick={envoyer}
+        disabled={state === "envoi"}
+        className="mt-2 flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-rose-700 hover:text-white disabled:opacity-50"
+      >
+        {state === "envoi" && <Spinner />}
+        Envoyer un e-mail de test
+      </button>
+      {resultat && (
+        <p
+          className={`mt-2 rounded-md px-2.5 py-1.5 text-xs ${
+            resultat.ok
+              ? "border border-emerald-900 bg-emerald-950/40 text-emerald-300"
+              : "border border-red-900 bg-red-950/40 text-red-400"
+          }`}
+        >
+          {resultat.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ConfigurationAlerts({ configuration }: { configuration: AdminOverview["configuration"] }) {
   const manquants = [
     !configuration.emailsActifs && {
@@ -126,6 +173,7 @@ function Overview({ overview, activity }: { overview: AdminOverview; activity: A
   return (
     <div className="space-y-5">
       <ConfigurationAlerts configuration={overview.configuration} />
+      <TestEmail />
       <section>
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-zinc-400">Comptes et abonnements</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

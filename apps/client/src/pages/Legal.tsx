@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
+import { EDITEUR, LIBELLES, champsManquants, editeurComplet } from "../config/editeur";
 
 /**
  * Ces pages décrivent fidèlement ce que l'application fait des données, tel que
- * le code le fait réellement. Les mentions d'identité de l'éditeur restent à
- * compléter, et le texte doit être relu par un professionnel avant exploitation
- * commerciale : le bandeau ci-dessous le rappelle tant que c'est le cas.
+ * le code le fait réellement. L'identité de l'éditeur vient d'un seul fichier
+ * (src/config/editeur.ts) : tant qu'elle est incomplète, l'avertissement
+ * ci-dessous s'affiche, et disparaît de lui-même une fois les champs remplis.
  */
-const EDITEUR_A_COMPLETER = true;
 
 function Page({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
@@ -18,15 +18,28 @@ function Page({ title, updated, children }: { title: string; updated: string; ch
       <h1 className="mt-4 text-2xl font-black italic tracking-wide text-white">{title}</h1>
       <p className="mt-1 text-xs text-zinc-500">Version {updated}</p>
 
-      {EDITEUR_A_COMPLETER && (
-        <p className="mt-4 rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-          Document à compléter (identité de l'éditeur, contact) et à faire relire avant exploitation commerciale.
-        </p>
+      {!editeurComplet() && (
+        <div className="mt-4 rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+          <p className="font-semibold">Document incomplet</p>
+          <p className="mt-0.5 text-amber-300/80">
+            À renseigner dans <code className="text-amber-200">apps/client/src/config/editeur.ts</code> :{" "}
+            {champsManquants()
+              .map((c) => LIBELLES[c])
+              .join(", ")}
+            .
+          </p>
+        </div>
       )}
 
       <div className="mt-5 space-y-5 text-sm leading-relaxed text-zinc-300">{children}</div>
     </div>
   );
+}
+
+/** Affiche une valeur renseignée, ou un repli en italique si elle manque. */
+function Champ({ valeur, defaut }: { valeur: string | null; defaut: string }) {
+  if (valeur) return <span className="text-zinc-300">{valeur}</span>;
+  return <span className="italic text-zinc-500">[{defaut}]</span>;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -49,9 +62,13 @@ export function Conditions() {
       </Section>
 
       <Section title="Éditeur">
-        <p className="italic text-zinc-500">
-          [À compléter : dénomination, forme juridique, adresse, numéro d'immatriculation, adresse de contact,
-          directeur de la publication, hébergeur.]
+        <p>
+          Le service est édité par{" "}
+          <Champ valeur={EDITEUR.nom} defaut="l'éditeur" />.{" "}
+          <Link to="/mentions-legales" className="text-rose-400 hover:underline">
+            Voir les mentions légales complètes
+          </Link>
+          .
         </p>
       </Section>
 
@@ -69,8 +86,14 @@ export function Conditions() {
           Au-delà, l'accès aux fonctions de programmation nécessite une offre payante. Les tarifs affichés dans
           l'application s'entendent toutes taxes comprises, par mois.
         </p>
-        <p className="italic text-zinc-500">
-          [À compléter : modalités de paiement, de reconduction et de résiliation, droit de rétractation.]
+        <p>
+          L'abonnement est mensuel et sans engagement de durée : il peut être résilié à tout moment depuis la page
+          « Mon abonnement », la résiliation prenant effet à la fin de la période en cours.
+        </p>
+        <p>
+          Conformément à l'article L221-28 du code de la consommation, vous disposez d'un délai de rétractation de 14
+          jours à compter de la souscription. En demandant l'accès immédiat au service, vous acceptez que son
+          exécution commence avant la fin de ce délai.
         </p>
       </Section>
 
@@ -113,7 +136,11 @@ export function Confidentialite() {
   return (
     <Page title="Politique de confidentialité" updated="2026-09">
       <Section title="Responsable du traitement">
-        <p className="italic text-zinc-500">[À compléter : identité et coordonnées du responsable de traitement.]</p>
+        <p>
+          <Champ valeur={EDITEUR.nom} defaut="L'éditeur du service" />,{" "}
+          <Champ valeur={EDITEUR.adresse} defaut="adresse à préciser" />. Contact :{" "}
+          <Champ valeur={EDITEUR.email} defaut="adresse e-mail à préciser" />.
+        </p>
       </Section>
 
       <Section title="Données collectées">
@@ -174,8 +201,8 @@ export function Confidentialite() {
             coach.
           </li>
           <li>
-            <strong className="text-zinc-300">Hébergeur et base de données</strong>{" "}
-            <span className="italic text-zinc-500">[à compléter : prestataires et localisation des serveurs]</span>.
+            <strong className="text-zinc-300">Hébergeur</strong> —{" "}
+            <Champ valeur={EDITEUR.hebergeur} defaut="hébergeur à préciser" />.
           </li>
         </ul>
       </Section>
@@ -210,7 +237,9 @@ export function Confidentialite() {
           Vous pouvez également introduire une réclamation auprès de la CNIL (
           <span className="text-zinc-300">www.cnil.fr</span>).
         </p>
-        <p className="italic text-zinc-500">[À compléter : adresse de contact pour l'exercice des autres droits.]</p>
+        <p>
+          Pour les autres droits, écrivez à <Champ valeur={EDITEUR.email} defaut="l'adresse de contact de l'éditeur" />.
+        </p>
       </Section>
 
       <Section title="Sécurité">
@@ -221,5 +250,71 @@ export function Confidentialite() {
         </p>
       </Section>
     </Page>
+  );
+}
+
+
+export function MentionsLegales() {
+  const societe = EDITEUR.forme === "societe";
+
+  return (
+    <Page title="Mentions légales" updated="2026-09">
+      <Section title="Éditeur du service">
+        <dl className="space-y-1.5">
+          <Ligne label={societe ? "Dénomination" : "Nom"} valeur={EDITEUR.nom} />
+          {societe && <Ligne label="Forme juridique" valeur={EDITEUR.formeSociale} />}
+          {societe && <Ligne label="Capital social" valeur={EDITEUR.capital} />}
+          <Ligne label="Adresse" valeur={EDITEUR.adresse} />
+          <Ligne label={societe ? "RCS" : "SIREN"} valeur={EDITEUR.immatriculation} />
+          {EDITEUR.tva && <Ligne label="TVA intracommunautaire" valeur={EDITEUR.tva} />}
+          <Ligne label="E-mail" valeur={EDITEUR.email} />
+          <Ligne label="Téléphone" valeur={EDITEUR.telephone} />
+          <Ligne label="Directeur de la publication" valeur={EDITEUR.directeurPublication} />
+        </dl>
+      </Section>
+
+      <Section title="Hébergement">
+        <p>
+          <Champ valeur={EDITEUR.hebergeur} defaut="hébergeur à préciser" />
+        </p>
+      </Section>
+
+      <Section title="Propriété intellectuelle">
+        <p>
+          Les contenus du service (interface, textes, identité visuelle) sont protégés. Les programmes générés pour
+          votre compte vous sont destinés et vous pouvez les exporter librement depuis « Mon compte ».
+        </p>
+      </Section>
+
+      <Section title="Médiation de la consommation">
+        <p>
+          En cas de litige non résolu avec le service, vous pouvez recourir gratuitement à un médiateur de la
+          consommation, ou à la plateforme européenne de règlement en ligne des litiges.
+        </p>
+      </Section>
+
+      <Section title="Documents liés">
+        <p>
+          <Link to="/conditions" className="text-rose-400 hover:underline">
+            Conditions d'utilisation
+          </Link>
+          {" · "}
+          <Link to="/confidentialite" className="text-rose-400 hover:underline">
+            Politique de confidentialité
+          </Link>
+        </p>
+      </Section>
+    </Page>
+  );
+}
+
+function Ligne({ label, valeur }: { label: string; valeur: string | null }) {
+  return (
+    <div className="flex flex-wrap gap-x-2">
+      <dt className="text-zinc-500">{label} :</dt>
+      <dd>
+        <Champ valeur={valeur} defaut="à compléter" />
+      </dd>
+    </div>
   );
 }

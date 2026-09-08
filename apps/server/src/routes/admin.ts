@@ -7,7 +7,7 @@ import { requireAdmin, ADMIN_ROLE } from "../middleware/admin.js";
 import { ah, HttpError } from "../lib/http.js";
 import { hasStandardAccess, isTrialActive, trialEndsAt, TRIAL_DAYS } from "../lib/subscription.js";
 import { PRICING_UPDATED_AT } from "../lib/pricing.js";
-import { isMailConfigured } from "../lib/mailer.js";
+import { isMailConfigured, sendMail } from "../lib/mailer.js";
 import { isAiConfigured } from "../lib/anthropic.js";
 import { canSelfActivatePaidPlan } from "../lib/billing.js";
 
@@ -417,6 +417,57 @@ adminRouter.patch(
     });
 
     res.json(updated);
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Diagnostic de l'envoi d'e-mails                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Envoie un message à l'administrateur lui-même. Une configuration SMTP
+ * incorrecte échoue silencieusement du point de vue de l'athlète : ce bouton
+ * remonte l'erreur exacte du serveur d'envoi, au lieu de laisser deviner.
+ */
+adminRouter.post(
+  "/test-email",
+  ah(async (req: AuthedRequest, res) => {
+    if (!isMailConfigured()) {
+      throw new HttpError(
+        400,
+        "Aucun serveur SMTP configuré. Renseignez SMTP_HOST, SMTP_USER et SMTP_PASSWORD chez votre hébergeur."
+      );
+    }
+
+    const admin = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { email: true, name: true },
+    });
+    if (!admin) throw new HttpError(404, "Utilisateur introuvable.");
+
+    try {
+      await sendMail({
+        to: admin.email,
+        subject: "TriCoach — test d'envoi",
+        text: [
+          `Bonjour ${admin.name},`,
+          "",
+          "Si vous lisez ce message, l'envoi d'e-mails de TriCoach fonctionne.",
+          "Vos athlètes peuvent désormais réinitialiser leur mot de passe et confirmer leur adresse.",
+          "",
+          `Envoyé le ${new Date().toLocaleString("fr-FR")}.`,
+        ].join("\n"),
+      });
+    } catch (err) {
+      // Le message du serveur d'envoi est bien plus utile que « échec » :
+      // il nomme l'identifiant refusé, le port fermé ou le domaine non vérifié.
+      throw new HttpError(
+        502,
+        `Le serveur d'envoi a refusé le message : ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    res.json({ ok: true, destinataire: admin.email });
   })
 );
 

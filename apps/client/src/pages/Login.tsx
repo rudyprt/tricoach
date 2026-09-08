@@ -89,6 +89,15 @@ export function Login() {
             Créer un compte
           </Link>
         </p>
+        <p className="text-center text-xs text-zinc-600">
+          <Link to="/mentions-legales" className="hover:text-zinc-400 hover:underline">
+            Mentions légales
+          </Link>
+          {" · "}
+          <Link to="/confidentialite" className="hover:text-zinc-400 hover:underline">
+            Confidentialité
+          </Link>
+        </p>
       </form>
     </div>
   );
