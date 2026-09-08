@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
 import { computeTrainingZones, periodization } from "../lib/training.js";
+import { parseZoneOverrides, zoneOverridesSchema } from "../lib/zoneOverrides.js";
 import { startOfWeek } from "../lib/week.js";
 
 export const profileRouter = Router();
@@ -67,17 +69,87 @@ profileRouter.get(
       throw new HttpError(400, "Complétez d'abord votre profil (onboarding).");
     }
 
-    const zones = computeTrainingZones({
+    const overrides = parseZoneOverrides(profile.customZones);
+    const inputs = {
       tempsCourse: profile.tempsCourse,
       tempsNatation: profile.tempsNatation,
       tempsVelo: profile.tempsVelo,
       ftpWatts: profile.ftpWatts,
-    });
+    };
     const phase = periodization(startOfWeek(new Date(), user?.timezone ?? undefined), profile.objectifDate);
 
     res.json({
-      zones,
+      zones: computeTrainingZones({ ...inputs, overrides }),
+      // Les zones purement calculées sont renvoyées en plus : l'écran de
+      // modification doit pouvoir montrer la valeur d'origine à côté de la
+      // valeur corrigée, et proposer d'y revenir.
+      computedZones: computeTrainingZones(inputs),
+      overrides: overrides ?? {},
       periodization: { phase: phase.phase, label: phase.label, weeksToGoal: phase.weeksToGoal },
+    });
+  })
+);
+
+/**
+ * Enregistre les corrections manuelles. Une zone laissée vide revient au
+ * calcul automatique, ce qui évite d'avoir à tout ressaisir pour annuler une
+ * seule valeur.
+ */
+profileRouter.put(
+  "/zones",
+  ah(async (req: AuthedRequest, res) => {
+    const parsed = zoneOverridesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Zones invalides." });
+      return;
+    }
+
+    const profile = await prisma.athleteProfile.findUnique({ where: { userId: req.userId! } });
+    if (!profile) {
+      throw new HttpError(400, "Complétez d'abord votre profil (onboarding).");
+    }
+
+    const overrides = parseZoneOverrides(parsed.data);
+    await prisma.athleteProfile.update({
+      where: { userId: req.userId! },
+      data: { customZones: overrides ?? Prisma.DbNull },
+    });
+
+    res.json({
+      zones: computeTrainingZones({
+        tempsCourse: profile.tempsCourse,
+        tempsNatation: profile.tempsNatation,
+        tempsVelo: profile.tempsVelo,
+        ftpWatts: profile.ftpWatts,
+        overrides,
+      }),
+      overrides: overrides ?? {},
+    });
+  })
+);
+
+/** Revient entièrement au calcul automatique. */
+profileRouter.delete(
+  "/zones",
+  ah(async (req: AuthedRequest, res) => {
+    const profile = await prisma.athleteProfile.findUnique({ where: { userId: req.userId! } });
+    if (!profile) {
+      throw new HttpError(400, "Complétez d'abord votre profil (onboarding).");
+    }
+
+    await prisma.athleteProfile.update({
+      where: { userId: req.userId! },
+      data: { customZones: Prisma.DbNull },
+    });
+
+    res.json({
+      zones: computeTrainingZones({
+        tempsCourse: profile.tempsCourse,
+        tempsNatation: profile.tempsNatation,
+        tempsVelo: profile.tempsVelo,
+        ftpWatts: profile.ftpWatts,
+      }),
+      overrides: {},
     });
   })
 );

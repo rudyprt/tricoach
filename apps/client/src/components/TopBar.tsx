@@ -97,9 +97,13 @@ export function TopBar() {
         >
           ☰
         </button>
-        <span className="text-lg font-black italic tracking-wide text-white">
+        <button
+          onClick={() => navigate("/dashboard")}
+          aria-label="Revenir à mon programme"
+          className="text-lg font-black italic tracking-wide text-white transition-transform duration-150 active:scale-95"
+        >
           TRI<span className="text-rose-500">COACH</span>
-        </span>
+        </button>
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}

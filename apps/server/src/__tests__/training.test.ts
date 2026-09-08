@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeTrainingZones,
+  formatZonesForPrompt,
   formatPacePerKm,
   parsePerformance,
   periodization,
@@ -59,6 +60,58 @@ describe("computeTrainingZones", () => {
     const zones = computeTrainingZones({ tempsNatation: "1500m en 30min" });
     // 30 min sur 1500 m = 2:00/100 m
     expect(zones.natation?.find((z) => z.zone === "Z4")?.value).toBe("2:00/100m");
+  });
+
+  it("laisse une correction manuelle remplacer la valeur calculée", () => {
+    const zones = computeTrainingZones({
+      tempsCourse: "10km en 45min",
+      overrides: { course: { Z2: "5:30/km" } },
+    });
+    const z2 = zones.course?.find((z) => z.zone === "Z2");
+    expect(z2?.value).toBe("5:30/km");
+    expect(z2?.custom).toBe(true);
+
+    // Les autres zones restent calculées.
+    const z4 = zones.course?.find((z) => z.zone === "Z4");
+    expect(z4?.value).toBe("4:45/km");
+    expect(z4?.custom).toBeUndefined();
+  });
+
+  it("accepte des zones saisies pour un sport sans temps de référence", () => {
+    const zones = computeTrainingZones({
+      overrides: { natation: { Z4: "1:45/100m", Z2: "2:00/100m" } },
+    });
+    expect(zones.natation).toHaveLength(2);
+    expect(zones.natation?.every((z) => z.custom)).toBe(true);
+    expect(zones.course).toBeNull();
+  });
+
+  it("signale dans les notes les sports corrigés à la main", () => {
+    const zones = computeTrainingZones({
+      tempsCourse: "10km en 45min",
+      overrides: { course: { Z3: "5:00/km" } },
+    });
+    expect(zones.notes.join(" ")).toContain("corrigées à la main");
+    expect(zones.notes.join(" ")).toContain("course");
+  });
+
+  it("ignore une correction vide plutôt que d'effacer la zone", () => {
+    const zones = computeTrainingZones({
+      tempsCourse: "10km en 45min",
+      overrides: { course: { Z2: "   " } },
+    });
+    expect(zones.course?.find((z) => z.zone === "Z2")?.value).toBe("5:45/km");
+    expect(zones.course?.find((z) => z.zone === "Z2")?.custom).toBeUndefined();
+  });
+
+  it("marque les valeurs fixées par l'athlète dans le texte envoyé au modèle", () => {
+    const zones = computeTrainingZones({
+      tempsCourse: "10km en 45min",
+      overrides: { course: { Z4: "4:38/km" } },
+    });
+    const prompt = formatZonesForPrompt(zones);
+    expect(prompt).toContain("4:38/km (valeur fixée par l'athlète)");
+    expect(prompt).not.toContain("4:45/km");
   });
 
   it("signale l'absence de données plutôt que d'inventer des zones", () => {

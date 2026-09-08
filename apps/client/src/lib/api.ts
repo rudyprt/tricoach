@@ -48,7 +48,14 @@ export interface ZoneRange {
   zone: string;
   label: string;
   value: string;
+  /** true si la valeur a été saisie par l'athlète et non calculée. */
+  custom?: boolean;
 }
+
+export type ZoneSport = "course" | "natation" | "velo";
+
+/** Corrections manuelles : { course: { Z2: "5:30/km" }, ... }. */
+export type ZoneOverrides = Partial<Record<ZoneSport, Record<string, string>>>;
 
 export interface TrainingZones {
   course: ZoneRange[] | null;
@@ -59,6 +66,9 @@ export interface TrainingZones {
 
 export interface ZonesResponse {
   zones: TrainingZones;
+  /** Zones telles que calculées, sans les corrections : sert à y revenir. */
+  computedZones: TrainingZones;
+  overrides: ZoneOverrides;
   periodization: Periodization;
 }
 

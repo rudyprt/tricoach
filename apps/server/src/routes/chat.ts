@@ -9,6 +9,7 @@ import { ah, HttpError } from "../lib/http.js";
 import { chatRateLimit } from "../lib/rateLimit.js";
 import { startOfLocalDay } from "../lib/week.js";
 import { computeTrainingZones, formatZonesForPrompt, periodization } from "../lib/training.js";
+import { parseZoneOverrides } from "../lib/zoneOverrides.js";
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
@@ -97,6 +98,7 @@ chatRouter.post(
           tempsNatation: profile.tempsNatation,
           tempsVelo: profile.tempsVelo,
           ftpWatts: profile.ftpWatts,
+          overrides: parseZoneOverrides(profile.customZones),
         })
       : null;
     const phase = profile ? periodization(new Date(), profile.objectifDate) : null;

@@ -80,7 +80,15 @@ export interface ZoneRange {
   zone: string;
   label: string;
   value: string;
+  /** true si la valeur a été saisie par l'athlète et non calculée. */
+  custom?: boolean;
 }
+
+export const ZONE_SPORTS = ["course", "natation", "velo"] as const;
+export type ZoneSport = (typeof ZONE_SPORTS)[number];
+
+/** Corrections manuelles : { course: { Z2: "5:30/km" }, ... }. */
+export type ZoneOverrides = Partial<Record<ZoneSport, Record<string, string>>>;
 
 export interface TrainingZones {
   course: ZoneRange[] | null;
@@ -119,6 +127,35 @@ export interface ZoneInputs {
   tempsNatation?: string | null;
   tempsVelo?: string | null;
   ftpWatts?: number | null;
+  /** Corrections saisies par l'athlète, prioritaires sur le calcul. */
+  overrides?: ZoneOverrides | null;
+}
+
+/**
+ * Une correction manuelle remplace la valeur calculée, et peut aussi exister
+ * pour un sport dont aucun temps de référence n'est exploitable : un athlète
+ * qui connaît déjà ses allures doit pouvoir les saisir sans passer par une
+ * course de référence.
+ */
+function applyOverrides(
+  computed: ZoneRange[] | null,
+  overrides: Record<string, string> | undefined,
+  defs: { zone: string; label: string }[]
+): ZoneRange[] | null {
+  const manual = Object.entries(overrides ?? {}).filter(([, value]) => value.trim() !== "");
+  if (manual.length === 0) return computed;
+
+  const byZone = new Map(manual.map(([zone, value]) => [zone, value.trim()]));
+  const base = computed ?? defs.map((d) => ({ zone: d.zone, label: d.label, value: "" }));
+
+  const merged = base.map((range) =>
+    byZone.has(range.zone)
+      ? { ...range, value: byZone.get(range.zone)!, custom: true }
+      : range
+  );
+
+  // Un sport sans aucune valeur reste absent plutôt qu'affiché vide.
+  return merged.some((r) => r.value !== "") ? merged.filter((r) => r.value !== "") : null;
 }
 
 /**
@@ -183,6 +220,20 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     }
   }
 
+  const overrides = inputs.overrides ?? {};
+  course = applyOverrides(course, overrides.course, RUN_ZONE_OFFSETS_S_PER_KM);
+  natation = applyOverrides(natation, overrides.natation, SWIM_ZONE_OFFSETS_S_PER_100M);
+  velo = applyOverrides(velo, overrides.velo, BIKE_ZONE_FTP_PCT);
+
+  const correctedSports = ZONE_SPORTS.filter((sport) =>
+    ({ course, natation, velo })[sport]?.some((z) => z.custom)
+  );
+  if (correctedSports.length > 0) {
+    notes.push(
+      `Zones corrigées à la main pour : ${correctedSports.join(", ")}. Ces valeurs remplacent le calcul automatique.`
+    );
+  }
+
   if (!course && !natation && !velo) {
     notes.push("Aucun temps de référence exploitable : renseignez vos temps récents pour obtenir des zones chiffrées.");
   }
@@ -194,7 +245,13 @@ export function formatZonesForPrompt(zones: TrainingZones): string {
   const lines: string[] = [];
   const push = (sport: string, ranges: ZoneRange[] | null) => {
     if (!ranges) return;
-    lines.push(`${sport} : ${ranges.map((z) => `${z.zone} ${z.label} ${z.value}`).join(" | ")}`);
+    lines.push(
+      `${sport} : ${ranges
+        // Une zone corrigée par l'athlète est signalée : c'est sa connaissance de
+        // lui-même, elle prime sur toute estimation que le modèle referait.
+        .map((z) => `${z.zone} ${z.label} ${z.value}${z.custom ? " (valeur fixée par l'athlète)" : ""}`)
+        .join(" | ")}`
+    );
   };
   push("Course à pied", zones.course);
   push("Natation", zones.natation);

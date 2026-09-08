@@ -16,6 +16,7 @@ import {
   periodization,
   type Periodization,
 } from "../lib/training.js";
+import { parseZoneOverrides } from "../lib/zoneOverrides.js";
 
 export const plansRouter = Router();
 plansRouter.use(requireAuth);
@@ -49,6 +50,7 @@ interface ProfileForPrompt {
   heuresSemaine: number;
   contraintes: string;
   ftpWatts: number | null;
+  customZones: unknown;
 }
 
 function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): string {
@@ -93,6 +95,7 @@ function profileLines(profile: ProfileForPrompt, phase: Periodization, maxVolume
     tempsNatation: profile.tempsNatation,
     tempsVelo: profile.tempsVelo,
     ftpWatts: profile.ftpWatts,
+    overrides: parseZoneOverrides(profile.customZones),
   });
 
   return [
