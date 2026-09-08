@@ -9,7 +9,9 @@ son coach IA en chat.
 Le programme est construit sur une **périodisation** (fondation → développement
 → spécifique → affûtage → course) et sur des **zones d'entraînement calculées**
 à partir des temps de référence de l'athlète, pas réinventées à chaque
-génération. Les séances sont exportables vers un agenda au format iCalendar.
+génération. Chaque zone reste **modifiable à la main** : un athlète qui connaît
+ses allures les saisit, et ce sont ces valeurs qui servent aux programmes. Les
+séances sont exportables vers un agenda au format iCalendar.
 
 ## Structure
 

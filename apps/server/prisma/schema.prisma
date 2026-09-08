@@ -85,6 +85,9 @@ model AthleteProfile {
   contraintes   String   @default("")
   /// Zones de puissance vélo si l'athlète connaît sa FTP (sinon estimation par la vitesse).
   ftpWatts      Int?
+  /// Zones corrigées à la main par l'athlète : { course: { Z2: "5:30/km" }, ... }.
+  /// Une valeur saisie ici prime sur le calcul automatique.
+  customZones   Json?
   updatedAt     DateTime @updatedAt
 }
 

@@ -242,6 +242,91 @@ describeIfDb("API", () => {
       expect(zones.body.periodization.phase).toBe("base");
     });
 
+    it("enregistre une correction de zone et la fait primer sur le calcul", async () => {
+      const { agent } = await signUp("zones-perso@example.com");
+      await agent.put("/api/profile").send({
+        objectif: "Marathon",
+        objectifDate: "2027-06-01",
+        tempsCourse: "10km en 45min",
+        heuresSemaine: 6,
+      });
+
+      const avant = await agent.get("/api/profile/zones");
+      expect(avant.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:45/km");
+      expect(avant.body.overrides).toEqual({});
+
+      const put = await agent.put("/api/profile/zones").send({ course: { Z2: "5:30/km" } });
+      expect(put.status).toBe(200);
+      expect(put.body.zones.course.find((z: { zone: string }) => z.zone === "Z2")).toMatchObject({
+        value: "5:30/km",
+        custom: true,
+      });
+
+      // La correction survit au rechargement, et la valeur calculée reste
+      // consultable pour pouvoir y revenir.
+      const apres = await agent.get("/api/profile/zones");
+      expect(apres.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:30/km");
+      expect(apres.body.computedZones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:45/km");
+      expect(apres.body.overrides).toEqual({ course: { Z2: "5:30/km" } });
+    });
+
+    it("revient au calcul automatique quand on efface les corrections", async () => {
+      const { agent } = await signUp("zones-reset@example.com");
+      await agent.put("/api/profile").send({
+        objectif: "Marathon",
+        objectifDate: "2027-06-01",
+        tempsCourse: "10km en 45min",
+        heuresSemaine: 6,
+      });
+      await agent.put("/api/profile/zones").send({ course: { Z2: "5:30/km" } });
+
+      const reset = await agent.delete("/api/profile/zones");
+      expect(reset.status).toBe(200);
+      expect(reset.body.overrides).toEqual({});
+      expect(reset.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:45/km");
+    });
+
+    it("refuse une zone inconnue ou une valeur démesurée", async () => {
+      const { agent } = await signUp("zones-invalides@example.com");
+      await agent.put("/api/profile").send({
+        objectif: "Marathon",
+        objectifDate: "2027-06-01",
+        heuresSemaine: 6,
+      });
+
+      expect((await agent.put("/api/profile/zones").send({ course: { Z9: "5:00/km" } })).status).toBe(400);
+      expect((await agent.put("/api/profile/zones").send({ course: { Z2: "x".repeat(100) } })).status).toBe(400);
+    });
+
+    it("n'expose pas les zones d'un autre athlète", async () => {
+      const { agent: alice } = await signUp("alice-zones@example.com");
+      await alice.put("/api/profile").send({
+        objectif: "Marathon",
+        objectifDate: "2027-06-01",
+        tempsCourse: "10km en 45min",
+        heuresSemaine: 6,
+      });
+      await alice.put("/api/profile/zones").send({ course: { Z2: "5:30/km" } });
+
+      const { agent: bob } = await signUp("bob-zones@example.com");
+      await bob.put("/api/profile").send({
+        objectif: "Ironman",
+        objectifDate: "2027-06-01",
+        tempsCourse: "10km en 40min",
+        heuresSemaine: 10,
+      });
+
+      const zones = await bob.get("/api/profile/zones");
+      expect(zones.body.overrides).toEqual({});
+      expect(zones.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).not.toBe("5:30/km");
+    });
+
+    it("exige un profil avant d'enregistrer des zones", async () => {
+      const { agent } = await signUp("zones-sans-profil@example.com");
+      expect((await agent.put("/api/profile/zones").send({ course: { Z2: "5:30/km" } })).status).toBe(400);
+      expect((await agent.delete("/api/profile/zones")).status).toBe(400);
+    });
+
     it("refuse une date d'objectif invalide", async () => {
       const { agent } = await signUp("datebidon@example.com");
       const res = await agent.put("/api/profile").send({
