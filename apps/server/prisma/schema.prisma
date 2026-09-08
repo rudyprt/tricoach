@@ -8,32 +8,37 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
   passwordHash String
   name         String
   avatarUrl    String?
-  plan         String    @default("free")
-  createdAt    DateTime  @default(now())
+  plan         String   @default("free")
+  /// Fuseau IANA de l'athlète : la semaine d'entraînement est calculée dessus.
+  timezone     String   @default("Europe/Paris")
+  createdAt    DateTime @default(now())
 
   profile       AthleteProfile?
   trainingPlans TrainingPlan[]
   sessions      Session[]
   chatMessages  ChatMessage[]
+  resetTokens   PasswordResetToken[]
 }
 
 model AthleteProfile {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  objectif            String
-  objectifDate         DateTime
-  tempsNatation       String   @default("")
-  tempsVelo           String   @default("")
-  tempsCourse         String   @default("")
-  heuresSemaine       Float
-  contraintes         String   @default("")
-  updatedAt           DateTime @updatedAt
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectif      String
+  objectifDate  DateTime
+  tempsNatation String   @default("")
+  tempsVelo     String   @default("")
+  tempsCourse   String   @default("")
+  heuresSemaine Float
+  contraintes   String   @default("")
+  /// Zones de puissance vélo si l'athlète connaît sa FTP (sinon estimation par la vitesse).
+  ftpWatts      Int?
+  updatedAt     DateTime @updatedAt
 }
 
 model TrainingPlan {
@@ -44,26 +49,33 @@ model TrainingPlan {
   generatedAt DateTime  @default(now())
   rawAiJson   String
   debrief     String?
+  /// Phase de périodisation appliquée (base, developpement, specifique, affutage, course, transition).
+  phase       String?
   sessions    Session[]
+
+  @@index([userId, weekStart])
 }
 
 model Session {
-  id          String        @id @default(cuid())
+  id          String       @id @default(cuid())
   planId      String
-  plan        TrainingPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan        TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime
   sport       String
   titre       String
   dureeMin    Int
   distanceKm  Float?
-  description String        @default("")
+  description String       @default("")
   objectif    String?
-  structure   String?
-  status      String        @default("planifiee")
+  structure   Json?
+  status      String       @default("planifiee")
   ressenti    String?
   completedAt DateTime?
+
+  @@index([userId, date])
+  @@index([planId])
 }
 
 model ChatMessage {
@@ -73,4 +85,19 @@ model ChatMessage {
   role      String
   content   String
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Seul le hash du jeton est stocké : une fuite de la base ne permet pas de réinitialiser un compte.
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }

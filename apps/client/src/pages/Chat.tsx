@@ -10,6 +10,7 @@ export function Chat() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quotaReached, setQuotaReached] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,10 +40,28 @@ export function Chat() {
       const { data } = await api.post<ChatMessage>("/chat", { content: optimistic.content });
       setMessages((prev) => [...prev, data]);
     } catch (err) {
+      // Le serveur n'enregistre la question que si le coach a répondu : on
+      // retire le message affiché pour rester fidèle à ce qui est conservé.
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setInput(optimistic.content);
       if (isSubscriptionRequiredError(err)) setQuotaReached(true);
       setError(apiErrorMessage(err, "Le coach n'a pas pu répondre."));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleClear() {
+    if (!window.confirm("Effacer toute la conversation avec votre coach ?")) return;
+    setClearing(true);
+    setError(null);
+    try {
+      await api.delete("/chat");
+      setMessages([]);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Impossible d'effacer la conversation."));
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -54,13 +73,24 @@ export function Chat() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-white">Discuter avec le coach</h1>
-        {user && !user.isPremium && (
-          <span className="text-xs text-zinc-500">
-            {Math.max(0, CHAT_DAILY_LIMIT - messagesToday)}/{CHAT_DAILY_LIMIT} messages restants
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {user && !user.isPremium && (
+            <span className="text-xs text-zinc-500">
+              {Math.max(0, CHAT_DAILY_LIMIT - messagesToday)}/{CHAT_DAILY_LIMIT} messages restants
+            </span>
+          )}
+          {messages.length > 0 && (
+            <button
+              onClick={handleClear}
+              disabled={clearing || sending}
+              className="text-xs text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline disabled:opacity-50"
+            >
+              {clearing ? "Effacement..." : "Effacer"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-4">

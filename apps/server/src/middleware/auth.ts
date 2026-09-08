@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { env } from "../lib/env.js";
 
 export interface AuthedRequest extends Request {
   userId?: string;
@@ -12,7 +13,7 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
     return;
   }
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    const payload = jwt.verify(token, env().JWT_SECRET) as { userId: string };
     req.userId = payload.userId;
     next();
   } catch {

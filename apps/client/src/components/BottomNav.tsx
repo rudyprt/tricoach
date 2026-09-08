@@ -4,6 +4,7 @@ const items = [
   { to: "/dashboard", label: "Programme", icon: "📅" },
   { to: "/historique", label: "Historique", icon: "📈" },
   { to: "/chat", label: "Coach IA", icon: "💬" },
+  { to: "/zones", label: "Zones", icon: "⚡" },
   { to: "/objectif", label: "Objectif", icon: "🎯" },
 ];
 

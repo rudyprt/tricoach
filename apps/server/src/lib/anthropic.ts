@@ -1,22 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { env } from "./env.js";
 
 const MODEL = "claude-sonnet-5";
 
-// Certaines interfaces d'hébergement ajoutent un retour à la ligne ou des espaces
-// en fin de valeur lors du copier-coller d'une variable d'environnement, ce qui
-// rend la clé invalide en en-tête HTTP. On la nettoie systématiquement.
-function getApiKey(): string {
-  return (process.env.ANTHROPIC_API_KEY ?? "").trim();
-}
-
 export function isAiConfigured(): boolean {
-  return Boolean(getApiKey());
+  return Boolean(env().ANTHROPIC_API_KEY);
 }
 
 let client: Anthropic | null = null;
 
 function getClient(): Anthropic {
-  const apiKey = getApiKey();
+  const apiKey = env().ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new AiNotConfiguredError();
   }

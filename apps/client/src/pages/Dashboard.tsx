@@ -147,6 +147,17 @@ export function Dashboard() {
     return { next: nextSession, rest };
   }, [plan]);
 
+  function confirmRegenerate() {
+    // Les séances déjà réalisées sont conservées côté serveur ; seules celles
+    // encore planifiées sont remplacées. On le dit avant d'agir.
+    const done = plan?.sessions.filter((s) => s.status !== "planifiee").length ?? 0;
+    const message =
+      done > 0
+        ? `Régénérer la semaine ? Vos ${done} séance(s) déjà validée(s) sont conservées, les séances encore planifiées seront remplacées.`
+        : "Régénérer la semaine ? Les séances encore planifiées seront remplacées.";
+    if (window.confirm(message)) generatePlan();
+  }
+
   const trialDaysLeft =
     user && user.plan === "free" && user.isTrialActive
       ? Math.max(0, Math.ceil((new Date(user.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -165,7 +176,7 @@ export function Dashboard() {
           </Link>
         ) : (
           <button
-            onClick={plan ? generatePlan : hasPastPlan ? generateNextWeek : generatePlan}
+            onClick={plan ? confirmRegenerate : hasPastPlan ? generateNextWeek : generatePlan}
             disabled={generating}
             className="flex items-center gap-2 rounded-full bg-rose-500 px-3.5 py-1.5 text-xs font-semibold text-black transition-all duration-150 hover:scale-[1.03] hover:bg-rose-400 active:scale-[0.97] disabled:opacity-50 disabled:hover:scale-100"
           >
@@ -180,6 +191,24 @@ export function Dashboard() {
           </button>
         )}
       </div>
+
+      {plan?.periodization && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Link
+            to="/zones"
+            className="rounded-full border border-rose-900/50 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-300 transition-colors hover:border-rose-700 hover:text-rose-200"
+          >
+            {plan.periodization.label}
+            {plan.periodization.weeksToGoal > 0 && ` · J-${plan.periodization.weeksToGoal} sem.`}
+          </Link>
+          <a
+            href="/api/calendar/sessions.ics"
+            className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+          >
+            Ajouter à mon agenda
+          </a>
+        </div>
+      )}
 
       {plan?.debrief && !debriefDismissed && (
         <div className="animate-fade-in-up mb-4 rounded-2xl border border-rose-900/50 bg-gradient-to-br from-rose-950/50 to-black p-4">

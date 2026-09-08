@@ -5,6 +5,18 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+/**
+ * Le serveur calcule la semaine d'entraînement et le quota quotidien dans le
+ * fuseau de l'athlète : il est transmis à l'inscription et à chaque connexion.
+ */
+export function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface AthleteProfile {
   id: string;
   userId: string;
@@ -15,6 +27,39 @@ export interface AthleteProfile {
   tempsCourse: string;
   heuresSemaine: number;
   contraintes: string;
+  ftpWatts: number | null;
+}
+
+export type TrainingPhase =
+  | "base"
+  | "developpement"
+  | "specifique"
+  | "affutage"
+  | "course"
+  | "transition";
+
+export interface Periodization {
+  phase: TrainingPhase;
+  label: string;
+  weeksToGoal: number;
+}
+
+export interface ZoneRange {
+  zone: string;
+  label: string;
+  value: string;
+}
+
+export interface TrainingZones {
+  course: ZoneRange[] | null;
+  natation: ZoneRange[] | null;
+  velo: ZoneRange[] | null;
+  notes: string[];
+}
+
+export interface ZonesResponse {
+  zones: TrainingZones;
+  periodization: Periodization;
 }
 
 export interface SessionExercise {
@@ -58,7 +103,9 @@ export interface TrainingPlan {
   weekStart: string;
   generatedAt: string;
   debrief: string | null;
+  phase: TrainingPhase | null;
   sessions: Session[];
+  periodization: Periodization;
 }
 
 export interface ChatMessage {
@@ -76,11 +123,14 @@ export interface CurrentUser {
   name: string;
   avatarUrl: string | null;
   plan: Plan;
+  timezone: string;
   createdAt: string;
   trialEndsAt: string;
   isTrialActive: boolean;
   hasStandardAccess: boolean;
   isPremium: boolean;
+  /** false tant qu'aucun paiement n'est branché : l'app ne propose pas d'activer une offre. */
+  selfServeBilling: boolean;
   profile: AthleteProfile | null;
 }
 
@@ -94,10 +144,22 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function isSubscriptionRequiredError(err: unknown): boolean {
+function hasErrorCode(err: unknown, code: string): boolean {
   return (
     axios.isAxiosError(err) &&
     typeof err.response?.data === "object" &&
-    (err.response?.data as { code?: string })?.code === "SUBSCRIPTION_REQUIRED"
+    (err.response?.data as { code?: string })?.code === code
   );
+}
+
+export function isSubscriptionRequiredError(err: unknown): boolean {
+  return hasErrorCode(err, "SUBSCRIPTION_REQUIRED");
+}
+
+export function isBillingUnavailableError(err: unknown): boolean {
+  return hasErrorCode(err, "BILLING_UNAVAILABLE");
+}
+
+export function isRateLimitError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 429;
 }
