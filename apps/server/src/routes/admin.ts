@@ -7,6 +7,9 @@ import { requireAdmin, ADMIN_ROLE } from "../middleware/admin.js";
 import { ah, HttpError } from "../lib/http.js";
 import { hasStandardAccess, isTrialActive, trialEndsAt, TRIAL_DAYS } from "../lib/subscription.js";
 import { PRICING_UPDATED_AT } from "../lib/pricing.js";
+import { isMailConfigured } from "../lib/mailer.js";
+import { isAiConfigured } from "../lib/anthropic.js";
+import { canSelfActivatePaidPlan } from "../lib/billing.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireAdmin);
@@ -119,6 +122,13 @@ adminRouter.get(
       activite: {
         programmesGeneres30j: plansGenerated30,
         athletesAvecObjectifAVenir: profilesWithGoal,
+      },
+      // Un service mal configuré échoue en silence : l'administrateur doit le
+      // voir sans avoir à lire les logs.
+      configuration: {
+        emailsActifs: isMailConfigured(),
+        coachIaActif: isAiConfigured(),
+        paiementEnLigneActif: canSelfActivatePaidPlan(),
       },
       coutIa: {
         totalMicroUsd: aiTotals._sum.costMicroUsd ?? 0,

@@ -30,6 +30,23 @@ const envSchema = z.object({
    * l'hébergeur, donc utilisable depuis un téléphone.
    */
   ADMIN_EMAILS: z.string().default(""),
+
+  /**
+   * Envoi d'e-mails (réinitialisation de mot de passe, vérification
+   * d'adresse). Sans SMTP_HOST, les messages sont tracés dans les logs au lieu
+   * d'être envoyés : l'application reste utilisable, mais la récupération de
+   * compte ne fonctionne pas réellement.
+   */
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASSWORD: z.string().default(""),
+  /** true pour une connexion TLS directe (port 465), false pour STARTTLS. */
+  SMTP_SECURE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  MAIL_FROM: z.string().default("TriCoach <ne-pas-repondre@tricoach.app>"),
 });
 
 export type Env = z.infer<typeof envSchema>;

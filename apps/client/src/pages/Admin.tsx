@@ -89,10 +89,43 @@ function ActivityChart({ days }: { days: AdminActivityDay[] }) {
   );
 }
 
+/** Ce qui n'est pas branché échoue en silence : autant le dire ici. */
+function ConfigurationAlerts({ configuration }: { configuration: AdminOverview["configuration"] }) {
+  const manquants = [
+    !configuration.emailsActifs && {
+      titre: "Envoi d'e-mails inactif",
+      detail:
+        "Aucun serveur SMTP configuré : les liens de réinitialisation de mot de passe et de confirmation d'adresse ne partent pas. Renseignez SMTP_HOST chez votre hébergeur.",
+    },
+    !configuration.coachIaActif && {
+      titre: "Coach IA inactif",
+      detail: "Clé API Anthropic manquante : aucun programme ne peut être généré.",
+    },
+    !configuration.paiementEnLigneActif && {
+      titre: "Paiement en ligne inactif",
+      detail: "Les abonnements s'activent uniquement à la main depuis l'onglet Comptes.",
+    },
+  ].filter(Boolean) as { titre: string; detail: string }[];
+
+  if (manquants.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {manquants.map((m) => (
+        <div key={m.titre} className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-3">
+          <p className="text-sm font-semibold text-amber-200">⚠ {m.titre}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-amber-300/70">{m.detail}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Overview({ overview, activity }: { overview: AdminOverview; activity: AdminActivityDay[] }) {
   const { comptes, frequentation, activite, coutIa } = overview;
   return (
     <div className="space-y-5">
+      <ConfigurationAlerts configuration={overview.configuration} />
       <section>
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-zinc-400">Comptes et abonnements</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

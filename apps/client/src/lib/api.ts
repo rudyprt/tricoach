@@ -223,6 +223,11 @@ export interface AdminOverview {
     programmesGeneres30j: number;
     athletesAvecObjectifAVenir: number;
   };
+  configuration: {
+    emailsActifs: boolean;
+    coachIaActif: boolean;
+    paiementEnLigneActif: boolean;
+  };
   coutIa: {
     totalMicroUsd: number;
     total30jMicroUsd: number;
