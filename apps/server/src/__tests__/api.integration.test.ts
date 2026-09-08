@@ -49,7 +49,7 @@ describeIfDb("API", () => {
 
   async function signUp(email: string, password = "motdepasse123") {
     const agent = request.agent(app);
-    const res = await agent.post("/api/auth/register").send({ email, password, name: "Athlète" });
+    const res = await agent.post("/api/auth/register").send({ email, password, name: "Athlète", acceptConditions: true });
     expect(res.status).toBe(201);
     return { agent, user: res.body as { id: string; plan: string } };
   }
@@ -59,7 +59,7 @@ describeIfDb("API", () => {
       const agent = request.agent(app);
       const res = await agent
         .post("/api/auth/register")
-        .send({ email: "a@example.com", password: "motdepasse123", name: "Alice" });
+        .send({ email: "a@example.com", password: "motdepasse123", name: "Alice", acceptConditions: true });
 
       expect(res.status).toBe(201);
       expect(res.body.plan).toBe("free");
@@ -78,7 +78,7 @@ describeIfDb("API", () => {
     it("refuse un mot de passe trop court", async () => {
       const res = await request(app)
         .post("/api/auth/register")
-        .send({ email: "b@example.com", password: "court", name: "Bob" });
+        .send({ email: "b@example.com", password: "court", name: "Bob", acceptConditions: true });
       expect(res.status).toBe(400);
     });
 
@@ -86,7 +86,7 @@ describeIfDb("API", () => {
       await signUp("Casse@Example.com");
       const res = await request(app)
         .post("/api/auth/register")
-        .send({ email: "casse@example.com", password: "motdepasse123", name: "Autre" });
+        .send({ email: "casse@example.com", password: "motdepasse123", name: "Autre", acceptConditions: true });
       expect(res.status).toBe(409);
     });
 
@@ -184,7 +184,8 @@ describeIfDb("API", () => {
 
       const res = await bob.get("/api/sessions");
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      expect(res.body.sessions).toEqual([]);
+      expect(res.body.nextCursor).toBeNull();
     });
 
     it("refuse d'échanger deux séances dont une appartient à un autre", async () => {
@@ -461,34 +462,87 @@ describeIfDb("API", () => {
   });
 
   describe("protection anti-bourrage", () => {
-    it("bloque les tentatives de connexion répétées", async () => {
+    it("verrouille le compte après plusieurs tentatives infructueuses", async () => {
       await signUp("bruteforce@example.com");
       resetAllRateLimits();
 
       const attempt = () =>
         request(app).post("/api/auth/login").send({ email: "bruteforce@example.com", password: "mauvais" });
 
-      for (let i = 0; i < 10; i++) {
+      // Le verrouillage porte sur le compte, pas sur l'adresse IP : il résiste
+      // donc à une attaque distribuée et à un déploiement multi-instances.
+      const { MAX_FAILED_LOGINS } = await import("../lib/loginProtection.js");
+      for (let i = 0; i < MAX_FAILED_LOGINS; i++) {
         expect((await attempt()).status).toBe(401);
       }
 
       const blocked = await attempt();
       expect(blocked.status).toBe(429);
-      expect(blocked.headers["retry-after"]).toBeDefined();
+      expect(blocked.body.error).toContain("Trop de tentatives");
+
+      // Même le bon mot de passe est refusé tant que le verrou tient.
+      const avecBonMotDePasse = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "bruteforce@example.com", password: "motdepasse123" });
+      expect(avecBonMotDePasse.status).toBe(429);
     });
 
-    it("limite le nombre de créations de compte depuis une même adresse", async () => {
+    it("remet le compteur à zéro après une connexion réussie", async () => {
+      await signUp("compteur@example.com");
       resetAllRateLimits();
-      for (let i = 0; i < 5; i++) {
-        const res = await request(app)
-          .post("/api/auth/register")
-          .send({ email: `serie${i}@example.com`, password: "motdepasse123", name: "X" });
-        expect(res.status).toBe(201);
-      }
-      const blocked = await request(app)
-        .post("/api/auth/register")
-        .send({ email: "serie-de-trop@example.com", password: "motdepasse123", name: "X" });
-      expect(blocked.status).toBe(429);
+
+      await request(app).post("/api/auth/login").send({ email: "compteur@example.com", password: "faux" });
+      await request(app).post("/api/auth/login").send({ email: "compteur@example.com", password: "faux" });
+      expect(
+        (await prisma.user.findUniqueOrThrow({ where: { email: "compteur@example.com" } })).failedLogins
+      ).toBe(2);
+
+      const ok = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "compteur@example.com", password: "motdepasse123" });
+      expect(ok.status).toBe(200);
+      expect(
+        (await prisma.user.findUniqueOrThrow({ where: { email: "compteur@example.com" } })).failedLogins
+      ).toBe(0);
+    });
+
+    it("laisse la réinitialisation de mot de passe déverrouiller un compte", async () => {
+      const crypto = await import("node:crypto");
+      const { user } = await signUp("deverrouille@example.com");
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLogins: 20, lockedUntil: new Date(Date.now() + 3600_000) },
+      });
+      resetAllRateLimits();
+
+      const connexion = () =>
+        request(app).post("/api/auth/login").send({ email: "deverrouille@example.com", password: "nouveaumotdepasse" });
+
+      // Verrouillé : même le bon mot de passe ne passe pas.
+      expect((await connexion()).status).toBe(429);
+
+      // Le jeton n'existe en clair que dans l'e-mail : on en pose un dont on
+      // connaît la valeur, pour exercer la vraie route de réinitialisation.
+      const clair = crypto.randomBytes(32).toString("hex");
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: crypto.createHash("sha256").update(clair).digest("hex"),
+          expiresAt: new Date(Date.now() + 3600_000),
+        },
+      });
+
+      const reset = await request(app)
+        .post("/api/auth/reset-password")
+        .send({ token: clair, password: "nouveaumotdepasse" });
+      expect(reset.status).toBe(200);
+
+      // Réinitialiser son mot de passe est la sortie légitime du verrou.
+      resetAllRateLimits();
+      expect((await connexion()).status).toBe(200);
+      const apres = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+      expect(apres.failedLogins).toBe(0);
+      expect(apres.lockedUntil).toBeNull();
     });
   });
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { api, apiErrorMessage, isSubscriptionRequiredError, CHAT_DAILY_LIMIT, type ChatMessage } from "../lib/api";
+import { api, apiErrorMessage, isSubscriptionRequiredError, CHAT_DAILY_LIMIT, type ChatMessage, type ChatPage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 
 export function Chat() {
@@ -14,7 +14,9 @@ export function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.get<ChatMessage[]>("/chat").then(({ data }) => setMessages(data));
+    // Seule la fin du fil est chargée : une conversation ancienne ne doit pas
+    // faire attendre l'ouverture de l'écran.
+    api.get<ChatPage>("/chat").then(({ data }) => setMessages(data.messages));
   }, []);
 
   useEffect(() => {

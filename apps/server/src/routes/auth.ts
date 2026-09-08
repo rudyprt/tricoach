@@ -13,6 +13,9 @@ import { loginRateLimit, passwordResetRateLimit, registerRateLimit } from "../li
 import { isValidTimeZone, safeTimeZone } from "../lib/week.js";
 import { passwordResetMail, sendMail } from "../lib/mailer.js";
 import { syncBootstrapAdmin } from "../lib/adminBootstrap.js";
+import { CONSENT_VERSION, hasCurrentConsent } from "../lib/consent.js";
+import { clearFailedLogins, isLocked, minutesUntilUnlock, recordFailedLogin } from "../lib/loginProtection.js";
+import { sendEmailVerification } from "./privacy.js";
 
 export const authRouter = Router();
 
@@ -35,16 +38,32 @@ const USER_SELECT = {
   id: true,
   email: true,
   name: true,
-  avatarUrl: true,
+  // L'image elle-même n'est jamais renvoyée ici : elle pesait jusqu'à 400 Ko
+  // dans chaque réponse. Seule sa date de mise à jour circule, et sert de
+  // cache-buster pour la route qui sert l'image.
+  avatarUpdatedAt: true,
   plan: true,
   role: true,
   timezone: true,
+  emailVerifiedAt: true,
+  consentAcceptedAt: true,
+  consentVersion: true,
   createdAt: true,
 } as const;
 
-function withSubscriptionInfo<T extends { plan: string; createdAt: Date }>(user: T) {
+function withSubscriptionInfo<
+  T extends { plan: string; createdAt: Date; emailVerifiedAt?: Date | null; consentAcceptedAt?: Date | null; consentVersion?: string | null },
+>(user: T) {
   return {
     ...user,
+    emailVerified: Boolean(user.emailVerifiedAt),
+    // Une évolution des conditions doit être re-consentie : le client affiche
+    // alors une demande d'acceptation.
+    needsConsent: !hasCurrentConsent({
+      consentAcceptedAt: user.consentAcceptedAt ?? null,
+      consentVersion: user.consentVersion ?? null,
+    }),
+    consentVersionRequise: CONSENT_VERSION,
     trialEndsAt: trialEndsAt(user.createdAt),
     isTrialActive: isTrialActive(user.createdAt),
     hasStandardAccess: hasStandardAccess(user),
@@ -69,6 +88,11 @@ const registerSchema = z.object({
   password: z.string().min(8, "8 caractères minimum").max(200, "Mot de passe trop long"),
   name: z.string().trim().min(1).max(40),
   timezone: timezoneField,
+  // Le consentement est une case à cocher obligatoire : sans lui, pas de
+  // création de compte, et sa date est conservée comme preuve.
+  acceptConditions: z.literal(true, {
+    errorMap: () => ({ message: "Vous devez accepter les conditions et la politique de confidentialité." }),
+  }),
 });
 
 authRouter.post(
@@ -90,9 +114,22 @@ authRouter.post(
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const user = await prisma.user.create({
-      data: { email, passwordHash, name, timezone },
+      data: {
+        email,
+        passwordHash,
+        name,
+        timezone,
+        consentAcceptedAt: new Date(),
+        consentVersion: CONSENT_VERSION,
+      },
       select: USER_SELECT,
     });
+
+    // L'envoi ne doit pas faire échouer l'inscription : l'athlète peut demander
+    // un nouvel envoi depuis son compte.
+    await sendEmailVerification({ id: user.id, email: user.email, name: user.name }).catch((err) =>
+      console.error("Envoi de la vérification d'e-mail impossible :", err)
+    );
 
     issueSession(res, user.id);
     res.status(201).json(withSubscriptionInfo(user));
@@ -117,10 +154,27 @@ authRouter.post(
     const { email, password, timezone } = parsed.data;
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user) {
+      // Même réponse qu'un mot de passe faux : l'existence d'un compte ne doit
+      // pas se déduire du message d'erreur.
       res.status(401).json({ error: "Email ou mot de passe incorrect." });
       return;
     }
+
+    if (isLocked(user)) {
+      res.status(429).json({
+        error: `Trop de tentatives sur ce compte. Réessayez dans ${minutesUntilUnlock(user)} minute(s), ou réinitialisez votre mot de passe.`,
+      });
+      return;
+    }
+
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
+      await recordFailedLogin(user.id, user.failedLogins);
+      res.status(401).json({ error: "Email ou mot de passe incorrect." });
+      return;
+    }
+
+    await clearFailedLogins(user.id, user);
 
     // Le fuseau peut changer (voyage, déménagement) : on le rafraîchit à chaque
     // connexion pour que la semaine d'entraînement reste alignée sur l'athlète.
@@ -131,10 +185,13 @@ authRouter.post(
             id: user.id,
             email: user.email,
             name: user.name,
-            avatarUrl: user.avatarUrl,
+            avatarUpdatedAt: user.avatarUpdatedAt,
             plan: user.plan,
             role: user.role,
             timezone: user.timezone,
+            emailVerifiedAt: user.emailVerifiedAt,
+            consentAcceptedAt: user.consentAcceptedAt,
+            consentVersion: user.consentVersion,
             createdAt: user.createdAt,
           };
 
@@ -187,7 +244,48 @@ authRouter.patch(
     }
     const user = await prisma.user.update({
       where: { id: req.userId! },
-      data: { avatarUrl: parsed.data.avatarUrl },
+      data: { avatarUrl: parsed.data.avatarUrl, avatarUpdatedAt: new Date() },
+      select: USER_SELECT,
+    });
+    res.json(withSubscriptionInfo(user));
+  })
+);
+
+/**
+ * Sert la photo de profil comme une vraie image, mise en cache par le
+ * navigateur. Le cache est privé : une photo de profil n'a rien à faire dans
+ * un cache partagé.
+ */
+authRouter.get(
+  "/avatar/me",
+  requireAuth,
+  ah(async (req: AuthedRequest, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { avatarUrl: true, avatarUpdatedAt: true },
+    });
+    if (!user?.avatarUrl) {
+      throw new HttpError(404, "Aucune photo de profil.");
+    }
+
+    const match = user.avatarUrl.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
+    if (!match) {
+      throw new HttpError(404, "Photo de profil illisible.");
+    }
+
+    res.setHeader("Content-Type", match[1]);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.send(Buffer.from(match[2], "base64"));
+  })
+);
+
+authRouter.delete(
+  "/avatar",
+  requireAuth,
+  ah(async (req: AuthedRequest, res) => {
+    const user = await prisma.user.update({
+      where: { id: req.userId! },
+      data: { avatarUrl: null, avatarUpdatedAt: null },
       select: USER_SELECT,
     });
     res.json(withSubscriptionInfo(user));
@@ -371,7 +469,12 @@ authRouter.post(
 
     const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
     await prisma.$transaction([
-      prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+      // Réinitialiser son mot de passe est la voie de sortie légitime d'un
+      // compte verrouillé par des tentatives infructueuses.
+      prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash, failedLogins: 0, lockedUntil: null },
+      }),
       prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
       // Les autres liens en attente pour ce compte deviennent inutilisables.
       prisma.passwordResetToken.deleteMany({ where: { userId: record.userId, usedAt: null } }),

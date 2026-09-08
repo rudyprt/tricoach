@@ -7,6 +7,8 @@ import {
   type AthleteProfile,
   type Session,
   type TrainingPlan,
+  isGenerationRunning,
+  type GenerationJob,
 } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { SessionCard } from "../components/SessionCard";
@@ -25,6 +27,10 @@ const SPORT_ICON: Record<Session["sport"], string> = {
   renfo: "🏋️",
   repos: "😴",
 };
+
+/** Sondage de l'avancement : assez fréquent pour paraître vivant, assez espacé
+ * pour ne pas marteler le serveur pendant deux minutes. */
+const POLL_INTERVAL_MS = 2500;
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -51,44 +57,72 @@ export function Dashboard() {
     }
   }, []);
 
-  const generatePlan = useCallback(async () => {
-    setGenerating(true);
-    setError(null);
-    setSubscriptionRequired(false);
-    try {
-      const { data } = await api.post<TrainingPlan>("/plans/generate");
-      setPlan(data);
-      setDebriefDismissed(false);
-    } catch (err) {
-      if (isSubscriptionRequiredError(err)) {
-        setSubscriptionRequired(true);
-      }
-      setError(apiErrorMessage(err, "Échec de la génération du programme."));
-    } finally {
-      setGenerating(false);
-    }
-  }, []);
+  /**
+   * La génération dure souvent plus d'une minute : le serveur la traite en
+   * tâche de fond et l'on suit son avancement. L'athlète peut donc quitter
+   * l'écran, ou revenir plus tard, sans perdre le programme en cours.
+   */
+  const followJob = useCallback(
+    async (job: GenerationJob) => {
+      setGenerating(true);
+      setError(null);
 
-  const generateNextWeek = useCallback(async () => {
-    setGenerating(true);
-    setError(null);
-    setSubscriptionRequired(false);
-    try {
-      const { data } = await api.post<TrainingPlan>("/plans/next");
-      setPlan(data);
-      setDebriefDismissed(false);
-    } catch (err) {
-      if (isSubscriptionRequiredError(err)) {
-        setSubscriptionRequired(true);
+      let current = job;
+      while (isGenerationRunning(current)) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        try {
+          const { data } = await api.get<GenerationJob>(`/plans/jobs/${current.id}`);
+          current = data;
+        } catch {
+          // Coupure réseau passagère : on retente au tour suivant plutôt que
+          // d'abandonner une génération qui est peut-être en train d'aboutir.
+          continue;
+        }
       }
-      setError(apiErrorMessage(err, "Échec de la génération du programme."));
-    } finally {
+
       setGenerating(false);
-    }
-  }, []);
+      if (current.status === "reussie") {
+        setDebriefDismissed(false);
+        await loadPlan();
+      } else {
+        setError(current.error ?? "Échec de la génération du programme.");
+      }
+    },
+    [loadPlan]
+  );
+
+  const startGeneration = useCallback(
+    async (endpoint: "/plans/generate" | "/plans/next") => {
+      setGenerating(true);
+      setError(null);
+      setSubscriptionRequired(false);
+      try {
+        const { data } = await api.post<GenerationJob>(endpoint);
+        await followJob(data);
+      } catch (err) {
+        setGenerating(false);
+        if (isSubscriptionRequiredError(err)) {
+          setSubscriptionRequired(true);
+        }
+        setError(apiErrorMessage(err, "Échec de la génération du programme."));
+      }
+    },
+    [followJob]
+  );
+
+  const generatePlan = useCallback(() => startGeneration("/plans/generate"), [startGeneration]);
+  const generateNextWeek = useCallback(() => startGeneration("/plans/next"), [startGeneration]);
 
   useEffect(() => {
     loadPlan();
+    // Une génération lancée puis quittée continue côté serveur : on la reprend
+    // au lieu d'afficher un écran vide.
+    api
+      .get<GenerationJob | null>("/plans/jobs/latest")
+      .then(({ data }) => {
+        if (isGenerationRunning(data)) followJob(data!);
+      })
+      .catch(() => undefined);
     api.get<AthleteProfile | null>("/profile").then(({ data }) => setProfile(data));
     api.get<{ exists: boolean }>("/plans/previous").then(({ data }) => setHasPastPlan(data.exists));
     if (user?.isPremium) {
@@ -283,7 +317,18 @@ export function Dashboard() {
         </div>
       )}
 
-      {loading ? (
+      {generating ? (
+        <div className="animate-fade-in-up rounded-2xl border border-rose-900/40 bg-gradient-to-b from-rose-950/25 to-zinc-950/80 p-8 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
+            <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-rose-500/25 border-t-rose-500" />
+          </div>
+          <p className="text-sm font-semibold text-white">Votre coach prépare votre semaine…</p>
+          <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-zinc-400">
+            Cela prend généralement une à deux minutes. Vous pouvez fermer l'application : la génération continue et
+            vous retrouverez votre programme en revenant.
+          </p>
+        </div>
+      ) : loading ? (
         <p className="flex items-center gap-2 text-zinc-500">
           <Spinner /> Chargement...
         </p>

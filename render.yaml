@@ -18,3 +18,18 @@ services:
       # À renseigner APRÈS avoir créé votre compte dans l'application.
       - key: ADMIN_EMAILS
         sync: false
+      # URL publique du service, utilisée dans les liens des e-mails.
+      - key: APP_URL
+        sync: false
+      # Envoi d'e-mails (récupération de mot de passe, vérification d'adresse).
+      # Sans SMTP_HOST, aucun e-mail ne part.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false

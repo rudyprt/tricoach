@@ -9,6 +9,16 @@ export const api = axios.create({
  * Le serveur calcule la semaine d'entraînement et le quota quotidien dans le
  * fuseau de l'athlète : il est transmis à l'inscription et à chaque connexion.
  */
+/**
+ * URL de la photo de profil. La date de mise à jour sert de cache-buster :
+ * l'image est mise en cache un jour par le navigateur, mais une nouvelle photo
+ * s'affiche immédiatement.
+ */
+export function avatarUrl(user: { avatarUpdatedAt: string | null } | null): string | null {
+  if (!user?.avatarUpdatedAt) return null;
+  return `/api/auth/avatar/me?v=${encodeURIComponent(user.avatarUpdatedAt)}`;
+}
+
 export function browserTimeZone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
@@ -118,6 +128,22 @@ export interface TrainingPlan {
   periodization: Periodization;
 }
 
+export type GenerationStatus = "en_attente" | "en_cours" | "reussie" | "echouee";
+
+export interface GenerationJob {
+  id: string;
+  kind: "premiere_semaine" | "semaine_suivante";
+  status: GenerationStatus;
+  planId: string | null;
+  error: string | null;
+  createdAt: string;
+  endedAt: string | null;
+}
+
+export function isGenerationRunning(job: GenerationJob | null): boolean {
+  return job?.status === "en_attente" || job?.status === "en_cours";
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -133,7 +159,8 @@ export interface CurrentUser {
   id: string;
   email: string;
   name: string;
-  avatarUrl: string | null;
+  /** Date du dernier changement de photo, ou null si aucune photo. */
+  avatarUpdatedAt: string | null;
   plan: Plan;
   role: UserRole;
   timezone: string;
@@ -144,6 +171,9 @@ export interface CurrentUser {
   isPremium: boolean;
   /** false tant qu'aucun paiement n'est branché : l'app ne propose pas d'activer une offre. */
   selfServeBilling: boolean;
+  emailVerified: boolean;
+  /** true quand les conditions ont changé depuis la dernière acceptation. */
+  needsConsent: boolean;
   profile: AthleteProfile | null;
 }
 
@@ -182,6 +212,17 @@ export function isRateLimitError(err: unknown): boolean {
 /* Administration                                                      */
 /* ------------------------------------------------------------------ */
 
+export interface SessionPage {
+  sessions: Session[];
+  nextCursor: string | null;
+}
+
+export interface ChatPage {
+  messages: ChatMessage[];
+  hasMore: boolean;
+  oldestAt: string | null;
+}
+
 export interface AdminOverview {
   comptes: {
     total: number;
@@ -203,6 +244,11 @@ export interface AdminOverview {
   activite: {
     programmesGeneres30j: number;
     athletesAvecObjectifAVenir: number;
+  };
+  configuration: {
+    emailsActifs: boolean;
+    coachIaActif: boolean;
+    paiementEnLigneActif: boolean;
   };
   coutIa: {
     totalMicroUsd: number;

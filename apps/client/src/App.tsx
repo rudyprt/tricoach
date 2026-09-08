@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -9,14 +9,18 @@ import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Onboarding } from "./pages/Onboarding";
 import { Dashboard } from "./pages/Dashboard";
-import { Historique } from "./pages/Historique";
+const Historique = lazy(() => import("./pages/Historique").then((m) => ({ default: m.Historique })));
 import { Chat } from "./pages/Chat";
 import { Plans } from "./pages/Plans";
 import { Objectif } from "./pages/Objectif";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
-import { Zones } from "./pages/Zones";
-import { Admin } from "./pages/Admin";
+const Zones = lazy(() => import("./pages/Zones").then((m) => ({ default: m.Zones })));
+const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin })));
+const Compte = lazy(() => import("./pages/Compte").then((m) => ({ default: m.Compte })));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail").then((m) => ({ default: m.VerifyEmail })));
+const Conditions = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Conditions })));
+const Confidentialite = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Confidentialite })));
 
 function AppShell() {
   const [showSplash, setShowSplash] = useState(true);
@@ -35,11 +39,21 @@ function AppShell() {
     <>
       <AnimatedBackground />
       {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
-      <Routes>
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-rose-500" />
+          </div>
+        }
+      >
+        <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
         <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
+        <Route path="/verifier-email" element={<VerifyEmail />} />
+        <Route path="/conditions" element={<Conditions />} />
+        <Route path="/confidentialite" element={<Confidentialite />} />
         <Route
           path="/plans-intro"
           element={
@@ -70,10 +84,12 @@ function AppShell() {
           <Route path="/objectif" element={<Objectif />} />
           <Route path="/zones" element={<Zones />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/compte" element={<Compte />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </>
   );
 }

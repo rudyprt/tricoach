@@ -234,26 +234,6 @@ async function runGeneration(
   throw lastError ?? new Error("Échec de la génération après plusieurs tentatives.");
 }
 
-/**
- * Un échec de génération est un 502 explicite ; les erreurs de persistance qui
- * suivent doivent, elles, remonter telles quelles (une panne base ne doit pas
- * être présentée à l'athlète comme un échec de l'IA).
- */
-async function generateOrFail(
-  userId: string,
-  kind: AiCallKind,
-  system: string,
-  userPrompt: string,
-  allowedDates: string[]
-) {
-  try {
-    return await runGeneration(userId, kind, system, userPrompt, allowedDates);
-  } catch (err) {
-    console.error("Génération de programme impossible :", err);
-    throw new HttpError(502, "Échec de la génération du programme par l'IA. Réessayez.");
-  }
-}
-
 async function loadUserContext(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -363,33 +343,230 @@ function planPayload(plan: { sessions: Parameters<typeof serializeSession>[0][] 
   };
 }
 
-plansRouter.post(
-  "/generate",
-  generationRateLimit,
-  ah(async (req: AuthedRequest, res) => {
-    const user = await requireGenerationAccess(req.userId!);
-    const profile = await requireProfile(req.userId!);
+/* ------------------------------------------------------------------ */
+/* Génération en tâche de fond                                         */
+/* ------------------------------------------------------------------ */
 
-    const weekStart = startOfWeek(new Date(), user.timezone);
-    const phase = periodization(weekStart, profile.objectifDate);
+export type JobKind = "premiere_semaine" | "semaine_suivante";
+
+/** Au-delà, une tâche encore "en_cours" est considérée comme perdue. */
+const JOB_STALE_MS = 10 * 60 * 1000;
+
+interface PreparedGeneration {
+  weekStart: Date;
+  phase: Periodization;
+  system: string;
+  userPrompt: string;
+  aiKind: AiCallKind;
+}
+
+/**
+ * Tout ce qui peut échouer immédiatement (abonnement, profil manquant, absence
+ * de semaine précédente) est vérifié avant de créer la tâche : l'athlète reçoit
+ * une erreur claire tout de suite, pas au bout de deux minutes d'attente.
+ */
+async function prepareGeneration(userId: string, kind: JobKind): Promise<PreparedGeneration> {
+  const user = await requireGenerationAccess(userId);
+  const profile = await requireProfile(userId);
+
+  const weekStart = startOfWeek(new Date(), user.timezone);
+  const phase = periodization(weekStart, profile.objectifDate);
+
+  if (kind === "premiere_semaine") {
     const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
-
     const recentSessions = await prisma.session.findMany({
-      where: { userId: req.userId!, status: { in: ["faite", "manquee"] } },
+      where: { userId, status: { in: ["faite", "manquee"] } },
       orderBy: { date: "desc" },
       take: 10,
       select: { date: true, sport: true, dureeMin: true, distanceKm: true, status: true, ressenti: true },
     });
 
-    const generated = await generateOrFail(
-      req.userId!,
-      "plan_generation",
-      buildSystemPrompt(false, phase),
-      buildFirstWeekPrompt(profile, weekStart, phase, maxVolumeMin, recentSessions),
-      weekDays(weekStart)
+    return {
+      weekStart,
+      phase,
+      aiKind: "plan_generation",
+      system: buildSystemPrompt(false, phase),
+      userPrompt: buildFirstWeekPrompt(profile, weekStart, phase, maxVolumeMin, recentSessions),
+    };
+  }
+
+  const previousPlan = await prisma.trainingPlan.findFirst({
+    where: { userId, weekStart: { lt: weekStart } },
+    orderBy: { weekStart: "desc" },
+    include: { sessions: { orderBy: { date: "asc" } } },
+  });
+  if (!previousPlan) {
+    throw new HttpError(400, "Aucune semaine précédente trouvée pour établir une progression.");
+  }
+
+  const nonRestSessions = previousPlan.sessions.filter((s) => s.sport !== "repos");
+  const plannedVolumeMin = nonRestSessions.reduce((sum, s) => sum + s.dureeMin, 0);
+  const realizedVolumeMin = nonRestSessions
+    .filter((s) => s.status === "faite")
+    .reduce((sum, s) => sum + s.dureeMin, 0);
+  const completedCount = nonRestSessions.filter((s) => s.status === "faite").length;
+  const missedCount = nonRestSessions.filter((s) => s.status === "manquee").length;
+
+  const baseVolumeMin =
+    realizedVolumeMin > 0 ? realizedVolumeMin : plannedVolumeMin > 0 ? plannedVolumeMin : profile.heuresSemaine * 60;
+  // La progression de charge est plafonnée à +10%, puis la phase de
+  // périodisation peut encore la réduire (affûtage, semaine de course).
+  const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor);
+
+  return {
+    weekStart,
+    phase,
+    aiKind: "plan_progression",
+    system: buildSystemPrompt(true, phase),
+    userPrompt: buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, {
+      plannedVolumeMin,
+      realizedVolumeMin,
+      completedCount,
+      missedCount,
+      totalCount: nonRestSessions.length,
+      maxVolumeMin,
+    }),
+  };
+}
+
+/**
+ * Exécute la génération hors du cycle requête/réponse. Aucune exception ne doit
+ * en sortir : l'échec est enregistré sur la tâche, que l'athlète consulte.
+ */
+async function processJob(jobId: string, userId: string, prepared: PreparedGeneration): Promise<void> {
+  try {
+    await prisma.generationJob.update({
+      where: { id: jobId },
+      data: { status: "en_cours", startedAt: new Date() },
+    });
+
+    const { aiPlan, raw } = await runGeneration(
+      userId,
+      prepared.aiKind,
+      prepared.system,
+      prepared.userPrompt,
+      weekDays(prepared.weekStart)
     );
-    const plan = await persistPlan({ userId: req.userId!, weekStart, ...generated, phase });
-    res.status(201).json(planPayload(plan, phase));
+
+    const plan = await persistPlan({
+      userId,
+      weekStart: prepared.weekStart,
+      raw,
+      aiPlan,
+      phase: prepared.phase,
+    });
+
+    await prisma.generationJob.update({
+      where: { id: jobId },
+      data: { status: "reussie", planId: plan.id, endedAt: new Date() },
+    });
+  } catch (err) {
+    console.error(`Génération ${jobId} échouée :`, err);
+    await prisma.generationJob
+      .update({
+        where: { id: jobId },
+        data: {
+          status: "echouee",
+          error:
+            err instanceof HttpError
+              ? err.message
+              : "Le coach IA n'a pas réussi à produire un programme valide. Réessayez.",
+          endedAt: new Date(),
+        },
+      })
+      .catch((updateErr) => console.error("Impossible d'enregistrer l'échec de génération :", updateErr));
+  }
+}
+
+function jobPayload(job: {
+  id: string;
+  kind: string;
+  status: string;
+  planId: string | null;
+  error: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+  endedAt: Date | null;
+}) {
+  // Une tâche laissée "en_cours" par un redémarrage du serveur ne se terminera
+  // jamais : passé le délai, elle est présentée comme échouée plutôt que de
+  // faire attendre l'athlète indéfiniment.
+  const stale =
+    (job.status === "en_cours" || job.status === "en_attente") &&
+    Date.now() - (job.startedAt ?? job.createdAt).getTime() > JOB_STALE_MS;
+
+  return {
+    id: job.id,
+    kind: job.kind,
+    status: stale ? "echouee" : job.status,
+    planId: job.planId,
+    error: stale ? "La génération a été interrompue. Relancez-la." : job.error,
+    createdAt: job.createdAt,
+    endedAt: job.endedAt,
+  };
+}
+
+async function findRunningJob(userId: string) {
+  const job = await prisma.generationJob.findFirst({
+    where: { userId, status: { in: ["en_attente", "en_cours"] } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!job) return null;
+  return jobPayload(job).status === "echouee" ? null : job;
+}
+
+async function launchGeneration(req: AuthedRequest, res: import("express").Response, kind: JobKind) {
+  const userId = req.userId!;
+
+  // Une seule génération à la fois : un double appui sur le bouton ne doit pas
+  // déclencher deux appels facturés au modèle.
+  const running = await findRunningJob(userId);
+  if (running) {
+    res.status(202).json(jobPayload(running));
+    return;
+  }
+
+  const prepared = await prepareGeneration(userId, kind);
+  const job = await prisma.generationJob.create({ data: { userId, kind } });
+
+  // Volontairement sans await : la réponse part immédiatement.
+  void processJob(job.id, userId, prepared);
+
+  res.status(202).json(jobPayload(job));
+}
+
+plansRouter.post(
+  "/generate",
+  generationRateLimit,
+  ah(async (req: AuthedRequest, res) => launchGeneration(req, res, "premiere_semaine"))
+);
+
+plansRouter.post(
+  "/next",
+  generationRateLimit,
+  ah(async (req: AuthedRequest, res) => launchGeneration(req, res, "semaine_suivante"))
+);
+
+/** Avancement de la dernière génération lancée : ce que le client interroge. */
+plansRouter.get(
+  "/jobs/latest",
+  ah(async (req: AuthedRequest, res) => {
+    const job = await prisma.generationJob.findFirst({
+      where: { userId: req.userId! },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(job ? jobPayload(job) : null);
+  })
+);
+
+plansRouter.get(
+  "/jobs/:id",
+  ah(async (req: AuthedRequest, res) => {
+    const job = await prisma.generationJob.findUnique({ where: { id: req.params.id } });
+    if (!job || job.userId !== req.userId) {
+      throw new HttpError(404, "Génération introuvable.");
+    }
+    res.json(jobPayload(job));
   })
 );
 
@@ -403,61 +580,6 @@ plansRouter.get(
       orderBy: { weekStart: "desc" },
     });
     res.json({ exists: Boolean(previous) });
-  })
-);
-
-plansRouter.post(
-  "/next",
-  generationRateLimit,
-  ah(async (req: AuthedRequest, res) => {
-    const user = await requireGenerationAccess(req.userId!);
-    const profile = await requireProfile(req.userId!);
-
-    const weekStart = startOfWeek(new Date(), user.timezone);
-    const phase = periodization(weekStart, profile.objectifDate);
-
-    const previousPlan = await prisma.trainingPlan.findFirst({
-      where: { userId: req.userId!, weekStart: { lt: weekStart } },
-      orderBy: { weekStart: "desc" },
-      include: { sessions: { orderBy: { date: "asc" } } },
-    });
-
-    if (!previousPlan) {
-      throw new HttpError(400, "Aucune semaine précédente trouvée pour établir une progression.");
-    }
-
-    const nonRestSessions = previousPlan.sessions.filter((s) => s.sport !== "repos");
-    const plannedVolumeMin = nonRestSessions.reduce((sum, s) => sum + s.dureeMin, 0);
-    const realizedVolumeMin = nonRestSessions
-      .filter((s) => s.status === "faite")
-      .reduce((sum, s) => sum + s.dureeMin, 0);
-    const completedCount = nonRestSessions.filter((s) => s.status === "faite").length;
-    const missedCount = nonRestSessions.filter((s) => s.status === "manquee").length;
-
-    const baseVolumeMin =
-      realizedVolumeMin > 0 ? realizedVolumeMin : plannedVolumeMin > 0 ? plannedVolumeMin : profile.heuresSemaine * 60;
-    // La progression de charge est plafonnée à +10%, puis la phase de
-    // périodisation peut encore la réduire (affûtage, semaine de course).
-    const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor);
-
-    const stats = {
-      plannedVolumeMin,
-      realizedVolumeMin,
-      completedCount,
-      missedCount,
-      totalCount: nonRestSessions.length,
-      maxVolumeMin,
-    };
-
-    const generated = await generateOrFail(
-      req.userId!,
-      "plan_progression",
-      buildSystemPrompt(true, phase),
-      buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, stats),
-      weekDays(weekStart)
-    );
-    const plan = await persistPlan({ userId: req.userId!, weekStart, ...generated, phase });
-    res.status(201).json(planPayload(plan, phase));
   })
 );
 

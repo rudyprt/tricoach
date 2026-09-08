@@ -17,14 +17,43 @@ chatRouter.use(requireAuth);
 /** Nombre de messages du fil renvoyés au modèle comme contexte. */
 const HISTORY_WINDOW = 20;
 
+const historyQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  /** Date du plus ancien message déjà affiché, pour remonter le fil. */
+  before: z.string().datetime().optional(),
+});
+
+/**
+ * Le fil est renvoyé par tranches, du plus récent au plus ancien puis remis
+ * dans l'ordre : une conversation de plusieurs centaines de messages ne doit
+ * pas être rechargée entièrement à chaque ouverture.
+ */
 chatRouter.get(
   "/",
   ah(async (req: AuthedRequest, res) => {
-    const messages = await prisma.chatMessage.findMany({
-      where: { userId: req.userId! },
-      orderBy: { createdAt: "asc" },
+    const parsed = historyQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw new HttpError(400, "Paramètres de conversation invalides.");
+    }
+    const { limit, before } = parsed.data;
+
+    const recent = await prisma.chatMessage.findMany({
+      where: {
+        userId: req.userId!,
+        ...(before ? { createdAt: { lt: new Date(before) } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
     });
-    res.json(messages);
+
+    const hasMore = recent.length > limit;
+    const page = hasMore ? recent.slice(0, limit) : recent;
+
+    res.json({
+      messages: page.reverse(),
+      hasMore,
+      oldestAt: page[0]?.createdAt ?? null,
+    });
   })
 );
 
