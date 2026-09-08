@@ -30,9 +30,31 @@ model User {
   aiCalls              AiCall[]
   adminActions         AdminAction[]        @relation("AdminActor")
   receivedAdminActions AdminAction[]        @relation("AdminTarget")
+  GenerationJob        GenerationJob[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
+}
+
+/// Une génération de programme en cours ou terminée. La génération dure
+/// souvent plus d'une minute : elle est lancée en tâche de fond et l'athlète
+/// suit son avancement, au lieu de tenir une requête HTTP ouverte que les
+/// proxys finissent par couper.
+model GenerationJob {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "premiere_semaine" | "semaine_suivante"
+  kind      String
+  /// "en_attente" | "en_cours" | "reussie" | "echouee"
+  status    String    @default("en_attente")
+  planId    String?
+  error     String?
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }
 
 /// Un appel au modèle, avec sa consommation de tokens : permet de suivre le

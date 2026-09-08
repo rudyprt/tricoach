@@ -118,6 +118,22 @@ export interface TrainingPlan {
   periodization: Periodization;
 }
 
+export type GenerationStatus = "en_attente" | "en_cours" | "reussie" | "echouee";
+
+export interface GenerationJob {
+  id: string;
+  kind: "premiere_semaine" | "semaine_suivante";
+  status: GenerationStatus;
+  planId: string | null;
+  error: string | null;
+  createdAt: string;
+  endedAt: string | null;
+}
+
+export function isGenerationRunning(job: GenerationJob | null): boolean {
+  return job?.status === "en_attente" || job?.status === "en_cours";
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
