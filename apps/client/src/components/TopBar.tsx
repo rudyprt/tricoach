@@ -197,6 +197,20 @@ export function TopBar() {
                 </span>
               )}
             </button>
+            {user?.role === "admin" && (
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/admin");
+                }}
+                className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm text-amber-300 transition-colors hover:bg-zinc-900"
+              >
+                Administration
+                <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-400">
+                  admin
+                </span>
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-red-400 transition-colors hover:bg-zinc-900"

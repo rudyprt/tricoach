@@ -21,6 +21,7 @@ export function Onboarding() {
   });
   const [heuresSemaine, setHeuresSemaine] = useState(6);
   const [contraintes, setContraintes] = useState("");
+  const [ftpWatts, setFtpWatts] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { refresh } = useAuth();
@@ -37,6 +38,7 @@ export function Onboarding() {
         ...temps,
         heuresSemaine,
         contraintes,
+        ftpWatts: ftpWatts.trim() === "" ? null : Number(ftpWatts),
       });
       await refresh();
       navigate("/dashboard?generate=1");
@@ -100,6 +102,23 @@ export function Onboarding() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm text-zinc-300">FTP vélo en watts (facultatif)</label>
+            <input
+              type="number"
+              min={50}
+              max={600}
+              step={1}
+              placeholder="Ex : 240"
+              value={ftpWatts}
+              onChange={(e) => setFtpWatts(e.target.value)}
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+            />
+            <p className="text-xs text-zinc-500">
+              Renseignée, elle permet des zones vélo en puissance plutôt qu'une estimation par la vitesse.
+            </p>
           </div>
 
           <div className="space-y-1">

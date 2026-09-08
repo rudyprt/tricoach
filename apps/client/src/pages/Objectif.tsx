@@ -22,6 +22,7 @@ export function Objectif() {
   });
   const [heuresSemaine, setHeuresSemaine] = useState(6);
   const [contraintes, setContraintes] = useState("");
+  const [ftpWatts, setFtpWatts] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,6 +39,7 @@ export function Objectif() {
         });
         setHeuresSemaine(data.heuresSemaine);
         setContraintes(data.contraintes);
+        setFtpWatts(data.ftpWatts ? String(data.ftpWatts) : "");
       }
       setLoaded(true);
     });
@@ -49,7 +51,14 @@ export function Objectif() {
     setSaved(false);
     setLoading(true);
     try {
-      await api.put("/profile", { objectif, objectifDate, ...temps, heuresSemaine, contraintes });
+      await api.put("/profile", {
+        objectif,
+        objectifDate,
+        ...temps,
+        heuresSemaine,
+        contraintes,
+        ftpWatts: ftpWatts.trim() === "" ? null : Number(ftpWatts),
+      });
       setSaved(true);
     } catch (err) {
       setError(apiErrorMessage(err, "Impossible d'enregistrer votre profil."));
@@ -126,6 +135,24 @@ export function Objectif() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm text-zinc-300">FTP vélo en watts (facultatif)</label>
+          <input
+            type="number"
+            min={50}
+            max={600}
+            step={1}
+            placeholder="Ex : 240"
+            value={ftpWatts}
+            onChange={(e) => setFtpWatts(e.target.value)}
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+          />
+          <p className="text-xs text-zinc-500">
+            Si vous la connaissez, vos zones vélo seront exprimées en puissance plutôt qu'estimées à partir de votre
+            vitesse.
+          </p>
         </div>
 
         <div className="space-y-1">

@@ -5,6 +5,18 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+/**
+ * Le serveur calcule la semaine d'entraînement et le quota quotidien dans le
+ * fuseau de l'athlète : il est transmis à l'inscription et à chaque connexion.
+ */
+export function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface AthleteProfile {
   id: string;
   userId: string;
@@ -15,6 +27,39 @@ export interface AthleteProfile {
   tempsCourse: string;
   heuresSemaine: number;
   contraintes: string;
+  ftpWatts: number | null;
+}
+
+export type TrainingPhase =
+  | "base"
+  | "developpement"
+  | "specifique"
+  | "affutage"
+  | "course"
+  | "transition";
+
+export interface Periodization {
+  phase: TrainingPhase;
+  label: string;
+  weeksToGoal: number;
+}
+
+export interface ZoneRange {
+  zone: string;
+  label: string;
+  value: string;
+}
+
+export interface TrainingZones {
+  course: ZoneRange[] | null;
+  natation: ZoneRange[] | null;
+  velo: ZoneRange[] | null;
+  notes: string[];
+}
+
+export interface ZonesResponse {
+  zones: TrainingZones;
+  periodization: Periodization;
 }
 
 export interface SessionExercise {
@@ -58,7 +103,9 @@ export interface TrainingPlan {
   weekStart: string;
   generatedAt: string;
   debrief: string | null;
+  phase: TrainingPhase | null;
   sessions: Session[];
+  periodization: Periodization;
 }
 
 export interface ChatMessage {
@@ -70,17 +117,23 @@ export interface ChatMessage {
 
 export type Plan = "free" | "standard" | "premium";
 
+export type UserRole = "athlete" | "admin";
+
 export interface CurrentUser {
   id: string;
   email: string;
   name: string;
   avatarUrl: string | null;
   plan: Plan;
+  role: UserRole;
+  timezone: string;
   createdAt: string;
   trialEndsAt: string;
   isTrialActive: boolean;
   hasStandardAccess: boolean;
   isPremium: boolean;
+  /** false tant qu'aucun paiement n'est branché : l'app ne propose pas d'activer une offre. */
+  selfServeBilling: boolean;
   profile: AthleteProfile | null;
 }
 
@@ -94,10 +147,110 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function isSubscriptionRequiredError(err: unknown): boolean {
+function hasErrorCode(err: unknown, code: string): boolean {
   return (
     axios.isAxiosError(err) &&
     typeof err.response?.data === "object" &&
-    (err.response?.data as { code?: string })?.code === "SUBSCRIPTION_REQUIRED"
+    (err.response?.data as { code?: string })?.code === code
   );
+}
+
+export function isSubscriptionRequiredError(err: unknown): boolean {
+  return hasErrorCode(err, "SUBSCRIPTION_REQUIRED");
+}
+
+export function isBillingUnavailableError(err: unknown): boolean {
+  return hasErrorCode(err, "BILLING_UNAVAILABLE");
+}
+
+export function isRateLimitError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 429;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Administration                                                      */
+/* ------------------------------------------------------------------ */
+
+export interface AdminOverview {
+  comptes: {
+    total: number;
+    parOffre: Record<Plan, number>;
+    payants: number;
+    tauxConversionPct: number;
+    essaisEnCours: number;
+    essaisExpiresNonConvertis: number;
+    inscriptions7j: number;
+    inscriptions30j: number;
+  };
+  frequentation: {
+    actifs24h: number;
+    actifs7j: number;
+    actifs30j: number;
+    jamaisRevenus: number;
+    retention30jPct: number;
+  };
+  activite: {
+    programmesGeneres30j: number;
+    athletesAvecObjectifAVenir: number;
+  };
+  coutIa: {
+    totalMicroUsd: number;
+    total30jMicroUsd: number;
+    appelsTotal: number;
+    appels30j: number;
+    tokensEntree: number;
+    tokensSortie: number;
+    coutMoyenParPayant30jMicroUsd: number;
+    parType: { kind: string; appels: number; coutMicroUsd: number }[];
+    tarifsMisAJourLe: string;
+  };
+}
+
+export interface AdminActivityDay {
+  date: string;
+  inscriptions: number;
+  actifs: number;
+  coutMicroUsd: number;
+}
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string;
+  plan: Plan;
+  role: UserRole;
+  timezone: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  trialEndsAt: string;
+  isTrialActive: boolean;
+  hasStandardAccess: boolean;
+  coutIaMicroUsd: number;
+  profile: { objectif: string; objectifDate: string } | null;
+  _count: { sessions: number; trainingPlans: number; chatMessages: number };
+}
+
+export interface AdminUserList {
+  total: number;
+  page: number;
+  perPage: number;
+  pages: number;
+  users: AdminUserRow[];
+}
+
+export interface AdminAuditEntry {
+  id: string;
+  action: string;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+  admin: { id: string; email: string; name: string };
+  targetUser: { id: string; email: string; name: string } | null;
+}
+
+/** Les montants circulent en micro-dollars pour éviter les arrondis flottants. */
+export function formatUsd(microUsd: number): string {
+  const dollars = microUsd / 1_000_000;
+  if (dollars > 0 && dollars < 0.01) return "< 0,01 $";
+  return `${dollars.toFixed(2).replace(".", ",")} $`;
 }

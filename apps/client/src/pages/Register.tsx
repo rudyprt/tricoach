@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaUser, FaEnvelope, FaLock, FaEye, FaEyeSlash, FaCheck } from "react-icons/fa6";
-import { api, apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage, browserTimeZone } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "../components/Spinner";
 import { AthletesBackdrop } from "../components/AthletesBackdrop";
@@ -38,7 +38,7 @@ export function Register() {
     setError(null);
     setLoading(true);
     try {
-      await api.post("/auth/register", { name, email, password });
+      await api.post("/auth/register", { name, email, password, timezone: browserTimeZone() });
       await refresh();
       navigate("/plans-intro");
     } catch (err) {

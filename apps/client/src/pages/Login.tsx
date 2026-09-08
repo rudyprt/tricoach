@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from "react-icons/fa6";
-import { api, apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage, browserTimeZone } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "../components/Spinner";
 
@@ -19,7 +19,7 @@ export function Login() {
     setError(null);
     setLoading(true);
     try {
-      await api.post("/auth/login", { email, password });
+      await api.post("/auth/login", { email, password, timezone: browserTimeZone() });
       await refresh();
       navigate("/dashboard");
     } catch (err) {
@@ -78,6 +78,11 @@ export function Login() {
           {loading && <Spinner className="border-black/30 border-t-black" />}
           {loading ? "Connexion..." : "Se connecter"}
         </button>
+        <p className="text-center text-sm">
+          <Link to="/mot-de-passe-oublie" className="text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline">
+            Mot de passe oublié ?
+          </Link>
+        </p>
         <p className="text-center text-sm text-zinc-500">
           Pas de compte ?{" "}
           <Link to="/register" className="text-rose-400 hover:underline">

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaCheck, FaBolt, FaCrown } from "react-icons/fa6";
-import { api, apiErrorMessage, type Plan } from "../lib/api";
+import { FaCheck, FaBolt, FaCrown, FaClock } from "react-icons/fa6";
+import { api, apiErrorMessage, isBillingUnavailableError, type Plan } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "../components/Spinner";
 
@@ -13,11 +13,14 @@ const STANDARD_FEATURES = [
 
 const PREMIUM_FEATURES = [
   "Tout ce qui est inclus dans Standard",
-  "Connexion directe Strava / Garmin",
-  "Analyse fine des zones de fréquence cardiaque",
+  "Répartition de votre temps par zone d'intensité",
   "Détection de surentraînement",
   "Réponses illimitées au chat coach IA",
 ];
+
+// Annoncées comme à venir, et non comme incluses : la connexion aux montres
+// n'est pas encore implémentée.
+const PREMIUM_SOON = ["Connexion directe Strava / Garmin"];
 
 function daysRemaining(dateStr: string): number {
   const today = new Date();
@@ -43,7 +46,26 @@ export function Plans() {
       await refresh();
       navigate(isIntro ? "/onboarding" : "/dashboard");
     } catch (err) {
-      setError(apiErrorMessage(err, "Impossible de mettre à jour votre offre."));
+      // Tant qu'aucun paiement n'est branché, le serveur refuse d'activer une
+      // offre payante : on l'explique au lieu d'afficher une erreur technique.
+      setError(
+        isBillingUnavailableError(err)
+          ? apiErrorMessage(err, "Le paiement en ligne n'est pas encore disponible.")
+          : apiErrorMessage(err, "Impossible de mettre à jour votre offre.")
+      );
+    } finally {
+      setLoadingPlan(null);
+    }
+  }
+
+  async function cancelSubscription() {
+    setError(null);
+    setLoadingPlan("free");
+    try {
+      await api.patch("/auth/plan", { plan: "free" });
+      await refresh();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Impossible de résilier votre offre."));
     } finally {
       setLoadingPlan(null);
     }
@@ -89,6 +111,13 @@ export function Plans() {
 
         {error && (
           <p className="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-400">{error}</p>
+        )}
+
+        {user && !user.selfServeBilling && (
+          <p className="mb-4 rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-300">
+            Le paiement en ligne arrive bientôt. Ces offres sont présentées à titre indicatif : contactez-nous pour
+            activer un abonnement.
+          </p>
         )}
 
         <div className="space-y-4">
@@ -138,6 +167,12 @@ export function Plans() {
                   {f}
                 </li>
               ))}
+              {PREMIUM_SOON.map((f) => (
+                <li key={f} className="flex items-start gap-2 text-sm text-zinc-500">
+                  <FaClock size={12} className="mt-1 shrink-0 text-zinc-600" />
+                  {f} <span className="text-xs text-zinc-600">(bientôt)</span>
+                </li>
+              ))}
             </ul>
             <button
               onClick={() => choosePlan("premium")}
@@ -150,10 +185,21 @@ export function Plans() {
           </div>
         </div>
 
-        <div className="mt-5 text-center">
+        <div className="mt-5 space-y-2 text-center">
           <button onClick={continueWithFree} className="text-sm text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline">
             {isIntro ? "Continuer avec la semaine gratuite" : "Retour"}
           </button>
+          {!isIntro && user && user.plan !== "free" && (
+            <div>
+              <button
+                onClick={cancelSubscription}
+                disabled={loadingPlan !== null}
+                className="text-sm text-zinc-600 underline-offset-4 hover:text-zinc-400 hover:underline disabled:opacity-50"
+              >
+                Revenir à l'offre gratuite
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
