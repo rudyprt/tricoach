@@ -17,7 +17,7 @@
     "prisma:studio": "npx prisma studio --schema apps/server/prisma/schema.prisma",
     "build": "npm run prisma:generate -w apps/server && npm run build -w apps/client && npm run build -w apps/server",
     "start": "npm run prisma:deploy -w apps/server && npm run start -w apps/server",
-    "test": "npm run test -w apps/server",
+    "test": "npm run test -w apps/server && npm run test -w apps/client",
     "typecheck": "npm run typecheck -w apps/server && tsc -b apps/client",
     "lint": "npm run lint -w apps/client",
     "check": "npm run typecheck && npm run lint && npm run test"

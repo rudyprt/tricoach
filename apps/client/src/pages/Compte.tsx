@@ -260,6 +260,10 @@ export function Compte() {
         <Link to="/confidentialite" className="hover:text-zinc-400 hover:underline">
           Politique de confidentialité
         </Link>
+        {" · "}
+        <Link to="/mentions-legales" className="hover:text-zinc-400 hover:underline">
+          Mentions légales
+        </Link>
       </p>
     </div>
   );

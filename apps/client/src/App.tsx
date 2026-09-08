@@ -21,6 +21,7 @@ const Compte = lazy(() => import("./pages/Compte").then((m) => ({ default: m.Com
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail").then((m) => ({ default: m.VerifyEmail })));
 const Conditions = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Conditions })));
 const Confidentialite = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Confidentialite })));
+const MentionsLegales = lazy(() => import("./pages/Legal").then((m) => ({ default: m.MentionsLegales })));
 
 function AppShell() {
   const [showSplash, setShowSplash] = useState(true);
@@ -54,6 +55,7 @@ function AppShell() {
         <Route path="/verifier-email" element={<VerifyEmail />} />
         <Route path="/conditions" element={<Conditions />} />
         <Route path="/confidentialite" element={<Confidentialite />} />
+        <Route path="/mentions-legales" element={<MentionsLegales />} />
         <Route
           path="/plans-intro"
           element={

@@ -300,6 +300,22 @@ describeIfDb("administration", () => {
     });
   });
 
+  describe("test d'envoi d'e-mail", () => {
+    it("explique quoi configurer quand SMTP est absent", async () => {
+      const { agent } = await signUpAdmin("admin-mail@example.com");
+      const res = await agent.post("/api/admin/test-email");
+
+      expect(res.status).toBe(400);
+      // Le message doit nommer les variables à renseigner, pas juste échouer.
+      expect(res.body.error).toContain("SMTP_HOST");
+    });
+
+    it("reste inaccessible à un athlète ordinaire", async () => {
+      const { agent } = await signUp("pas-admin-mail@example.com");
+      expect((await agent.post("/api/admin/test-email")).status).toBe(404);
+    });
+  });
+
   describe("journal d'audit", () => {
     it("liste les actions les plus récentes en premier", async () => {
       const { agent } = await signUpAdmin("admin16@example.com");

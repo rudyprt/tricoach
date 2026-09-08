@@ -80,6 +80,30 @@ e-mail. Sans configuration SMTP, les messages sont seulement tracés dans les
 logs : **la récupération de compte ne fonctionne alors pas réellement**, et
 l'espace d'administration l'affiche en évidence.
 
+#### Mise en place avec Brevo (gratuit, 300 e-mails/jour)
+
+Tout se fait depuis un navigateur, téléphone compris.
+
+1. Créez un compte sur [brevo.com](https://www.brevo.com) et confirmez votre
+   adresse.
+2. Menu de votre compte (en haut à droite) → **SMTP & API** → onglet **SMTP**.
+3. Cliquez sur **Générer une nouvelle clé SMTP**. Notez les trois valeurs
+   affichées : le serveur (`smtp-relay.brevo.com`), votre **login** (une
+   adresse e-mail terminant par `@smtp-brevo.com`) et la **clé** — elle n'est
+   montrée qu'une seule fois.
+4. Reportez-les chez votre hébergeur (Render → votre service → *Environment*),
+   avec les autres variables ci-dessous.
+5. Enregistrez : le service redémarre. Allez ensuite dans l'application, onglet
+   **Administration**, et cliquez sur **Envoyer un e-mail de test**. Si vous le
+   recevez, c'est terminé. Sinon, le message d'erreur affiché vient directement
+   du serveur d'envoi et dit quoi corriger.
+
+Sans nom de domaine à vous, laissez `MAIL_FROM` sur une adresse générique : les
+messages partiront, mais avec un risque accru d'atterrir en indésirables. Avec
+un domaine, configurez SPF et DKIM chez Brevo pour une délivrabilité correcte.
+
+#### Variables
+
 Renseignez dans `apps/server/.env` (ou chez votre hébergeur) :
 
 ```
@@ -102,6 +126,30 @@ de l'hébergeur. Renseignez `ERROR_WEBHOOK_URL` avec l'URL d'un webhook (Slack,
 Discord, ou tout service acceptant du JSON) pour être alerté. Les erreurs
 identiques sont regroupées sur 5 minutes, et l'identifiant de l'athlète n'est
 jamais transmis au service externe.
+
+## Mentions légales
+
+Les pages **Conditions d'utilisation**, **Politique de confidentialité** et
+**Mentions légales** décrivent fidèlement ce que l'application fait des données.
+Seule l'identité de l'éditeur reste à renseigner, dans **un unique fichier** :
+
+```
+apps/client/src/config/editeur.ts
+```
+
+Remplacez chaque `null` par sa valeur, puis redéployez. Tant qu'un champ
+obligatoire manque, les pages affichent un avertissement nommant précisément ce
+qui reste à compléter — cet avertissement est visible par vos utilisateurs, et
+disparaît de lui-même une fois le fichier rempli.
+
+Ces mentions sont obligatoires pour tout site professionnel accessible en France
+(article 6 III de la LCEN). Elles supposent une structure déclarée : facturer un
+abonnement sans immatriculation n'est pas possible légalement. Le mode de
+facturation reste d'ailleurs désactivé par défaut (`BILLING_MODE=disabled`),
+donc personne ne peut souscrire tant que vous ne l'activez pas.
+
+Le contenu rédigé ici décrit le fonctionnement réel du service, mais n'a pas
+valeur de conseil juridique : faites-le relire avant d'ouvrir les abonnements.
 
 ## Administration
 
