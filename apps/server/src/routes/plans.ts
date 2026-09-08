@@ -251,7 +251,7 @@ async function requireGenerationAccess(userId: string) {
   if (!hasStandardAccess(user)) {
     throw new HttpError(
       402,
-      "Votre semaine d'essai gratuite est terminée. Choisissez une offre pour continuer à générer votre programme.",
+      "Votre période d'essai gratuite est terminée. Choisissez une offre pour continuer à générer votre programme.",
       "SUBSCRIPTION_REQUIRED"
     );
   }

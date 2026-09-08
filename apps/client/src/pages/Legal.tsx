@@ -64,7 +64,8 @@ export function Conditions() {
 
       <Section title="Offres et essai">
         <p>
-          Chaque nouveau compte bénéficie d'une période d'essai de 7 jours donnant accès à la génération de programmes.
+          Chaque nouveau compte bénéficie d'une période d'essai de 14 jours donnant accès à la génération de
+          programmes.
           Au-delà, l'accès aux fonctions de programmation nécessite une offre payante. Les tarifs affichés dans
           l'application s'entendent toutes taxes comprises, par mois.
         </p>

@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { hasStandardAccess, isPremium, isTrialActive, trialEndsAt } from "../lib/subscription.js";
+import { hasStandardAccess, isPremium, isTrialActive, trialEndsAt, TRIAL_DAYS } from "../lib/subscription.js";
 import { billingUnavailableMessage, canSelfActivatePaidPlan, isPaidPlan } from "../lib/billing.js";
 import { env, isProduction } from "../lib/env.js";
 import { ah, HttpError } from "../lib/http.js";
@@ -66,6 +66,9 @@ function withSubscriptionInfo<
     consentVersionRequise: CONSENT_VERSION,
     trialEndsAt: trialEndsAt(user.createdAt),
     isTrialActive: isTrialActive(user.createdAt),
+    // Porté par l'API pour que la durée affichée ne diverge jamais de celle
+    // réellement appliquée.
+    trialDays: TRIAL_DAYS,
     hasStandardAccess: hasStandardAccess(user),
     isPremium: isPremium(user),
     selfServeBilling: canSelfActivatePaidPlan(),
