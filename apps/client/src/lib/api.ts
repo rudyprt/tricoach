@@ -9,6 +9,16 @@ export const api = axios.create({
  * Le serveur calcule la semaine d'entraînement et le quota quotidien dans le
  * fuseau de l'athlète : il est transmis à l'inscription et à chaque connexion.
  */
+/**
+ * URL de la photo de profil. La date de mise à jour sert de cache-buster :
+ * l'image est mise en cache un jour par le navigateur, mais une nouvelle photo
+ * s'affiche immédiatement.
+ */
+export function avatarUrl(user: { avatarUpdatedAt: string | null } | null): string | null {
+  if (!user?.avatarUpdatedAt) return null;
+  return `/api/auth/avatar/me?v=${encodeURIComponent(user.avatarUpdatedAt)}`;
+}
+
 export function browserTimeZone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
@@ -149,7 +159,8 @@ export interface CurrentUser {
   id: string;
   email: string;
   name: string;
-  avatarUrl: string | null;
+  /** Date du dernier changement de photo, ou null si aucune photo. */
+  avatarUpdatedAt: string | null;
   plan: Plan;
   role: UserRole;
   timezone: string;
@@ -200,6 +211,17 @@ export function isRateLimitError(err: unknown): boolean {
 /* ------------------------------------------------------------------ */
 /* Administration                                                      */
 /* ------------------------------------------------------------------ */
+
+export interface SessionPage {
+  sessions: Session[];
+  nextCursor: string | null;
+}
+
+export interface ChatPage {
+  messages: ChatMessage[];
+  hasMore: boolean;
+  oldestAt: string | null;
+}
 
 export interface AdminOverview {
   comptes: {

@@ -95,6 +95,14 @@ N'importe quel service SMTP convient (Brevo, Resend, Postmark, Mailgun, ou même
 un compte dédié chez votre fournisseur). `APP_URL` doit pointer sur l'adresse
 publique de l'application : c'est elle qui construit les liens des e-mails.
 
+### Remontée des erreurs (recommandé)
+
+Sans récepteur configuré, une panne serveur ne se découvre qu'en lisant les logs
+de l'hébergeur. Renseignez `ERROR_WEBHOOK_URL` avec l'URL d'un webhook (Slack,
+Discord, ou tout service acceptant du JSON) pour être alerté. Les erreurs
+identiques sont regroupées sur 5 minutes, et l'identifiant de l'athlète n'est
+jamais transmis au service externe.
+
 ## Administration
 
 Un compte peut avoir le rôle `admin`. Il accède alors à `/admin` dans

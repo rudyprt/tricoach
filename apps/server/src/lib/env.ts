@@ -47,6 +47,13 @@ const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   MAIL_FROM: z.string().default("TriCoach <ne-pas-repondre@tricoach.app>"),
+
+  /**
+   * Remontée des erreurs serveur vers un service externe (Slack, Discord,
+   * Sentry via son endpoint HTTP, ou tout récepteur acceptant du JSON).
+   * Sans URL, les erreurs restent dans les logs.
+   */
+  ERROR_WEBHOOK_URL: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

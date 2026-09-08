@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaPen, FaCheck, FaXmark } from "react-icons/fa6";
 import { useAuth } from "../lib/AuthContext";
-import { api, apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage, avatarUrl } from "../lib/api";
 
 function resizeImageToDataUrl(file: File, maxSize = 256, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -35,6 +35,9 @@ function resizeImageToDataUrl(file: File, maxSize = 256, quality = 0.85): Promis
 export function TopBar() {
   const { user, logout, refresh } = useAuth();
   const navigate = useNavigate();
+  // L'image n'est plus incluse dans les réponses de l'API : elle est servie par
+  // une route dédiée, mise en cache par le navigateur.
+  const photo = avatarUrl(user);
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,8 +113,8 @@ export function TopBar() {
           aria-label="Changer la photo de profil"
           className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-rose-600 text-sm font-bold text-white transition-transform duration-150 active:scale-90 disabled:opacity-60"
         >
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+          {photo ? (
+            <img src={photo} alt="" className="h-full w-full object-cover" />
           ) : (
             user?.name?.[0]?.toUpperCase() ?? "?"
           )}

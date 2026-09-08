@@ -13,6 +13,9 @@ model User {
   passwordHash      String
   name              String
   avatarUrl         String?
+  /// Date du dernier changement de photo. Sa présence indique qu'une photo
+  /// existe, et sa valeur sert à invalider le cache du navigateur.
+  avatarUpdatedAt   DateTime?
   plan              String    @default("free")
   /// "athlete" ou "admin". Seul un admin accède à /api/admin.
   role              String    @default("athlete")
@@ -20,6 +23,11 @@ model User {
   timezone          String    @default("Europe/Paris")
   /// Dernière requête authentifiée : base du calcul de fréquentation.
   lastSeenAt        DateTime?
+  /// Tentatives de connexion infructueuses consécutives, et blocage temporaire.
+  /// Contrairement à la limitation par adresse IP, ce compteur est partagé
+  /// entre toutes les instances du serveur.
+  failedLogins      Int       @default(0)
+  lockedUntil       DateTime?
   /// Date de vérification de l'adresse e-mail (null tant qu'elle ne l'est pas).
   emailVerifiedAt   DateTime?
   /// Acceptation des conditions et de la politique de confidentialité, et

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type Session } from "../lib/api";
+import { api, type Session, type SessionPage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { ProgressChart } from "../components/ProgressChart";
 import { Spinner } from "../components/Spinner";
@@ -43,10 +43,21 @@ export function Historique() {
   const [hrZones, setHrZones] = useState<HrZones | null>(null);
 
   useEffect(() => {
-    api.get<Session[]>("/sessions").then(({ data }) => {
-      setSessions(data);
+    // L'historique est paginé côté serveur : on charge les pages en chaîne
+    // plutôt que de réclamer plusieurs années de séances d'un coup.
+    (async () => {
+      const collected: Session[] = [];
+      let cursor: string | null = null;
+      do {
+        const { data }: { data: SessionPage } = await api.get<SessionPage>("/sessions", {
+          params: cursor ? { cursor } : undefined,
+        });
+        collected.push(...data.sessions);
+        cursor = data.nextCursor;
+      } while (cursor && collected.length < 1000);
+      setSessions(collected);
       setLoading(false);
-    });
+    })().catch(() => setLoading(false));
     if (user?.isPremium) {
       api.get<HrZones>("/insights/hr-zones").then(({ data }) => setHrZones(data));
     }

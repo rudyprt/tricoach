@@ -75,9 +75,9 @@ describeIfDb("chat", () => {
     expect(res.body.role).toBe("assistant");
 
     const fil = await agent.get("/api/chat");
-    expect(fil.body.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
-    expect(fil.body[0].content).toBe("Comment gérer ma semaine ?");
-    expect(fil.body[1].content).toBe("Voici mon conseil.");
+    expect(fil.body.messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
+    expect(fil.body.messages[0].content).toBe("Comment gérer ma semaine ?");
+    expect(fil.body.messages[1].content).toBe("Voici mon conseil.");
   });
 
   it("n'enregistre pas la question si le coach échoue", async () => {
@@ -88,7 +88,7 @@ describeIfDb("chat", () => {
     expect(res.status).toBe(502);
 
     const fil = await agent.get("/api/chat");
-    expect(fil.body).toEqual([]);
+    expect(fil.body.messages).toEqual([]);
   });
 
   it("transmet au modèle les messages les plus récents, pas les plus anciens", async () => {
@@ -176,7 +176,7 @@ describeIfDb("chat", () => {
     await agent.post("/api/chat").send({ content: "Bonjour" });
 
     expect((await agent.delete("/api/chat")).status).toBe(200);
-    expect((await agent.get("/api/chat")).body).toEqual([]);
+    expect((await agent.get("/api/chat")).body.messages).toEqual([]);
   });
 
   it("enregistre la consommation de tokens et son coût", async () => {
