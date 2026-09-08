@@ -167,6 +167,8 @@ export interface CurrentUser {
   createdAt: string;
   trialEndsAt: string;
   isTrialActive: boolean;
+  /** Durée de l'essai, décidée par le serveur. */
+  trialDays: number;
   hasStandardAccess: boolean;
   isPremium: boolean;
   /** false tant qu'aucun paiement n'est branché : l'app ne propose pas d'activer une offre. */
@@ -281,6 +283,8 @@ export interface AdminUserRow {
   lastSeenAt: string | null;
   trialEndsAt: string;
   isTrialActive: boolean;
+  /** Durée de l'essai, décidée par le serveur. */
+  trialDays: number;
   hasStandardAccess: boolean;
   coutIaMicroUsd: number;
   profile: { objectif: string; objectifDate: string } | null;

@@ -1,4 +1,9 @@
-export const TRIAL_DAYS = 7;
+/**
+ * Deux semaines, et non une : l'intérêt du produit tient au renouvellement
+ * hebdomadaire du programme, qui s'appuie sur les séances réalisées la semaine
+ * précédente. Un essai de 7 jours ne permet pas d'en faire l'expérience.
+ */
+export const TRIAL_DAYS = 14;
 
 export type Plan = "free" | "standard" | "premium";
 

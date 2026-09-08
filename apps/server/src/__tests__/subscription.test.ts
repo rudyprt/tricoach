@@ -12,6 +12,14 @@ describe("essai gratuit", () => {
     expect(Math.round((end.getTime() - createdAt.getTime()) / (24 * 3600 * 1000))).toBe(TRIAL_DAYS);
   });
 
+  it("couvre deux semaines pleines, pour permettre un renouvellement", () => {
+    // L'intérêt du produit tient à l'enchaînement d'une semaine sur l'autre :
+    // l'essai doit laisser le temps de vivre ce cycle au moins une fois.
+    expect(TRIAL_DAYS).toBeGreaterThanOrEqual(14);
+    expect(hasStandardAccess({ plan: "free", createdAt: daysAgo(8) })).toBe(true);
+    expect(hasStandardAccess({ plan: "free", createdAt: daysAgo(13) })).toBe(true);
+  });
+
   it("est actif le jour même et expiré au-delà", () => {
     expect(isTrialActive(daysAgo(1))).toBe(true);
     expect(isTrialActive(daysAgo(TRIAL_DAYS + 1))).toBe(false);

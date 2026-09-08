@@ -84,13 +84,15 @@ export function Plans() {
           {isIntro ? (
             <>
               <p className="text-sm font-semibold uppercase tracking-widest text-rose-500">
-                🎉 Votre semaine d'essai a commencé
+                🎉 Votre essai gratuit a commencé
               </p>
               <h1 className="mt-2 text-2xl font-black italic tracking-wide text-white">
-                7 jours gratuits, <span className="text-rose-500">sans engagement</span>
+                {user?.trialDays ?? 14} jours gratuits, <span className="text-rose-500">sans engagement</span>
               </h1>
               <p className="mt-2 text-sm text-zinc-400">
-                Générez votre programme et découvrez le coach IA librement. Voici ce qui vous attend ensuite.
+                De quoi vivre un cycle complet : générez votre première semaine, réalisez vos séances, puis
+                enchaînez sur la suivante — c'est là que le coach ajuste votre charge. Voici ce qui vous attend
+                ensuite.
               </p>
             </>
           ) : (
