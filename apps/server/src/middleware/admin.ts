@@ -16,9 +16,17 @@ export function requireAdmin(req: AuthedRequest, res: Response, next: NextFuncti
   }
 
   prisma.user
-    .findUnique({ where: { id: req.userId }, select: { role: true } })
-    .then((user) => {
-      if (!user || user.role !== ADMIN_ROLE) {
+    .findUnique({ where: { id: req.userId }, select: { id: true, email: true, role: true } })
+    .then(async (user) => {
+      if (!user) {
+        res.status(404).json({ error: "Ressource introuvable." });
+        return;
+      }
+      // Import tardif : adminBootstrap importe ADMIN_ROLE depuis ce fichier.
+      const { syncBootstrapAdmin } = await import("../lib/adminBootstrap.js");
+      const role = await syncBootstrapAdmin(user);
+
+      if (role !== ADMIN_ROLE) {
         // Message volontairement identique à celui d'une ressource absente :
         // l'existence de l'espace d'administration n'a pas à être confirmée.
         res.status(404).json({ error: "Ressource introuvable." });

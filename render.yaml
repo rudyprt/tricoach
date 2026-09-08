@@ -14,3 +14,7 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      # Votre email, pour obtenir le rôle administrateur sans ligne de commande.
+      # À renseigner APRÈS avoir créé votre compte dans l'application.
+      - key: ADMIN_EMAILS
+        sync: false

@@ -76,9 +76,26 @@ La résiliation vers l'offre gratuite reste toujours possible.
 Un compte peut avoir le rôle `admin`. Il accède alors à `/admin` dans
 l'application : abonnements, fréquentation et coût du coach IA.
 
-Le tout premier administrateur se crée en ligne de commande — il ne peut pas
-exister de bouton « me promouvoir » dans l'application, sinon le contrôle
-d'accès ne vaudrait rien :
+Le tout premier administrateur ne peut pas se désigner depuis l'application —
+un bouton « me promouvoir » viderait le contrôle d'accès de son sens. Deux
+façons de l'amorcer, au choix.
+
+**Sans terminal (depuis un navigateur, y compris sur téléphone)**
+
+1. Créez votre compte normalement dans l'application.
+2. Chez votre hébergeur (Render → votre service → *Environment*), ajoutez la
+   variable `ADMIN_EMAILS` avec votre email. Plusieurs adresses possibles,
+   séparées par des virgules.
+3. Enregistrez : le service redémarre, et votre compte devient administrateur
+   au rechargement de l'application. Inutile de vous reconnecter.
+
+Seuls des comptes **déjà inscrits** sont promus : la variable ne crée jamais de
+compte. D'où l'ordre des étapes — inscrivez-vous *avant* de renseigner votre
+adresse, pour qu'elle ne reste pas disponible pour quelqu'un d'autre. Une fois
+la promotion faite, la variable peut être vidée : le rôle est enregistré en
+base.
+
+**En ligne de commande**
 
 ```bash
 # après avoir créé le compte normalement depuis l'application
@@ -87,7 +104,8 @@ npm run admin -w apps/server -- list
 npm run admin -w apps/server -- demote ancien-admin@exemple.com
 ```
 
-Ensuite, un administrateur peut en promouvoir d'autres depuis l'interface.
+Ensuite, dans les deux cas, un administrateur peut en promouvoir d'autres
+directement depuis l'interface.
 
 L'espace d'administration donne :
 
@@ -163,6 +181,7 @@ Le fichier `render.yaml` à la racine décrit un déploiement en un seul service
    marquées `sync: false` dans l'onglet *Environment* du service :
    - `DATABASE_URL` (chaîne de connexion Postgres, ex. Neon)
    - `ANTHROPIC_API_KEY`
+   - `ADMIN_EMAILS` (facultatif, voir *Administration* plus bas)
 4. Premier déploiement : quelques minutes. L'URL fournie par Render
    (`https://<nom-du-service>.onrender.com`) est permanente et partageable.
 

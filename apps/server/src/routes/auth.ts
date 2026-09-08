@@ -12,6 +12,7 @@ import { ah, HttpError } from "../lib/http.js";
 import { loginRateLimit, passwordResetRateLimit, registerRateLimit } from "../lib/rateLimit.js";
 import { isValidTimeZone, safeTimeZone } from "../lib/week.js";
 import { passwordResetMail, sendMail } from "../lib/mailer.js";
+import { syncBootstrapAdmin } from "../lib/adminBootstrap.js";
 
 export const authRouter = Router();
 
@@ -36,6 +37,7 @@ const USER_SELECT = {
   name: true,
   avatarUrl: true,
   plan: true,
+  role: true,
   timezone: true,
   createdAt: true,
 } as const;
@@ -131,12 +133,15 @@ authRouter.post(
             name: user.name,
             avatarUrl: user.avatarUrl,
             plan: user.plan,
+            role: user.role,
             timezone: user.timezone,
             createdAt: user.createdAt,
           };
 
+    const role = await syncBootstrapAdmin(updated);
+
     issueSession(res, user.id);
-    res.json(withSubscriptionInfo(updated));
+    res.json(withSubscriptionInfo({ ...updated, role }));
   })
 );
 
@@ -157,7 +162,8 @@ authRouter.get(
       res.status(404).json({ error: "Utilisateur introuvable." });
       return;
     }
-    res.json(withSubscriptionInfo(user));
+    const role = await syncBootstrapAdmin(user);
+    res.json(withSubscriptionInfo({ ...user, role }));
   })
 );
 

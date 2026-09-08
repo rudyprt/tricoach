@@ -23,6 +23,13 @@ describe("loadEnv", () => {
     expect(() => loadEnv({ JWT_SECRET: "x".repeat(32) } as NodeJS.ProcessEnv)).toThrow(/DATABASE_URL/);
   });
 
+  it("accepte une liste d'administrateurs, vide par défaut", () => {
+    expect(loadEnv(valid as NodeJS.ProcessEnv).ADMIN_EMAILS).toBe("");
+    expect(
+      loadEnv({ ...valid, ADMIN_EMAILS: "a@b.c, d@e.f" } as NodeJS.ProcessEnv).ADMIN_EMAILS
+    ).toBe("a@b.c, d@e.f");
+  });
+
   it("nettoie les espaces autour de la clé API collée depuis un hébergeur", () => {
     const env = loadEnv({ ...valid, ANTHROPIC_API_KEY: "  sk-ant-test\n" } as NodeJS.ProcessEnv);
     expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-test");

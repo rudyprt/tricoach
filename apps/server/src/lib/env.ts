@@ -23,6 +23,13 @@ const envSchema = z.object({
    */
   BILLING_MODE: z.enum(["disabled", "open"]).default("disabled"),
   APP_URL: z.string().default("http://localhost:5173"),
+  /**
+   * Amorçage du premier administrateur sans accès à une ligne de commande :
+   * les comptes EXISTANTS dont l'email figure ici obtiennent le rôle admin.
+   * Séparer par des virgules. Réglable depuis le tableau de bord de
+   * l'hébergeur, donc utilisable depuis un téléphone.
+   */
+  ADMIN_EMAILS: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;
