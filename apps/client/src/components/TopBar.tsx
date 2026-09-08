@@ -201,6 +201,18 @@ export function TopBar() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/compte");
+              }}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm text-zinc-300 transition-colors hover:bg-zinc-900"
+            >
+              Mon compte
+              {user && !user.emailVerified && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Adresse e-mail non confirmée" />
+              )}
+            </button>
             {user?.role === "admin" && (
               <button
                 onClick={() => {

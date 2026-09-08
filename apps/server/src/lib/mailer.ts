@@ -22,6 +22,23 @@ export async function sendMail(mail: Mail): Promise<void> {
   console.info(`[mailer] À: ${mail.to}\n[mailer] Sujet: ${mail.subject}\n${mail.text}`);
 }
 
+export function emailVerificationMail(to: string, name: string, token: string): Mail {
+  const url = `${env().APP_URL.replace(/\/$/, "")}/verifier-email?token=${token}`;
+  return {
+    to,
+    subject: "Confirmez votre adresse e-mail TriCoach",
+    text: [
+      `Bonjour ${name},`,
+      "",
+      "Confirmez votre adresse pour sécuriser votre compte TriCoach et pouvoir le récupérer en cas d'oubli de mot de passe :",
+      url,
+      "",
+      "Ce lien est valable 24 heures.",
+      "Si vous n'avez pas créé de compte TriCoach, ignorez cet e-mail.",
+    ].join("\n"),
+  };
+}
+
 export function passwordResetMail(to: string, token: string): Mail {
   const url = `${env().APP_URL.replace(/\/$/, "")}/reinitialiser-mot-de-passe?token=${token}`;
   return {

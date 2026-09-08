@@ -49,7 +49,7 @@ describeIfDb("API", () => {
 
   async function signUp(email: string, password = "motdepasse123") {
     const agent = request.agent(app);
-    const res = await agent.post("/api/auth/register").send({ email, password, name: "Athlète" });
+    const res = await agent.post("/api/auth/register").send({ email, password, name: "Athlète", acceptConditions: true });
     expect(res.status).toBe(201);
     return { agent, user: res.body as { id: string; plan: string } };
   }
@@ -59,7 +59,7 @@ describeIfDb("API", () => {
       const agent = request.agent(app);
       const res = await agent
         .post("/api/auth/register")
-        .send({ email: "a@example.com", password: "motdepasse123", name: "Alice" });
+        .send({ email: "a@example.com", password: "motdepasse123", name: "Alice", acceptConditions: true });
 
       expect(res.status).toBe(201);
       expect(res.body.plan).toBe("free");
@@ -78,7 +78,7 @@ describeIfDb("API", () => {
     it("refuse un mot de passe trop court", async () => {
       const res = await request(app)
         .post("/api/auth/register")
-        .send({ email: "b@example.com", password: "court", name: "Bob" });
+        .send({ email: "b@example.com", password: "court", name: "Bob", acceptConditions: true });
       expect(res.status).toBe(400);
     });
 
@@ -86,7 +86,7 @@ describeIfDb("API", () => {
       await signUp("Casse@Example.com");
       const res = await request(app)
         .post("/api/auth/register")
-        .send({ email: "casse@example.com", password: "motdepasse123", name: "Autre" });
+        .send({ email: "casse@example.com", password: "motdepasse123", name: "Autre", acceptConditions: true });
       expect(res.status).toBe(409);
     });
 
@@ -482,12 +482,12 @@ describeIfDb("API", () => {
       for (let i = 0; i < 5; i++) {
         const res = await request(app)
           .post("/api/auth/register")
-          .send({ email: `serie${i}@example.com`, password: "motdepasse123", name: "X" });
+          .send({ email: `serie${i}@example.com`, password: "motdepasse123", name: "X", acceptConditions: true });
         expect(res.status).toBe(201);
       }
       const blocked = await request(app)
         .post("/api/auth/register")
-        .send({ email: "serie-de-trop@example.com", password: "motdepasse123", name: "X" });
+        .send({ email: "serie-de-trop@example.com", password: "motdepasse123", name: "X", acceptConditions: true });
       expect(blocked.status).toBe(429);
     });
   });

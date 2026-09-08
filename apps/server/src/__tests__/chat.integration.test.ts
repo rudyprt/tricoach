@@ -61,7 +61,7 @@ describeIfDb("chat", () => {
     const agent = request.agent(app);
     const res = await agent
       .post("/api/auth/register")
-      .send({ email, password: "motdepasse123", name: "Athlète" });
+      .send({ email, password: "motdepasse123", name: "Athlète", acceptConditions: true });
     expect(res.status).toBe(201);
     return { agent, user: res.body as { id: string } };
   }

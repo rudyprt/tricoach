@@ -88,7 +88,7 @@ describeIfDb("génération en tâche de fond", () => {
 
   async function athlete(email: string) {
     const agent = request.agent(app);
-    const res = await agent.post("/api/auth/register").send({ email, password: "motdepasse123", name: "Athlète" });
+    const res = await agent.post("/api/auth/register").send({ email, password: "motdepasse123", name: "Athlète", acceptConditions: true });
     expect(res.status).toBe(201);
     await agent.put("/api/profile").send({
       objectif: "Marathon",
@@ -156,7 +156,7 @@ describeIfDb("génération en tâche de fond", () => {
 
   it("refuse tout de suite si le profil manque, sans créer de tâche", async () => {
     const agent = request.agent(app);
-    await agent.post("/api/auth/register").send({ email: "sansprofil@example.com", password: "motdepasse123", name: "X" });
+    await agent.post("/api/auth/register").send({ email: "sansprofil@example.com", password: "motdepasse123", name: "X", acceptConditions: true });
 
     const res = await agent.post("/api/plans/generate");
     expect(res.status).toBe(400);

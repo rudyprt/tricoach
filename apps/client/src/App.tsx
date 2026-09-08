@@ -17,6 +17,9 @@ import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
 import { Zones } from "./pages/Zones";
 import { Admin } from "./pages/Admin";
+import { Compte } from "./pages/Compte";
+import { VerifyEmail } from "./pages/VerifyEmail";
+import { Conditions, Confidentialite } from "./pages/Legal";
 
 function AppShell() {
   const [showSplash, setShowSplash] = useState(true);
@@ -40,6 +43,9 @@ function AppShell() {
         <Route path="/register" element={<Register />} />
         <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
         <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
+        <Route path="/verifier-email" element={<VerifyEmail />} />
+        <Route path="/conditions" element={<Conditions />} />
+        <Route path="/confidentialite" element={<Confidentialite />} />
         <Route
           path="/plans-intro"
           element={
@@ -70,6 +76,7 @@ function AppShell() {
           <Route path="/objectif" element={<Objectif />} />
           <Route path="/zones" element={<Zones />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/compte" element={<Compte />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

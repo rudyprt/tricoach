@@ -16,6 +16,7 @@ export function Register() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
+  const [acceptConditions, setAcceptConditions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { refresh } = useAuth();
@@ -29,7 +30,7 @@ export function Register() {
     if (/[0-9]/.test(password) && /[a-zA-Z]/.test(password)) score++;
     return score;
   }, [password]);
-  const canSubmit = name.trim().length > 0 && isValidEmail(email) && password.length >= 8;
+  const canSubmit = name.trim().length > 0 && isValidEmail(email) && password.length >= 8 && acceptConditions;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -38,7 +39,13 @@ export function Register() {
     setError(null);
     setLoading(true);
     try {
-      await api.post("/auth/register", { name, email, password, timezone: browserTimeZone() });
+      await api.post("/auth/register", {
+        name,
+        email,
+        password,
+        timezone: browserTimeZone(),
+        acceptConditions,
+      });
       await refresh();
       navigate("/plans-intro");
     } catch (err) {
@@ -168,6 +175,27 @@ export function Register() {
                 </div>
               )}
             </div>
+
+            <label className="flex cursor-pointer items-start gap-2 pt-0.5 text-xs leading-relaxed text-zinc-400">
+              <input
+                type="checkbox"
+                checked={acceptConditions}
+                onChange={(e) => setAcceptConditions(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-rose-500"
+              />
+              <span>
+                J'accepte les{" "}
+                <Link to="/conditions" target="_blank" className="text-rose-400 hover:underline">
+                  conditions d'utilisation
+                </Link>{" "}
+                et la{" "}
+                <Link to="/confidentialite" target="_blank" className="text-rose-400 hover:underline">
+                  politique de confidentialité
+                </Link>
+                . TriCoach enregistre mes données d'entraînement, y compris mes blessures et ressentis, pour
+                construire mes programmes.
+              </span>
+            </label>
 
             <button
               type="submit"

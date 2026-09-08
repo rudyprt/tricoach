@@ -48,7 +48,7 @@ describeIfDb("amorçage admin par ADMIN_EMAILS", () => {
 
   async function signUp(email: string) {
     const agent = request.agent(app);
-    const res = await agent.post("/api/auth/register").send({ email, password: "motdepasse123", name: "Compte" });
+    const res = await agent.post("/api/auth/register").send({ email, password: "motdepasse123", name: "Compte", acceptConditions: true });
     expect(res.status).toBe(201);
     return { agent, user: res.body as { id: string } };
   }

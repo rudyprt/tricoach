@@ -160,6 +160,9 @@ export interface CurrentUser {
   isPremium: boolean;
   /** false tant qu'aucun paiement n'est branché : l'app ne propose pas d'activer une offre. */
   selfServeBilling: boolean;
+  emailVerified: boolean;
+  /** true quand les conditions ont changé depuis la dernière acceptation. */
+  needsConsent: boolean;
   profile: AthleteProfile | null;
 }
 

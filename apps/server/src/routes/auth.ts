@@ -13,6 +13,8 @@ import { loginRateLimit, passwordResetRateLimit, registerRateLimit } from "../li
 import { isValidTimeZone, safeTimeZone } from "../lib/week.js";
 import { passwordResetMail, sendMail } from "../lib/mailer.js";
 import { syncBootstrapAdmin } from "../lib/adminBootstrap.js";
+import { CONSENT_VERSION, hasCurrentConsent } from "../lib/consent.js";
+import { sendEmailVerification } from "./privacy.js";
 
 export const authRouter = Router();
 
@@ -39,12 +41,25 @@ const USER_SELECT = {
   plan: true,
   role: true,
   timezone: true,
+  emailVerifiedAt: true,
+  consentAcceptedAt: true,
+  consentVersion: true,
   createdAt: true,
 } as const;
 
-function withSubscriptionInfo<T extends { plan: string; createdAt: Date }>(user: T) {
+function withSubscriptionInfo<
+  T extends { plan: string; createdAt: Date; emailVerifiedAt?: Date | null; consentAcceptedAt?: Date | null; consentVersion?: string | null },
+>(user: T) {
   return {
     ...user,
+    emailVerified: Boolean(user.emailVerifiedAt),
+    // Une évolution des conditions doit être re-consentie : le client affiche
+    // alors une demande d'acceptation.
+    needsConsent: !hasCurrentConsent({
+      consentAcceptedAt: user.consentAcceptedAt ?? null,
+      consentVersion: user.consentVersion ?? null,
+    }),
+    consentVersionRequise: CONSENT_VERSION,
     trialEndsAt: trialEndsAt(user.createdAt),
     isTrialActive: isTrialActive(user.createdAt),
     hasStandardAccess: hasStandardAccess(user),
@@ -69,6 +84,11 @@ const registerSchema = z.object({
   password: z.string().min(8, "8 caractères minimum").max(200, "Mot de passe trop long"),
   name: z.string().trim().min(1).max(40),
   timezone: timezoneField,
+  // Le consentement est une case à cocher obligatoire : sans lui, pas de
+  // création de compte, et sa date est conservée comme preuve.
+  acceptConditions: z.literal(true, {
+    errorMap: () => ({ message: "Vous devez accepter les conditions et la politique de confidentialité." }),
+  }),
 });
 
 authRouter.post(
@@ -90,9 +110,22 @@ authRouter.post(
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const user = await prisma.user.create({
-      data: { email, passwordHash, name, timezone },
+      data: {
+        email,
+        passwordHash,
+        name,
+        timezone,
+        consentAcceptedAt: new Date(),
+        consentVersion: CONSENT_VERSION,
+      },
       select: USER_SELECT,
     });
+
+    // L'envoi ne doit pas faire échouer l'inscription : l'athlète peut demander
+    // un nouvel envoi depuis son compte.
+    await sendEmailVerification({ id: user.id, email: user.email, name: user.name }).catch((err) =>
+      console.error("Envoi de la vérification d'e-mail impossible :", err)
+    );
 
     issueSession(res, user.id);
     res.status(201).json(withSubscriptionInfo(user));
@@ -135,6 +168,9 @@ authRouter.post(
             plan: user.plan,
             role: user.role,
             timezone: user.timezone,
+            emailVerifiedAt: user.emailVerifiedAt,
+            consentAcceptedAt: user.consentAcceptedAt,
+            consentVersion: user.consentVersion,
             createdAt: user.createdAt,
           };
 
