@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "./env.js";
+import type { TokenUsage } from "./pricing.js";
 
-const MODEL = "claude-sonnet-5";
+export const MODEL = "claude-sonnet-5";
 
 export function isAiConfigured(): boolean {
   return Boolean(env().ANTHROPIC_API_KEY);
@@ -29,11 +30,17 @@ export class AiNotConfiguredError extends Error {
   }
 }
 
+export interface ClaudeResponse {
+  text: string;
+  model: string;
+  usage: TokenUsage;
+}
+
 export async function askClaude(params: {
   system: string;
   messages: { role: "user" | "assistant"; content: string }[];
   maxTokens?: number;
-}): Promise<string> {
+}): Promise<ClaudeResponse> {
   const anthropic = getClient();
   // Cette version du SDK ne type pas encore "thinking", mais l'API l'accepte : on le
   // désactive explicitement pour que tout le budget de tokens serve la réponse visible
@@ -59,5 +66,24 @@ export async function askClaude(params: {
       `Réponse Claude tronquée par la limite de tokens (maxTokens=${params.maxTokens ?? 2000}, longueur reçue=${text.length} caractères).`
     );
   }
-  return text;
+
+  // Cette version du SDK ne type pas encore les compteurs de cache, que l'API
+  // renvoie pourtant : on les lit sans supposer leur présence.
+  const usage = (response.usage ?? {}) as {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+
+  return {
+    text,
+    model: response.model ?? MODEL,
+    usage: {
+      inputTokens: usage.input_tokens ?? 0,
+      outputTokens: usage.output_tokens ?? 0,
+      cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    },
+  };
 }

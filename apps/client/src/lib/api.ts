@@ -117,12 +117,15 @@ export interface ChatMessage {
 
 export type Plan = "free" | "standard" | "premium";
 
+export type UserRole = "athlete" | "admin";
+
 export interface CurrentUser {
   id: string;
   email: string;
   name: string;
   avatarUrl: string | null;
   plan: Plan;
+  role: UserRole;
   timezone: string;
   createdAt: string;
   trialEndsAt: string;
@@ -162,4 +165,92 @@ export function isBillingUnavailableError(err: unknown): boolean {
 
 export function isRateLimitError(err: unknown): boolean {
   return axios.isAxiosError(err) && err.response?.status === 429;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Administration                                                      */
+/* ------------------------------------------------------------------ */
+
+export interface AdminOverview {
+  comptes: {
+    total: number;
+    parOffre: Record<Plan, number>;
+    payants: number;
+    tauxConversionPct: number;
+    essaisEnCours: number;
+    essaisExpiresNonConvertis: number;
+    inscriptions7j: number;
+    inscriptions30j: number;
+  };
+  frequentation: {
+    actifs24h: number;
+    actifs7j: number;
+    actifs30j: number;
+    jamaisRevenus: number;
+    retention30jPct: number;
+  };
+  activite: {
+    programmesGeneres30j: number;
+    athletesAvecObjectifAVenir: number;
+  };
+  coutIa: {
+    totalMicroUsd: number;
+    total30jMicroUsd: number;
+    appelsTotal: number;
+    appels30j: number;
+    tokensEntree: number;
+    tokensSortie: number;
+    coutMoyenParPayant30jMicroUsd: number;
+    parType: { kind: string; appels: number; coutMicroUsd: number }[];
+    tarifsMisAJourLe: string;
+  };
+}
+
+export interface AdminActivityDay {
+  date: string;
+  inscriptions: number;
+  actifs: number;
+  coutMicroUsd: number;
+}
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string;
+  plan: Plan;
+  role: UserRole;
+  timezone: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  trialEndsAt: string;
+  isTrialActive: boolean;
+  hasStandardAccess: boolean;
+  coutIaMicroUsd: number;
+  profile: { objectif: string; objectifDate: string } | null;
+  _count: { sessions: number; trainingPlans: number; chatMessages: number };
+}
+
+export interface AdminUserList {
+  total: number;
+  page: number;
+  perPage: number;
+  pages: number;
+  users: AdminUserRow[];
+}
+
+export interface AdminAuditEntry {
+  id: string;
+  action: string;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+  admin: { id: string; email: string; name: string };
+  targetUser: { id: string; email: string; name: string } | null;
+}
+
+/** Les montants circulent en micro-dollars pour éviter les arrondis flottants. */
+export function formatUsd(microUsd: number): string {
+  const dollars = microUsd / 1_000_000;
+  if (dollars > 0 && dollars < 0.01) return "< 0,01 $";
+  return `${dollars.toFixed(2).replace(".", ",")} $`;
 }

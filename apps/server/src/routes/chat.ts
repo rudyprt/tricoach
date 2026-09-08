@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropic.js";
+import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL } from "../lib/anthropic.js";
+import { recordAiCall } from "../lib/aiUsage.js";
 import { CHAT_DAILY_LIMIT, isPremium } from "../lib/subscription.js";
 import { ah, HttpError } from "../lib/http.js";
 import { chatRateLimit } from "../lib/rateLimit.js";
@@ -119,7 +120,7 @@ chatRouter.post(
 
     let reply: string;
     try {
-      reply = await askClaude({
+      const response = await askClaude({
         system,
         messages: [
           ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
@@ -127,7 +128,10 @@ chatRouter.post(
         ],
         maxTokens: 1000,
       });
+      reply = response.text;
+      await recordAiCall({ userId: req.userId!, kind: "chat", response, succeeded: Boolean(reply.trim()) });
     } catch (err) {
+      await recordAiCall({ userId: req.userId!, kind: "chat", model: MODEL, succeeded: false });
       console.error("Réponse du coach IA impossible :", err);
       throw new HttpError(502, "Le coach IA n'a pas pu répondre. Réessayez.");
     }

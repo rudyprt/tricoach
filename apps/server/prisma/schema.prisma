@@ -8,21 +8,68 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   passwordHash String
   name         String
   avatarUrl    String?
-  plan         String   @default("free")
+  plan         String    @default("free")
+  /// "athlete" ou "admin". Seul un admin accède à /api/admin.
+  role         String    @default("athlete")
   /// Fuseau IANA de l'athlète : la semaine d'entraînement est calculée dessus.
-  timezone     String   @default("Europe/Paris")
+  timezone     String    @default("Europe/Paris")
+  /// Dernière requête authentifiée : base du calcul de fréquentation.
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  profile              AthleteProfile?
+  trainingPlans        TrainingPlan[]
+  sessions             Session[]
+  chatMessages         ChatMessage[]
+  resetTokens          PasswordResetToken[]
+  aiCalls              AiCall[]
+  adminActions         AdminAction[]        @relation("AdminActor")
+  receivedAdminActions AdminAction[]        @relation("AdminTarget")
+
+  @@index([lastSeenAt])
+  @@index([createdAt])
+}
+
+/// Un appel au modèle, avec sa consommation de tokens : permet de suivre le
+/// coût réel du coach IA par athlète et par période.
+model AiCall {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "plan_generation" | "plan_progression" | "chat"
+  kind             String
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  /// Coût estimé en micro-dollars (entier : pas d'arrondi flottant cumulé).
+  costMicroUsd     Int      @default(0)
+  succeeded        Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+/// Journal des actions d'administration : toute modification d'abonnement
+/// faite à la main doit rester traçable.
+model AdminAction {
+  id           String   @id @default(cuid())
+  adminId      String
+  admin        User     @relation("AdminActor", fields: [adminId], references: [id], onDelete: Cascade)
+  targetUserId String?
+  targetUser   User?    @relation("AdminTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  action       String
+  details      Json?
   createdAt    DateTime @default(now())
 
-  profile       AthleteProfile?
-  trainingPlans TrainingPlan[]
-  sessions      Session[]
-  chatMessages  ChatMessage[]
-  resetTokens   PasswordResetToken[]
+  @@index([createdAt])
 }
 
 model AthleteProfile {

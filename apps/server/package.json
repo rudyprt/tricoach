@@ -12,7 +12,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "admin": "tsx src/scripts/admin.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

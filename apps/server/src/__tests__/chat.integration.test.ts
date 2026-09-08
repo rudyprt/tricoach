@@ -9,8 +9,18 @@ const askClaude = vi.fn();
 vi.mock("../lib/anthropic.js", () => ({
   askClaude: (...args: unknown[]) => askClaude(...args),
   isAiConfigured: () => true,
+  MODEL: "claude-sonnet-5",
   AiNotConfiguredError: class extends Error {},
 }));
+
+/** Réponse du SDK telle que la voit `askClaude`, tokens compris. */
+function claudeReply(text: string) {
+  return {
+    text,
+    model: "claude-sonnet-5",
+    usage: { inputTokens: 1200, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  };
+}
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
@@ -38,6 +48,7 @@ describeIfDb("chat", () => {
   beforeEach(async () => {
     resetAllRateLimits();
     askClaude.mockReset();
+    await prisma.aiCall.deleteMany();
     await prisma.chatMessage.deleteMany();
     await prisma.session.deleteMany();
     await prisma.trainingPlan.deleteMany();
@@ -57,7 +68,7 @@ describeIfDb("chat", () => {
 
   it("enregistre la question et la réponse dans le bon ordre", async () => {
     const { agent } = await signUp("fil@example.com");
-    askClaude.mockResolvedValue("Voici mon conseil.");
+    askClaude.mockResolvedValue(claudeReply("Voici mon conseil."));
 
     const res = await agent.post("/api/chat").send({ content: "Comment gérer ma semaine ?" });
     expect(res.status).toBe(201);
@@ -95,7 +106,7 @@ describeIfDb("chat", () => {
       })),
     });
 
-    askClaude.mockResolvedValue("Réponse.");
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
     expect((await agent.post("/api/chat").send({ content: "Nouvelle question" })).status).toBe(201);
 
     const history = askClaude.mock.calls[0][0].messages as { content: string }[];
@@ -117,7 +128,7 @@ describeIfDb("chat", () => {
       ],
     });
 
-    askClaude.mockResolvedValue("Réponse.");
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
     await agent.post("/api/chat").send({ content: "quatrieme" });
 
     const history = askClaude.mock.calls[0][0].messages as { content: string }[];
@@ -136,7 +147,7 @@ describeIfDb("chat", () => {
       })),
     });
 
-    askClaude.mockResolvedValue("Réponse.");
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
     const res = await agent.post("/api/chat").send({ content: "Un de trop" });
     expect(res.status).toBe(402);
     expect(res.body.code).toBe("SUBSCRIPTION_REQUIRED");
@@ -155,17 +166,42 @@ describeIfDb("chat", () => {
       })),
     });
 
-    askClaude.mockResolvedValue("Réponse.");
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
     expect((await agent.post("/api/chat").send({ content: "Encore une" })).status).toBe(201);
   });
 
   it("permet d'effacer la conversation", async () => {
     const { agent } = await signUp("reset-chat@example.com");
-    askClaude.mockResolvedValue("Réponse.");
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
     await agent.post("/api/chat").send({ content: "Bonjour" });
 
     expect((await agent.delete("/api/chat")).status).toBe(200);
     expect((await agent.get("/api/chat")).body).toEqual([]);
+  });
+
+  it("enregistre la consommation de tokens et son coût", async () => {
+    const { agent, user } = await signUp("cout@example.com");
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+
+    await agent.post("/api/chat").send({ content: "Combien de séances cette semaine ?" });
+
+    const call = await prisma.aiCall.findFirstOrThrow({ where: { userId: user.id } });
+    expect(call.kind).toBe("chat");
+    expect(call.inputTokens).toBe(1200);
+    expect(call.outputTokens).toBe(300);
+    expect(call.succeeded).toBe(true);
+    // 1200 tokens à 2 $/M + 300 tokens à 10 $/M = 0,0054 $ = 5400 micro-dollars
+    expect(call.costMicroUsd).toBe(5400);
+  });
+
+  it("enregistre aussi un appel en échec, qui reste facturable", async () => {
+    const { agent, user } = await signUp("cout-echec@example.com");
+    askClaude.mockRejectedValue(new Error("API indisponible"));
+
+    await agent.post("/api/chat").send({ content: "Question" });
+
+    const call = await prisma.aiCall.findFirstOrThrow({ where: { userId: user.id } });
+    expect(call.succeeded).toBe(false);
   });
 
   it("refuse un message vide ou démesuré", async () => {

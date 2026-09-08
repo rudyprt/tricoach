@@ -16,6 +16,7 @@ import { Objectif } from "./pages/Objectif";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
 import { Zones } from "./pages/Zones";
+import { Admin } from "./pages/Admin";
 
 function AppShell() {
   const [showSplash, setShowSplash] = useState(true);
@@ -68,6 +69,7 @@ function AppShell() {
           <Route path="/abonnement" element={<Plans />} />
           <Route path="/objectif" element={<Objectif />} />
           <Route path="/zones" element={<Zones />} />
+          <Route path="/admin" element={<Admin />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -71,6 +71,47 @@ démo, passez `BILLING_MODE="open"` dans `apps/server/.env`.
 
 La résiliation vers l'offre gratuite reste toujours possible.
 
+## Administration
+
+Un compte peut avoir le rôle `admin`. Il accède alors à `/admin` dans
+l'application : abonnements, fréquentation et coût du coach IA.
+
+Le tout premier administrateur se crée en ligne de commande — il ne peut pas
+exister de bouton « me promouvoir » dans l'application, sinon le contrôle
+d'accès ne vaudrait rien :
+
+```bash
+# après avoir créé le compte normalement depuis l'application
+npm run admin -w apps/server -- promote vous@exemple.com
+npm run admin -w apps/server -- list
+npm run admin -w apps/server -- demote ancien-admin@exemple.com
+```
+
+Ensuite, un administrateur peut en promouvoir d'autres depuis l'interface.
+
+L'espace d'administration donne :
+
+- **Comptes et abonnements** — total, répartition par offre, taux de
+  conversion, essais en cours, essais expirés restés gratuits, inscriptions
+  sur 7 et 30 jours.
+- **Fréquentation** — actifs à 24 h / 7 j / 30 j, comptes jamais revenus,
+  rétention sur 30 jours, et une série journalière (inscriptions, actifs,
+  coût) sur le dernier mois.
+- **Coût du coach IA** — tokens et coût estimé par période, par type d'appel
+  (chat, génération, progression) et par athlète, avec le coût moyen par
+  abonné. L'estimation s'appuie sur les tarifs publics Anthropic relevés à la
+  date affichée dans `apps/server/src/lib/pricing.ts` ; c'est un repère, pas
+  une facture.
+- **Gestion des abonnements** — activer ou résilier une offre pour un compte.
+  C'est le seul chemin qui accorde une offre payante tant qu'aucun paiement
+  n'est branché. Chaque changement est journalisé (qui, quand, sur qui, quel
+  motif) et consultable dans l'onglet *Journal*.
+
+Deux garde-fous : le rôle est relu en base à chaque requête (une révocation est
+immédiate, sans attendre l'expiration du cookie de 30 jours), et un
+administrateur ne peut pas se retirer son propre rôle — il faut en promouvoir
+un autre d'abord.
+
 ## Lancer l'application
 
 ```bash
@@ -90,7 +131,8 @@ npm run test
 ```
 
 Les tests couvrent la logique métier (zones, périodisation, fuseaux, validation
-des réponses IA, abonnements, rate limiting) et l'API complète en intégration.
+des réponses IA, abonnements, tarification, rate limiting) et l'API complète en
+intégration, y compris le contrôle d'accès de l'espace d'administration.
 Les suites d'intégration nécessitent une base Postgres jetable :
 
 ```bash

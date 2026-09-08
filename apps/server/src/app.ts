@@ -10,6 +10,7 @@ import { sessionsRouter } from "./routes/sessions.js";
 import { chatRouter } from "./routes/chat.js";
 import { insightsRouter } from "./routes/insights.js";
 import { calendarRouter } from "./routes/calendar.js";
+import { adminRouter } from "./routes/admin.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
 import { env } from "./lib/env.js";
 
@@ -37,6 +38,7 @@ export function createApp() {
   app.use("/api/chat", chatRouter);
   app.use("/api/insights", insightsRouter);
   app.use("/api/calendar", calendarRouter);
+  app.use("/api/admin", adminRouter);
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });

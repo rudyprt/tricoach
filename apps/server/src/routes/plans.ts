@@ -3,7 +3,8 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropic.js";
+import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL } from "../lib/anthropic.js";
+import { recordAiCall, type AiCallKind } from "../lib/aiUsage.js";
 import { serializeSession, sessionStructureSchema } from "../lib/session.js";
 import { hasStandardAccess } from "../lib/subscription.js";
 import { ah, HttpError } from "../lib/http.js";
@@ -193,6 +194,8 @@ export function parseAiPlan(raw: string, allowedDates: string[]): AiPlanResponse
 }
 
 async function runGeneration(
+  userId: string,
+  kind: AiCallKind,
   system: string,
   userPrompt: string,
   allowedDates: string[]
@@ -203,10 +206,20 @@ async function runGeneration(
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let raw = "";
     try {
-      raw = await askClaude({ system, messages: [{ role: "user", content: userPrompt }], maxTokens: 8192 });
-      return { aiPlan: parseAiPlan(raw, allowedDates), raw };
+      const response = await askClaude({
+        system,
+        messages: [{ role: "user", content: userPrompt }],
+        maxTokens: 8192,
+      });
+      raw = response.text;
+      const aiPlan = parseAiPlan(raw, allowedDates);
+      // Une tentative facturée compte, qu'elle aboutisse ou non : c'est ce qui
+      // rend le coût affiché dans l'admin fidèle à la facture Anthropic.
+      await recordAiCall({ userId, kind, response, succeeded: true });
+      return { aiPlan, raw };
     } catch (err) {
       lastError = err;
+      await recordAiCall({ userId, kind, model: MODEL, succeeded: false });
       console.error(
         `Tentative ${attempt}/${attempts} de génération échouée :`,
         err instanceof Error ? err.message : err,
@@ -223,9 +236,15 @@ async function runGeneration(
  * suivent doivent, elles, remonter telles quelles (une panne base ne doit pas
  * être présentée à l'athlète comme un échec de l'IA).
  */
-async function generateOrFail(system: string, userPrompt: string, allowedDates: string[]) {
+async function generateOrFail(
+  userId: string,
+  kind: AiCallKind,
+  system: string,
+  userPrompt: string,
+  allowedDates: string[]
+) {
   try {
-    return await runGeneration(system, userPrompt, allowedDates);
+    return await runGeneration(userId, kind, system, userPrompt, allowedDates);
   } catch (err) {
     console.error("Génération de programme impossible :", err);
     throw new HttpError(502, "Échec de la génération du programme par l'IA. Réessayez.");
@@ -360,6 +379,8 @@ plansRouter.post(
     });
 
     const generated = await generateOrFail(
+      req.userId!,
+      "plan_generation",
       buildSystemPrompt(false, phase),
       buildFirstWeekPrompt(profile, weekStart, phase, maxVolumeMin, recentSessions),
       weekDays(weekStart)
@@ -426,6 +447,8 @@ plansRouter.post(
     };
 
     const generated = await generateOrFail(
+      req.userId!,
+      "plan_progression",
       buildSystemPrompt(true, phase),
       buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, stats),
       weekDays(weekStart)
