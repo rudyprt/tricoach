@@ -13,6 +13,9 @@ génération. Chaque zone reste **modifiable à la main** : un athlète qui conn
 ses allures les saisit, et ce sont ces valeurs qui servent aux programmes. Les
 séances sont exportables vers un agenda au format iCalendar.
 
+Relié à **Strava**, le coach raisonne sur les allures réellement mesurées par la
+montre, et non sur ce que l'athlète déclare avoir fait.
+
 ## Structure
 
 - `apps/server` — API Node.js/Express + TypeScript, base Postgres via Prisma, appels à l'API Anthropic (Claude). En production, sert aussi le frontend compilé (une seule URL).
@@ -126,6 +129,32 @@ de l'hébergeur. Renseignez `ERROR_WEBHOOK_URL` avec l'URL d'un webhook (Slack,
 Discord, ou tout service acceptant du JSON) pour être alerté. Les erreurs
 identiques sont regroupées sur 5 minutes, et l'identifiant de l'athlète n'est
 jamais transmis au service externe.
+
+### Connexion Strava (facultatif)
+
+Reliée, elle permet au coach de travailler sur les **allures réellement
+mesurées** plutôt que sur le déclaratif, et valide automatiquement les séances
+effectuées. Sans identifiants, la fonctionnalité n'apparaît simplement pas dans
+l'application.
+
+1. Rendez-vous sur [strava.com/settings/api](https://www.strava.com/settings/api)
+   et créez une application.
+2. Dans **Authorization Callback Domain**, indiquez le nom d'hôte de votre
+   `APP_URL`, sans `https://` (par exemple `tricoach.onrender.com`).
+3. Reportez chez votre hébergeur :
+
+```
+STRAVA_CLIENT_ID="votre-client-id"
+STRAVA_CLIENT_SECRET="votre-client-secret"
+```
+
+L'athlète relie ensuite son compte depuis « Mon compte ». L'import remonte 30
+jours à la première synchronisation, puis seulement les nouveautés.
+
+Le rapprochement entre une activité importée et une séance planifiée est
+volontairement strict — même jour, même discipline. Un rapprochement erroné
+marquerait une séance comme faite à tort et fausserait la progression de charge
+de la semaine suivante ; mieux vaut une activité non rattachée.
 
 ## Mentions légales
 

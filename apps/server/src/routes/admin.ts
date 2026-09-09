@@ -10,6 +10,7 @@ import { PRICING_UPDATED_AT } from "../lib/pricing.js";
 import { isMailConfigured, sendMail } from "../lib/mailer.js";
 import { isAiConfigured } from "../lib/anthropic.js";
 import { canSelfActivatePaidPlan } from "../lib/billing.js";
+import { isStravaConfigured } from "../lib/strava.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireAdmin);
@@ -129,6 +130,7 @@ adminRouter.get(
         emailsActifs: isMailConfigured(),
         coachIaActif: isAiConfigured(),
         paiementEnLigneActif: canSelfActivatePaidPlan(),
+        stravaActif: isStravaConfigured(),
       },
       coutIa: {
         totalMicroUsd: aiTotals._sum.costMicroUsd ?? 0,

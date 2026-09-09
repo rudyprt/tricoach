@@ -17,6 +17,7 @@ import {
   type Periodization,
 } from "../lib/training.js";
 import { parseZoneOverrides } from "../lib/zoneOverrides.js";
+import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
 plansRouter.use(requireAuth);
@@ -89,6 +90,27 @@ function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): strin
   return lines.join("\n");
 }
 
+/**
+ * Activités réellement effectuées, mesurées par la montre de l'athlète. C'est
+ * la donnée la plus fiable dont dispose le coach : elle dit ce qui a été fait,
+ * là où le reste du contexte dit ce qui était prévu ou ressenti.
+ */
+async function measuredActivityLines(userId: string, since: Date): Promise<string[]> {
+  const activities = await prisma.activity.findMany({
+    where: { userId, startedAt: { gte: since } },
+    orderBy: { startedAt: "asc" },
+    take: 30,
+  });
+  if (activities.length === 0) return [];
+
+  return [
+    "",
+    "Séances réellement effectuées, mesurées (source : montre/Strava). Ces chiffres priment sur toute estimation :",
+    activities.map((a) => `- ${describeActivity(a)}`).join("\n"),
+    "Compare ces données aux allures prévues : si l'athlète court systématiquement plus vite que la zone demandée, dis-le lui et corrige. S'il est plus lent, adapte plutôt que d'insister.",
+  ];
+}
+
 function profileLines(profile: ProfileForPrompt, phase: Periodization, maxVolumeMin: number): string[] {
   const zones = computeTrainingZones({
     tempsCourse: profile.tempsCourse,
@@ -119,7 +141,8 @@ function buildFirstWeekPrompt(
   weekStart: Date,
   phase: Periodization,
   maxVolumeMin: number,
-  recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[]
+  recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
+  mesurees: string[]
 ): string {
   const historyLines = recentSessions.length
     ? recentSessions
@@ -132,6 +155,7 @@ function buildFirstWeekPrompt(
 
   return [
     ...profileLines(profile, phase, maxVolumeMin),
+    ...mesurees,
     "",
     `Séances récentes (pour adapter la charge et les zones) : ${historyLines}`,
     `Génère le programme pour les 7 jours suivants (dans cet ordre) : ${weekDays(weekStart).join(", ")}`,
@@ -143,7 +167,8 @@ function buildProgressionPrompt(
   weekStart: Date,
   phase: Periodization,
   pastSessions: { date: Date; sport: string; titre: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
-  stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number }
+  stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number },
+  mesurees: string[]
 ): string {
   const pastLines = pastSessions.length
     ? pastSessions
@@ -156,6 +181,7 @@ function buildProgressionPrompt(
 
   return [
     ...profileLines(profile, phase, stats.maxVolumeMin),
+    ...mesurees,
     "",
     `Détail de LA SEMAINE QUI VIENT DE SE TERMINER : ${pastLines}`,
     `Bilan chiffré de cette semaine passée : ${stats.completedCount}/${stats.totalCount} séances complétées, ${stats.missedCount} manquée(s), volume réalisé ≈ ${Math.round(stats.realizedVolumeMin)} min (volume prévu était ${Math.round(stats.plannedVolumeMin)} min).`,
@@ -182,7 +208,8 @@ function buildAdjustmentUserPrompt(
   joursRestants: string[],
   dejaVecu: { date: Date; sport: string; titre: string; dureeMin: number; status: string; ressenti: string | null }[],
   maxVolumeMin: number,
-  motif: string | null
+  motif: string | null,
+  mesurees: string[]
 ): string {
   const bilan = dejaVecu.length
     ? dejaVecu
@@ -198,6 +225,7 @@ function buildAdjustmentUserPrompt(
 
   return [
     ...profileLines(profile, phase, maxVolumeMin),
+    ...mesurees,
     "",
     `Début de semaine déjà vécu : ${bilan}`,
     `Bilan : ${faites.length} séance(s) réalisée(s) pour ${faites.reduce((sum, s) => sum + s.dureeMin, 0)} min, ${manquees.length} manquée(s).`,
@@ -467,7 +495,15 @@ async function prepareAdjustment(
     replaceFrom: debutRestant,
     aiKind: "plan_generation",
     system: buildAdjustmentSystemPrompt(phase, joursRestants),
-    userPrompt: buildAdjustmentUserPrompt(profile, phase, joursRestants, dejaVecu, maxVolumeMin, motif),
+    userPrompt: buildAdjustmentUserPrompt(
+      profile,
+      phase,
+      joursRestants,
+      dejaVecu,
+      maxVolumeMin,
+      motif,
+      await measuredActivityLines(userId, weekStart)
+    ),
   };
 }
 
@@ -502,7 +538,14 @@ async function prepareGeneration(
       allowedDates: weekDays(weekStart),
       aiKind: "plan_generation",
       system: buildSystemPrompt(false, phase),
-      userPrompt: buildFirstWeekPrompt(profile, weekStart, phase, maxVolumeMin, recentSessions),
+      userPrompt: buildFirstWeekPrompt(
+        profile,
+        weekStart,
+        phase,
+        maxVolumeMin,
+        recentSessions,
+        await measuredActivityLines(userId, addDays(weekStart, -21))
+      ),
     };
   }
 
@@ -546,7 +589,7 @@ async function prepareGeneration(
       missedCount,
       totalCount: nonRestSessions.length,
       maxVolumeMin,
-    }),
+    }, await measuredActivityLines(userId, addDays(weekStart, -14))),
   };
 }
 

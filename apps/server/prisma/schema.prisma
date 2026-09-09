@@ -46,6 +46,8 @@ model User {
   receivedAdminActions   AdminAction[]            @relation("AdminTarget")
   GenerationJob          GenerationJob[]
   EmailVerificationToken EmailVerificationToken[]
+  StravaAccount          StravaAccount?
+  Activity               Activity[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -63,6 +65,56 @@ model EmailVerificationToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+/// Connexion au compte Strava d'un athlète. Les jetons sont conservés pour
+/// rafraîchir l'accès sans redemander l'autorisation à chaque import.
+model StravaAccount {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Identifiant de l'athlète chez Strava.
+  athleteId    String    @unique
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  /// Nom affiché chez Strava, pour que l'athlète sache quel compte est relié.
+  athleteName  String?
+  lastSyncAt   DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+/// Activité réellement effectuée, importée depuis Strava. Distincte de Session,
+/// qui est ce qui était planifié : c'est l'écart entre les deux qui a de la
+/// valeur pour le coach.
+model Activity {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Identifiant chez la source, pour ne jamais importer deux fois la même.
+  externalId     String
+  source         String   @default("strava")
+  /// "natation" | "velo" | "course" | "renfo" | "autre"
+  sport          String
+  name           String
+  startedAt      DateTime
+  dureeMin       Int
+  distanceKm     Float?
+  /// Dénivelé positif en mètres.
+  denivelePosM   Int?
+  /// Fréquence cardiaque moyenne, si la montre l'a mesurée.
+  fcMoyenne      Int?
+  fcMax          Int?
+  /// Puissance moyenne en watts (vélo).
+  puissanceMoy   Int?
+  /// Allure moyenne en secondes par kilomètre, calculée à l'import.
+  allureSecParKm Int?
+  /// Séance planifiée à laquelle l'activité a été rapprochée, le cas échéant.
+  sessionId      String?
+  importedAt     DateTime @default(now())
+
+  @@unique([source, externalId])
+  @@index([userId, startedAt])
 }
 
 /// Une génération de programme en cours ou terminée. La génération dure

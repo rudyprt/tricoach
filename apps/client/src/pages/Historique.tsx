@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type Session, type SessionPage } from "../lib/api";
+import { api, type Session, type SessionPage, type Activity, formatAllure } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { ProgressChart } from "../components/ProgressChart";
 import { Spinner } from "../components/Spinner";
@@ -34,6 +34,16 @@ interface HrZones {
   zones: { zone: string; minutes: number }[];
 }
 
+/** Résumé chiffré d'une activité mesurée. */
+function resumeActivite(a: Activity): string {
+  const morceaux = [`${a.dureeMin} min`];
+  if (a.distanceKm) morceaux.push(`${a.distanceKm} km`);
+  if (a.allureSecParKm) morceaux.push(formatAllure(a.allureSecParKm));
+  if (a.puissanceMoy) morceaux.push(`${a.puissanceMoy} W`);
+  if (a.fcMoyenne) morceaux.push(`FC ${a.fcMoyenne}`);
+  return morceaux.join(" · ");
+}
+
 export function Historique() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -41,6 +51,7 @@ export function Historique() {
   const [sportFilter, setSportFilter] = useState<string>("tous");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hrZones, setHrZones] = useState<HrZones | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
 
   useEffect(() => {
     // L'historique est paginé côté serveur : on charge les pages en chaîne
@@ -58,6 +69,12 @@ export function Historique() {
       setSessions(collected);
       setLoading(false);
     })().catch(() => setLoading(false));
+    // Données réellement mesurées : elles enrichissent l'historique sans le
+    // remplacer, et restent silencieuses si Strava n'est pas relié.
+    api
+      .get<{ activities: Activity[] }>("/strava/activities")
+      .then(({ data }) => setActivities(data.activities))
+      .catch(() => undefined);
     if (user?.isPremium) {
       api.get<HrZones>("/insights/hr-zones").then(({ data }) => setHrZones(data));
     }
@@ -82,6 +99,16 @@ export function Historique() {
   const hiddenCount = allPastSessions.length - pastSessions.length;
 
   const maxZoneMinutes = hrZones ? Math.max(1, ...hrZones.zones.map((z) => z.minutes)) : 1;
+
+  // Les données mesurées s'affichent à côté du prévu : c'est l'écart entre les
+  // deux qui a de la valeur pour l'athlète.
+  const activitesParSeance = useMemo(() => {
+    const index = new Map<string, Activity>();
+    for (const a of activities) {
+      if (a.sessionId) index.set(a.sessionId, a);
+    }
+    return index;
+  }, [activities]);
 
   return (
     <div className="space-y-5">
@@ -171,6 +198,11 @@ export function Historique() {
                   {s.dureeMin} min{s.distanceKm ? ` · ${s.distanceKm} km` : ""}
                   {s.ressenti ? ` · Ressenti : ${s.ressenti}` : ""}
                 </p>
+                {activitesParSeance.get(s.id) && (
+                  <p className="mt-0.5 truncate text-xs text-[#fc4c02]">
+                    ⌚ Réalisé : {resumeActivite(activitesParSeance.get(s.id)!)}
+                  </p>
+                )}
               </div>
               <span
                 className={`shrink-0 rounded-full px-2 py-1 text-xs ${

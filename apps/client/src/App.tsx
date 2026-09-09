@@ -18,6 +18,7 @@ import { ResetPassword } from "./pages/ResetPassword";
 const Zones = lazy(() => import("./pages/Zones").then((m) => ({ default: m.Zones })));
 const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin })));
 const Compte = lazy(() => import("./pages/Compte").then((m) => ({ default: m.Compte })));
+const StravaReturn = lazy(() => import("./pages/StravaReturn").then((m) => ({ default: m.StravaReturn })));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail").then((m) => ({ default: m.VerifyEmail })));
 const Conditions = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Conditions })));
 const Confidentialite = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Confidentialite })));
@@ -53,6 +54,14 @@ function AppShell() {
         <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
         <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
         <Route path="/verifier-email" element={<VerifyEmail />} />
+        <Route
+          path="/strava/retour"
+          element={
+            <ProtectedRoute>
+              <StravaReturn />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/conditions" element={<Conditions />} />
         <Route path="/confidentialite" element={<Confidentialite />} />
         <Route path="/mentions-legales" element={<MentionsLegales />} />
