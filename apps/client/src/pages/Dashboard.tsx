@@ -113,6 +113,28 @@ export function Dashboard() {
   const generatePlan = useCallback(() => startGeneration("/plans/generate"), [startGeneration]);
   const generateNextWeek = useCallback(() => startGeneration("/plans/next"), [startGeneration]);
 
+  /**
+   * Réajuste les jours restants. Le motif est facultatif mais précieux : il
+   * permet au coach de distinguer un imprévu d'agenda d'une douleur.
+   */
+  const adjustWeek = useCallback(async () => {
+    const motif = window.prompt(
+      "Réajuster les jours restants de votre semaine.\n\nQue s'est-il passé ? (facultatif, mais ça aide votre coach)",
+      ""
+    );
+    if (motif === null) return;
+
+    setGenerating(true);
+    setError(null);
+    try {
+      const { data } = await api.post<GenerationJob>("/plans/adjust", { motif: motif.trim() || undefined });
+      await followJob(data);
+    } catch (err) {
+      setGenerating(false);
+      setError(apiErrorMessage(err, "Impossible de réajuster votre semaine."));
+    }
+  }, [followJob]);
+
   useEffect(() => {
     loadPlan();
     // Une génération lancée puis quittée continue côté serveur : on la reprend
@@ -225,6 +247,15 @@ export function Dashboard() {
           </button>
         )}
       </div>
+
+      {plan && !generating && (
+        <button
+          onClick={adjustWeek}
+          className="mb-4 w-full rounded-2xl border border-dashed border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-rose-800/70 hover:text-zinc-200"
+        >
+          Je n'ai pas pu m'entraîner — réajuster ma semaine
+        </button>
+      )}
 
       {plan?.periodization && (
         <div className="mb-4 flex flex-wrap items-center gap-2">

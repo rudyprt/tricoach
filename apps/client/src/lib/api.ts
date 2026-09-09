@@ -132,7 +132,7 @@ export type GenerationStatus = "en_attente" | "en_cours" | "reussie" | "echouee"
 
 export interface GenerationJob {
   id: string;
-  kind: "premiere_semaine" | "semaine_suivante";
+  kind: "premiere_semaine" | "semaine_suivante" | "ajustement_semaine";
   status: GenerationStatus;
   planId: string | null;
   error: string | null;
