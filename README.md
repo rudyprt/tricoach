@@ -13,8 +13,9 @@ génération. Chaque zone reste **modifiable à la main** : un athlète qui conn
 ses allures les saisit, et ce sont ces valeurs qui servent aux programmes. Les
 séances sont exportables vers un agenda au format iCalendar.
 
-Relié à **Strava**, le coach raisonne sur les allures réellement mesurées par la
-montre, et non sur ce que l'athlète déclare avoir fait.
+L'athlète peut **déposer les fichiers de sa montre** (`.fit`, `.gpx`, `.tcx`) :
+le coach raisonne alors sur les allures réellement mesurées, et non sur ce qui
+est déclaré. Une connexion Strava est également possible.
 
 ## Structure
 
@@ -130,7 +131,27 @@ Discord, ou tout service acceptant du JSON) pour être alerté. Les erreurs
 identiques sont regroupées sur 5 minutes, et l'identifiant de l'athlète n'est
 jamais transmis au service externe.
 
+### Import de séances par fichier
+
+Voie principale pour récupérer les données réelles : **aucun service tiers, aucun
+abonnement, aucune configuration**. L'athlète exporte sa séance depuis sa montre
+ou son application, et la dépose dans « Mon compte ».
+
+Formats acceptés : `.fit`, `.gpx`, `.tcx` — soit Garmin, Polar, Coros, Suunto,
+Wahoo et Apple Watch. Plusieurs fichiers peuvent être déposés d'un coup ; un
+fichier illisible n'interrompt pas les autres.
+
+Durée, distance, allure, dénivelé positif, fréquence cardiaque et puissance sont
+extraits, puis rapprochés de la séance planifiée du jour. Réimporter le même
+fichier ne crée pas de doublon, même renommé : l'identifiant est dérivé de la
+date de début et de la durée.
+
 ### Connexion Strava (facultatif)
+
+> **Note.** Strava réserve désormais l'accès à son API aux comptes abonnés.
+> L'import de fichiers ci-dessus rend cette intégration facultative : elle reste
+> disponible pour qui possède déjà un abonnement Strava.
+
 
 Reliée, elle permet au coach de travailler sur les **allures réellement
 mesurées** plutôt que sur le déclaratif, et valide automatiquement les séances

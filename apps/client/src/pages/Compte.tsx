@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "../components/Spinner";
 import { StravaCard } from "../components/StravaCard";
+import { ImportSeances } from "../components/ImportSeances";
 
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">{children}</div>;
@@ -141,6 +142,8 @@ export function Compte() {
           </button>
         </Card>
       )}
+
+      <ImportSeances />
 
       <StravaCard />
 
