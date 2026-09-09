@@ -72,7 +72,7 @@ export function Historique() {
     // Données réellement mesurées : elles enrichissent l'historique sans le
     // remplacer, et restent silencieuses si Strava n'est pas relié.
     api
-      .get<{ activities: Activity[] }>("/strava/activities")
+      .get<{ activities: Activity[] }>("/activities")
       .then(({ data }) => setActivities(data.activities))
       .catch(() => undefined);
     if (user?.isPremium) {

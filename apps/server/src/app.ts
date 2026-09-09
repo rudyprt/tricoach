@@ -13,6 +13,7 @@ import { calendarRouter } from "./routes/calendar.js";
 import { adminRouter } from "./routes/admin.js";
 import { privacyRouter } from "./routes/privacy.js";
 import { stravaRouter } from "./routes/strava.js";
+import { activitiesRouter } from "./routes/activities.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
 import { env } from "./lib/env.js";
 
@@ -43,6 +44,7 @@ export function createApp() {
   app.use("/api/admin", adminRouter);
   app.use("/api/privacy", privacyRouter);
   app.use("/api/strava", stravaRouter);
+  app.use("/api/activities", activitiesRouter);
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });

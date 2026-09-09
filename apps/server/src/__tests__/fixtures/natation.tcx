@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">
+  <Activities>
+    <Activity Sport="Swimming">
+      <Id>2026-09-09T06:30:00Z</Id>
+      <Lap StartTime="2026-09-09T06:30:00Z">
+        <TotalTimeSeconds>900</TotalTimeSeconds>
+        <DistanceMeters>750</DistanceMeters>
+        <Track>
+          <Trackpoint>
+            <Time>2026-09-09T06:30:00Z</Time>
+            <DistanceMeters>0</DistanceMeters>
+            <HeartRateBpm><Value>110</Value></HeartRateBpm>
+          </Trackpoint>
+          <Trackpoint>
+            <Time>2026-09-09T06:37:30Z</Time>
+            <DistanceMeters>375</DistanceMeters>
+            <HeartRateBpm><Value>134</Value></HeartRateBpm>
+          </Trackpoint>
+        </Track>
+      </Lap>
+      <Lap StartTime="2026-09-09T06:45:00Z">
+        <TotalTimeSeconds>900</TotalTimeSeconds>
+        <DistanceMeters>750</DistanceMeters>
+        <Track>
+          <Trackpoint>
+            <Time>2026-09-09T06:45:00Z</Time>
+            <DistanceMeters>750</DistanceMeters>
+            <HeartRateBpm><Value>138</Value></HeartRateBpm>
+          </Trackpoint>
+        </Track>
+      </Lap>
+    </Activity>
+  </Activities>
+</TrainingCenterDatabase>
