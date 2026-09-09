@@ -9,7 +9,7 @@ import { serializeSession, sessionStructureSchema } from "../lib/session.js";
 import { hasStandardAccess } from "../lib/subscription.js";
 import { ah, HttpError } from "../lib/http.js";
 import { generationRateLimit } from "../lib/rateLimit.js";
-import { formatDate, startOfWeek, weekDays } from "../lib/week.js";
+import { addDays, formatDate, localCalendarDate, startOfWeek, weekDays } from "../lib/week.js";
 import {
   computeTrainingZones,
   formatZonesForPrompt,
@@ -17,6 +17,7 @@ import {
   type Periodization,
 } from "../lib/training.js";
 import { parseZoneOverrides } from "../lib/zoneOverrides.js";
+import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
 plansRouter.use(requireAuth);
@@ -89,6 +90,27 @@ function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): strin
   return lines.join("\n");
 }
 
+/**
+ * Activités réellement effectuées, mesurées par la montre de l'athlète. C'est
+ * la donnée la plus fiable dont dispose le coach : elle dit ce qui a été fait,
+ * là où le reste du contexte dit ce qui était prévu ou ressenti.
+ */
+async function measuredActivityLines(userId: string, since: Date): Promise<string[]> {
+  const activities = await prisma.activity.findMany({
+    where: { userId, startedAt: { gte: since } },
+    orderBy: { startedAt: "asc" },
+    take: 30,
+  });
+  if (activities.length === 0) return [];
+
+  return [
+    "",
+    "Séances réellement effectuées, mesurées (source : montre/Strava). Ces chiffres priment sur toute estimation :",
+    activities.map((a) => `- ${describeActivity(a)}`).join("\n"),
+    "Compare ces données aux allures prévues : si l'athlète court systématiquement plus vite que la zone demandée, dis-le lui et corrige. S'il est plus lent, adapte plutôt que d'insister.",
+  ];
+}
+
 function profileLines(profile: ProfileForPrompt, phase: Periodization, maxVolumeMin: number): string[] {
   const zones = computeTrainingZones({
     tempsCourse: profile.tempsCourse,
@@ -119,7 +141,8 @@ function buildFirstWeekPrompt(
   weekStart: Date,
   phase: Periodization,
   maxVolumeMin: number,
-  recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[]
+  recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
+  mesurees: string[]
 ): string {
   const historyLines = recentSessions.length
     ? recentSessions
@@ -132,6 +155,7 @@ function buildFirstWeekPrompt(
 
   return [
     ...profileLines(profile, phase, maxVolumeMin),
+    ...mesurees,
     "",
     `Séances récentes (pour adapter la charge et les zones) : ${historyLines}`,
     `Génère le programme pour les 7 jours suivants (dans cet ordre) : ${weekDays(weekStart).join(", ")}`,
@@ -143,7 +167,8 @@ function buildProgressionPrompt(
   weekStart: Date,
   phase: Periodization,
   pastSessions: { date: Date; sport: string; titre: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
-  stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number }
+  stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number },
+  mesurees: string[]
 ): string {
   const pastLines = pastSessions.length
     ? pastSessions
@@ -156,11 +181,59 @@ function buildProgressionPrompt(
 
   return [
     ...profileLines(profile, phase, stats.maxVolumeMin),
+    ...mesurees,
     "",
     `Détail de LA SEMAINE QUI VIENT DE SE TERMINER : ${pastLines}`,
     `Bilan chiffré de cette semaine passée : ${stats.completedCount}/${stats.totalCount} séances complétées, ${stats.missedCount} manquée(s), volume réalisé ≈ ${Math.round(stats.realizedVolumeMin)} min (volume prévu était ${Math.round(stats.plannedVolumeMin)} min).`,
     "",
     `Génère le débrief de la semaine passée puis le programme de la nouvelle semaine, pour les 7 jours suivants (dans cet ordre) : ${weekDays(weekStart).join(", ")}`,
+  ].join("\n");
+}
+
+function buildAdjustmentSystemPrompt(phase: Periodization, joursRestants: string[]): string {
+  return [
+    buildSystemPrompt(false, phase),
+    "",
+    "SITUATION PARTICULIÈRE — RÉAJUSTEMENT EN COURS DE SEMAINE.",
+    `Tu ne régénères PAS la semaine entière : tu produis uniquement les ${joursRestants.length} jour(s) restant(s), à ces dates exactes : ${joursRestants.join(", ")}. N'inclus aucune autre date.`,
+    "Le début de semaine est déjà vécu et ne peut pas être refait : tiens compte de ce qui a été réalisé ou manqué (détaillé dans le message utilisateur) pour redistribuer intelligemment ce qu'il reste.",
+    "Ne cherche pas à rattraper tout le volume perdu : c'est le meilleur moyen de blesser un athlète. Priorise les séances les plus utiles à l'objectif, quitte à en abandonner définitivement certaines. Une semaine allégée assumée vaut mieux qu'une semaine surchargée.",
+    "Si l'athlète explique pourquoi il n'a pas pu s'entraîner (fatigue, maladie, blessure, imprévu), prends-le au sérieux : en cas de douleur ou de maladie, propose du repos ou de la récupération active plutôt que de maintenir l'intensité.",
+  ].join("\n");
+}
+
+function buildAdjustmentUserPrompt(
+  profile: ProfileForPrompt,
+  phase: Periodization,
+  joursRestants: string[],
+  dejaVecu: { date: Date; sport: string; titre: string; dureeMin: number; status: string; ressenti: string | null }[],
+  maxVolumeMin: number,
+  motif: string | null,
+  mesurees: string[]
+): string {
+  const bilan = dejaVecu.length
+    ? dejaVecu
+        .map(
+          (s) =>
+            `${formatDate(s.date)} ${s.sport} "${s.titre}" ${s.dureeMin}min → ${s.status}${s.ressenti ? ` (ressenti: ${s.ressenti})` : ""}`
+        )
+        .join("; ")
+    : "aucune séance sur le début de semaine";
+
+  const faites = dejaVecu.filter((s) => s.status === "faite");
+  const manquees = dejaVecu.filter((s) => s.status === "manquee");
+
+  return [
+    ...profileLines(profile, phase, maxVolumeMin),
+    ...mesurees,
+    "",
+    `Début de semaine déjà vécu : ${bilan}`,
+    `Bilan : ${faites.length} séance(s) réalisée(s) pour ${faites.reduce((sum, s) => sum + s.dureeMin, 0)} min, ${manquees.length} manquée(s).`,
+    motif
+      ? `L'athlète explique : « ${motif} »`
+      : "L'athlète n'a pas précisé de raison.",
+    "",
+    `Réorganise uniquement les jours restants, à ces dates : ${joursRestants.join(", ")}`,
   ].join("\n");
 }
 
@@ -274,7 +347,9 @@ async function requireProfile(userId: string): Promise<ProfileForPrompt> {
 export async function replacePlannedSessions(
   tx: Prisma.TransactionClient,
   userId: string,
-  weekStart: Date
+  weekStart: Date,
+  /** Ne remplacer qu'à partir de ce jour : sert au réajustement en cours de semaine. */
+  fromDate?: Date
 ): Promise<void> {
   const existingPlans = await tx.trainingPlan.findMany({
     where: { userId, weekStart },
@@ -283,7 +358,13 @@ export async function replacePlannedSessions(
   if (existingPlans.length === 0) return;
 
   const planIds = existingPlans.map((p) => p.id);
-  await tx.session.deleteMany({ where: { planId: { in: planIds }, status: "planifiee" } });
+  await tx.session.deleteMany({
+    where: {
+      planId: { in: planIds },
+      status: "planifiee",
+      ...(fromDate ? { date: { gte: fromDate } } : {}),
+    },
+  });
 
   const stillUsed = await tx.session.findMany({
     where: { planId: { in: planIds } },
@@ -303,11 +384,12 @@ async function persistPlan(params: {
   raw: string;
   aiPlan: AiPlanResponse;
   phase: Periodization;
+  replaceFrom?: Date;
 }) {
-  const { userId, weekStart, raw, aiPlan, phase } = params;
+  const { userId, weekStart, raw, aiPlan, phase, replaceFrom } = params;
 
   return prisma.$transaction(async (tx) => {
-    await replacePlannedSessions(tx, userId, weekStart);
+    await replacePlannedSessions(tx, userId, weekStart, replaceFrom);
 
     return tx.trainingPlan.create({
       data: {
@@ -347,7 +429,7 @@ function planPayload(plan: { sessions: Parameters<typeof serializeSession>[0][] 
 /* Génération en tâche de fond                                         */
 /* ------------------------------------------------------------------ */
 
-export type JobKind = "premiere_semaine" | "semaine_suivante";
+export type JobKind = "premiere_semaine" | "semaine_suivante" | "ajustement_semaine";
 
 /** Au-delà, une tâche encore "en_cours" est considérée comme perdue. */
 const JOB_STALE_MS = 10 * 60 * 1000;
@@ -358,6 +440,71 @@ interface PreparedGeneration {
   system: string;
   userPrompt: string;
   aiKind: AiCallKind;
+  /** Jours que la génération est autorisée à produire. */
+  allowedDates: string[];
+  /** Borne de remplacement : les séances antérieures sont conservées. */
+  replaceFrom?: Date;
+}
+
+/**
+ * Réajustement en cours de semaine : seuls les jours à venir sont reconstruits.
+ * Ce qui a déjà été vécu — réalisé comme manqué — est conservé, et sert
+ * précisément à décider de la suite.
+ */
+async function prepareAdjustment(
+  userId: string,
+  timezone: string,
+  profile: ProfileForPrompt,
+  weekStart: Date,
+  phase: Periodization,
+  motif: string | null
+): Promise<PreparedGeneration> {
+  const aujourdHui = localCalendarDate(new Date(), timezone);
+  const joursRestants = weekDays(weekStart).filter((jour) => jour >= aujourdHui);
+
+  if (joursRestants.length <= 1) {
+    throw new HttpError(
+      400,
+      "Il ne reste pas assez de jours cette semaine pour réajuster. Générez la semaine suivante lundi."
+    );
+  }
+
+  const debutRestant = new Date(`${joursRestants[0]}T00:00:00.000Z`);
+  const sessions = await prisma.session.findMany({
+    where: { userId, date: { gte: weekStart, lt: addDays(weekStart, 7) } },
+    orderBy: { date: "asc" },
+  });
+  if (sessions.length === 0) {
+    throw new HttpError(400, "Aucun programme à réajuster cette semaine. Générez-en un d'abord.");
+  }
+
+  const dejaVecu = sessions.filter((s) => s.date < debutRestant && s.sport !== "repos");
+  const volumeRealise = dejaVecu
+    .filter((s) => s.status === "faite")
+    .reduce((sum, s) => sum + s.dureeMin, 0);
+
+  // Le volume restant est celui de la semaine moins ce qui a déjà été fait :
+  // réajuster ne doit pas devenir un prétexte à s'entraîner davantage.
+  const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
+  const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
+
+  return {
+    weekStart,
+    phase,
+    allowedDates: joursRestants,
+    replaceFrom: debutRestant,
+    aiKind: "plan_generation",
+    system: buildAdjustmentSystemPrompt(phase, joursRestants),
+    userPrompt: buildAdjustmentUserPrompt(
+      profile,
+      phase,
+      joursRestants,
+      dejaVecu,
+      maxVolumeMin,
+      motif,
+      await measuredActivityLines(userId, weekStart)
+    ),
+  };
 }
 
 /**
@@ -365,7 +512,11 @@ interface PreparedGeneration {
  * de semaine précédente) est vérifié avant de créer la tâche : l'athlète reçoit
  * une erreur claire tout de suite, pas au bout de deux minutes d'attente.
  */
-async function prepareGeneration(userId: string, kind: JobKind): Promise<PreparedGeneration> {
+async function prepareGeneration(
+  userId: string,
+  kind: JobKind,
+  motif: string | null = null
+): Promise<PreparedGeneration> {
   const user = await requireGenerationAccess(userId);
   const profile = await requireProfile(userId);
 
@@ -384,10 +535,22 @@ async function prepareGeneration(userId: string, kind: JobKind): Promise<Prepare
     return {
       weekStart,
       phase,
+      allowedDates: weekDays(weekStart),
       aiKind: "plan_generation",
       system: buildSystemPrompt(false, phase),
-      userPrompt: buildFirstWeekPrompt(profile, weekStart, phase, maxVolumeMin, recentSessions),
+      userPrompt: buildFirstWeekPrompt(
+        profile,
+        weekStart,
+        phase,
+        maxVolumeMin,
+        recentSessions,
+        await measuredActivityLines(userId, addDays(weekStart, -21))
+      ),
     };
+  }
+
+  if (kind === "ajustement_semaine") {
+    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif);
   }
 
   const previousPlan = await prisma.trainingPlan.findFirst({
@@ -416,6 +579,7 @@ async function prepareGeneration(userId: string, kind: JobKind): Promise<Prepare
   return {
     weekStart,
     phase,
+    allowedDates: weekDays(weekStart),
     aiKind: "plan_progression",
     system: buildSystemPrompt(true, phase),
     userPrompt: buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, {
@@ -425,7 +589,7 @@ async function prepareGeneration(userId: string, kind: JobKind): Promise<Prepare
       missedCount,
       totalCount: nonRestSessions.length,
       maxVolumeMin,
-    }),
+    }, await measuredActivityLines(userId, addDays(weekStart, -14))),
   };
 }
 
@@ -445,7 +609,7 @@ async function processJob(jobId: string, userId: string, prepared: PreparedGener
       prepared.aiKind,
       prepared.system,
       prepared.userPrompt,
-      weekDays(prepared.weekStart)
+      prepared.allowedDates
     );
 
     const plan = await persistPlan({
@@ -454,6 +618,7 @@ async function processJob(jobId: string, userId: string, prepared: PreparedGener
       raw,
       aiPlan,
       phase: prepared.phase,
+      replaceFrom: prepared.replaceFrom,
     });
 
     await prisma.generationJob.update({
@@ -515,7 +680,12 @@ async function findRunningJob(userId: string) {
   return jobPayload(job).status === "echouee" ? null : job;
 }
 
-async function launchGeneration(req: AuthedRequest, res: import("express").Response, kind: JobKind) {
+async function launchGeneration(
+  req: AuthedRequest,
+  res: import("express").Response,
+  kind: JobKind,
+  motif: string | null = null
+) {
   const userId = req.userId!;
 
   // Une seule génération à la fois : un double appui sur le bouton ne doit pas
@@ -526,7 +696,7 @@ async function launchGeneration(req: AuthedRequest, res: import("express").Respo
     return;
   }
 
-  const prepared = await prepareGeneration(userId, kind);
+  const prepared = await prepareGeneration(userId, kind, motif);
   const job = await prisma.generationJob.create({ data: { userId, kind } });
 
   // Volontairement sans await : la réponse part immédiatement.
@@ -545,6 +715,27 @@ plansRouter.post(
   "/next",
   generationRateLimit,
   ah(async (req: AuthedRequest, res) => launchGeneration(req, res, "semaine_suivante"))
+);
+
+const adjustSchema = z.object({
+  motif: z.string().trim().max(300, "300 caractères maximum.").optional(),
+});
+
+/**
+ * Réajuste les jours restants de la semaine en cours. Répond au cas le plus
+ * fréquent de la vie réelle : l'athlète a manqué des séances et attendait
+ * jusqu'ici le lundi suivant pour repartir sur un programme cohérent.
+ */
+plansRouter.post(
+  "/adjust",
+  generationRateLimit,
+  ah(async (req: AuthedRequest, res) => {
+    const parsed = adjustSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message ?? "Motif invalide.");
+    }
+    return launchGeneration(req, res, "ajustement_semaine", parsed.data.motif ?? null);
+  })
 );
 
 /** Avancement de la dernière génération lancée : ce que le client interroge. */
@@ -588,15 +779,24 @@ plansRouter.get(
   ah(async (req: AuthedRequest, res) => {
     const user = await loadUserContext(req.userId!);
     const weekStart = startOfWeek(new Date(), user.timezone);
+    const weekEnd = addDays(weekStart, 7);
+
     const plan = await prisma.trainingPlan.findFirst({
       where: { userId: req.userId!, weekStart },
-      include: { sessions: { orderBy: { date: "asc" } } },
       orderBy: { generatedAt: "desc" },
     });
     if (!plan) {
       res.json(null);
       return;
     }
+
+    // Les séances sont chargées par semaine et non par plan : une régénération
+    // ou un réajustement laisse les séances déjà réalisées rattachées au plan
+    // d'origine, et elles doivent rester visibles.
+    const sessions = await prisma.session.findMany({
+      where: { userId: req.userId!, date: { gte: weekStart, lt: weekEnd } },
+      orderBy: { date: "asc" },
+    });
 
     const profile = await prisma.athleteProfile.findUnique({
       where: { userId: req.userId! },
@@ -606,6 +806,6 @@ plansRouter.get(
       ? periodization(weekStart, profile.objectifDate)
       : { phase: "base" as const, label: "Fondation aérobie", weeksToGoal: 0, volumeFactor: 1, guidance: "" };
 
-    res.json(planPayload(plan, phase));
+    res.json(planPayload({ ...plan, sessions }, phase));
   })
 );

@@ -54,6 +54,14 @@ const envSchema = z.object({
    * Sans URL, les erreurs restent dans les logs.
    */
   ERROR_WEBHOOK_URL: z.string().default(""),
+
+  /**
+   * Connexion Strava. Sans identifiants d'application, la fonctionnalité est
+   * simplement absente de l'interface : rien ne casse, elle ne s'affiche pas.
+   * Créez une application sur https://www.strava.com/settings/api
+   */
+  STRAVA_CLIENT_ID: z.string().default(""),
+  STRAVA_CLIENT_SECRET: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

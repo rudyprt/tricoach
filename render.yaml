@@ -33,3 +33,9 @@ services:
         sync: false
       - key: MAIL_FROM
         sync: false
+      # Connexion Strava (facultatif) : sans ces valeurs, la fonctionnalité
+      # n'apparaît pas dans l'application.
+      - key: STRAVA_CLIENT_ID
+        sync: false
+      - key: STRAVA_CLIENT_SECRET
+        sync: false

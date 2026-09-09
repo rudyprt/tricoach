@@ -10,6 +10,7 @@ import { chatRateLimit } from "../lib/rateLimit.js";
 import { startOfLocalDay } from "../lib/week.js";
 import { computeTrainingZones, formatZonesForPrompt, periodization } from "../lib/training.js";
 import { parseZoneOverrides } from "../lib/zoneOverrides.js";
+import { describeActivity } from "../lib/activityMatching.js";
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
@@ -107,7 +108,7 @@ chatRouter.post(
       }
     }
 
-    const [profile, recentSessions, recentMessages] = await Promise.all([
+    const [profile, recentSessions, recentMessages, recentActivities] = await Promise.all([
       prisma.athleteProfile.findUnique({ where: { userId: req.userId! } }),
       prisma.session.findMany({ where: { userId: req.userId! }, orderBy: { date: "desc" }, take: 10 }),
       // Les DERNIERS messages, pas les premiers : trié en ascendant, `take` renvoyait
@@ -116,6 +117,11 @@ chatRouter.post(
         where: { userId: req.userId! },
         orderBy: { createdAt: "desc" },
         take: HISTORY_WINDOW,
+      }),
+      prisma.activity.findMany({
+        where: { userId: req.userId!, startedAt: { gte: new Date(Date.now() - 21 * 24 * 3600 * 1000) } },
+        orderBy: { startedAt: "desc" },
+        take: 15,
       }),
     ]);
 
@@ -140,8 +146,13 @@ chatRouter.post(
         : "L'athlète n'a pas encore rempli son profil.",
       phase ? `Phase de préparation actuelle : ${phase.label} (objectif dans ${phase.weeksToGoal} semaine(s)). ${phase.guidance}` : "",
       zones ? `Zones d'entraînement (à reprendre telles quelles) :\n${formatZonesForPrompt(zones)}` : "",
+      recentActivities.length
+        ? `Séances réellement effectuées et mesurées (montre/Strava), les plus fiables :\n${recentActivities
+            .map((a) => `- ${describeActivity(a)}`)
+            .join("\n")}`
+        : "",
       recentSessions.length
-        ? `Séances récentes : ${recentSessions
+        ? `Séances planifiées récentes : ${recentSessions
             .map((s) => `${s.date.toISOString().slice(0, 10)} ${s.sport} ${s.dureeMin}min (${s.status})`)
             .join("; ")}`
         : "Aucune séance enregistrée pour le moment.",

@@ -132,7 +132,7 @@ export type GenerationStatus = "en_attente" | "en_cours" | "reussie" | "echouee"
 
 export interface GenerationJob {
   id: string;
-  kind: "premiere_semaine" | "semaine_suivante";
+  kind: "premiere_semaine" | "semaine_suivante" | "ajustement_semaine";
   status: GenerationStatus;
   planId: string | null;
   error: string | null;
@@ -214,6 +214,35 @@ export function isRateLimitError(err: unknown): boolean {
 /* Administration                                                      */
 /* ------------------------------------------------------------------ */
 
+export interface StravaStatus {
+  /** false si l'application n'a pas d'identifiants Strava : rien ne s'affiche. */
+  disponible: boolean;
+  relie: boolean;
+  athleteName: string | null;
+  lastSyncAt: string | null;
+  activitesImportees: number;
+}
+
+export interface Activity {
+  id: string;
+  sport: string;
+  name: string;
+  startedAt: string;
+  dureeMin: number;
+  distanceKm: number | null;
+  denivelePosM: number | null;
+  fcMoyenne: number | null;
+  puissanceMoy: number | null;
+  allureSecParKm: number | null;
+  sessionId: string | null;
+}
+
+export function formatAllure(secParKm: number): string {
+  const minutes = Math.floor(secParKm / 60);
+  const secondes = secParKm % 60;
+  return `${minutes}:${String(secondes).padStart(2, "0")}/km`;
+}
+
 export interface SessionPage {
   sessions: Session[];
   nextCursor: string | null;
@@ -251,6 +280,7 @@ export interface AdminOverview {
     emailsActifs: boolean;
     coachIaActif: boolean;
     paiementEnLigneActif: boolean;
+    stravaActif: boolean;
   };
   coutIa: {
     totalMicroUsd: number;
