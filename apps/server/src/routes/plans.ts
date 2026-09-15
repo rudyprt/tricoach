@@ -24,8 +24,8 @@ import {
   etatDeReprise,
   pauseEnCours,
   reprisePromptLines,
-  type Reprise,
 } from "../lib/pause.js";
+import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../lib/races.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -479,8 +479,8 @@ async function prepareAdjustment(
   phase: Periodization,
   motif: string | null,
   zones: TrainingZones,
-  reprise: Reprise | null,
-  lignesReprise: string[]
+  facteurContexte: number,
+  lignesContexte: string[]
 ): Promise<PreparedGeneration> {
   const aujourdHui = localCalendarDate(new Date(), timezone);
   const joursRestants = weekDays(weekStart).filter((jour) => jour >= aujourdHui);
@@ -508,7 +508,7 @@ async function prepareAdjustment(
 
   // Le volume restant est celui de la semaine moins ce qui a déjà été fait :
   // réajuster ne doit pas devenir un prétexte à s'entraîner davantage.
-  const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * (reprise?.facteurVolume ?? 1));
+  const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte);
   const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
 
   const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants);
@@ -529,7 +529,7 @@ async function prepareAdjustment(
       motif,
       await measuredActivityLines(userId, weekStart),
       zones,
-      [...(test ? testPromptLines(test) : []), ...lignesReprise]
+      [...(test ? testPromptLines(test) : []), ...lignesContexte]
     ),
   };
 }
@@ -571,8 +571,17 @@ async function prepareGeneration(
   const facteurReprise = reprise?.facteurVolume ?? 1;
   const lignesReprise = reprise ? reprisePromptLines(reprise, dernierePause?.detail ?? "") : [];
 
+  // Le calendrier ne remplace pas la périodisation, il s'y insère : la phase
+  // reste pilotée par la prochaine course A, et les courses B et C de la
+  // semaine ajoutent leurs propres consignes.
+  const courses = await coursesDeLAthlete(userId, weekStart);
+  const lignesCourses = coursesPromptLines(courses, weekStart);
+  const facteurCourses = facteurVolumeCourses(courses, weekStart) ?? 1;
+  const facteurContexte = facteurReprise * facteurCourses;
+  const lignesContexte = [...lignesReprise, ...lignesCourses];
+
   if (kind === "premiere_semaine") {
-    const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurReprise);
+    const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte);
     const recentSessions = await prisma.session.findMany({
       where: { userId, status: { in: ["faite", "manquee"] } },
       orderBy: { date: "desc" },
@@ -596,13 +605,13 @@ async function prepareGeneration(
         recentSessions,
         await measuredActivityLines(userId, addDays(weekStart, -21)),
         zones,
-        [...(test ? testPromptLines(test) : []), ...lignesReprise]
+        [...(test ? testPromptLines(test) : []), ...lignesContexte]
       ),
     };
   }
 
   if (kind === "ajustement_semaine") {
-    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif, zones, reprise, lignesReprise);
+    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif, zones, facteurContexte, lignesContexte);
   }
 
   const previousPlan = await prisma.trainingPlan.findFirst({
@@ -626,7 +635,7 @@ async function prepareGeneration(
     realizedVolumeMin > 0 ? realizedVolumeMin : plannedVolumeMin > 0 ? plannedVolumeMin : profile.heuresSemaine * 60;
   // La progression de charge est plafonnée à +10%, puis la phase de
   // périodisation peut encore la réduire (affûtage, semaine de course).
-  const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurReprise);
+  const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurContexte);
 
   const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
 
@@ -645,7 +654,7 @@ async function prepareGeneration(
       maxVolumeMin,
     }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones, [
     ...(test ? testPromptLines(test) : []),
-    ...lignesReprise,
+    ...lignesContexte,
   ]),
   };
 }

@@ -409,3 +409,19 @@ export interface EtatEntrainement {
   pause: PauseEnCours | null;
   reprise: Reprise | null;
 }
+
+/** Une course inscrite au calendrier. La priorité décide de l'affûtage. */
+export type PrioriteCourse = "A" | "B" | "C";
+export type FormatCourse = "sprint" | "olympique" | "half" | "ironman" | "autre";
+
+export interface Course {
+  id: string;
+  nom: string;
+  date: string;
+  format: FormatCourse;
+  priorite: PrioriteCourse;
+  lieu: string;
+  objectifTemps: string;
+  formatLabel: string;
+  prioriteLabel: string;
+}

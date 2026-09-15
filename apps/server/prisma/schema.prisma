@@ -54,6 +54,7 @@ model User {
   fitnessTests           FitnessTest[]
   reminders              Reminder[]
   pauses                 TrainingPause[]
+  races                  Race[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -338,4 +339,30 @@ model TrainingPause {
 
   @@index([userId, debut])
   @@index([userId, finReelle])
+}
+
+/// Une course inscrite au calendrier de l'athlète.
+///
+/// Un triathlète ne prépare presque jamais une seule course : il en cible une
+/// principale et en court d'autres en chemin. Les traiter toutes comme
+/// l'objectif principal ferait affûter quatre fois dans la saison ; les ignorer
+/// ferait courir un objectif intermédiaire en pleine fatigue.
+model Race {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nom           String
+  date          DateTime
+  /// "sprint" | "olympique" | "half" | "ironman" | "autre"
+  format        String   @default("autre")
+  /// "A" : objectif principal, affûtage complet.
+  /// "B" : objectif secondaire, affûtage court.
+  /// "C" : course d'entraînement, aucun allègement.
+  priorite      String   @default("A")
+  lieu          String   @default("")
+  /// Temps visé, texte libre ("2h30").
+  objectifTemps String   @default("")
+  createdAt     DateTime @default(now())
+
+  @@index([userId, date])
 }

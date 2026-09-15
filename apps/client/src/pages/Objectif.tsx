@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage, type AthleteProfile } from "../lib/api";
 import { Spinner } from "../components/Spinner";
+import { CalendrierCourses } from "../components/CalendrierCourses";
 
 const DISCIPLINES = [
   { key: "tempsNatation", icon: "🏊", label: "Natation", placeholder: "Ex : 1500m nage libre en 28min" },
@@ -47,8 +48,10 @@ export function Objectif() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    api.get<AthleteProfile | null>("/profile").then(({ data }) => {
+  // Extraite de l'effet : le calendrier de courses pilote l'objectif du profil,
+  // et doit pouvoir demander son rechargement après une modification.
+  const load = useCallback(() => {
+    return api.get<AthleteProfile | null>("/profile").then(({ data }) => {
       if (data) {
         setObjectif(data.objectif);
         setObjectifDate(data.objectifDate.slice(0, 10));
@@ -68,6 +71,10 @@ export function Objectif() {
       setLoaded(true);
     });
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -110,6 +117,10 @@ export function Objectif() {
         Modifiez votre objectif ou vos informations à tout moment. Votre historique et vos progrès déjà enregistrés
         restent intacts.
       </p>
+
+      <div className="mb-4">
+        <CalendrierCourses onChange={load} />
+      </div>
 
       <form onSubmit={handleSubmit} className="animate-fade-in-up space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 shadow-2xl shadow-black/50 sm:p-5">
         {error && <p className="rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-400">{error}</p>}
