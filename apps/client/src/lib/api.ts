@@ -425,3 +425,26 @@ export interface Course {
   formatLabel: string;
   prioriteLabel: string;
 }
+
+/** Charge d'entraînement : condition acquise, fatigue récente et fraîcheur. */
+export interface PointDeCharge {
+  date: string;
+  charge: number;
+  forme: number;
+  fatigue: number;
+  fraicheur: number;
+}
+
+export interface BilanDeCharge {
+  points: PointDeCharge[];
+  forme: number;
+  fatigue: number;
+  fraicheur: number;
+  lecture: {
+    etat: "frais" | "equilibre" | "charge" | "surcharge";
+    titre: string;
+    message: string;
+  };
+  seancesEstimees: number;
+  seancesTotal: number;
+}

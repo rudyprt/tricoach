@@ -5,6 +5,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { isPremium } from "../lib/subscription.js";
 import { ah, HttpError } from "../lib/http.js";
 import { sessionStructureSchema } from "../lib/session.js";
+import { bilanDeCharge } from "../lib/trainingLoad.js";
 
 export const insightsRouter = Router();
 insightsRouter.use(requireAuth);
@@ -124,5 +125,17 @@ insightsRouter.get(
       .sort((a, b) => a.zone.localeCompare(b.zone));
 
     res.json({ zones, windowDays: 30 });
+  })
+);
+
+/**
+ * Charge, forme et fraîcheur. Contrairement aux autres analyses, celle-ci est
+ * ouverte à tous : c'est le garde-fou anti-surentraînement, et le réserver à
+ * l'offre payante reviendrait à vendre la sécurité de l'athlète.
+ */
+insightsRouter.get(
+  "/charge",
+  ah(async (req: AuthedRequest, res) => {
+    res.json(await bilanDeCharge(req.userId!));
   })
 );

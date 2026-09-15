@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type Session, type SessionPage, type Activity, formatAllure } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { ProgressChart } from "../components/ProgressChart";
+import { ChargeChart } from "../components/ChargeChart";
 import { Spinner } from "../components/Spinner";
 import { SessionDetailModal } from "../components/SessionDetailModal";
 
@@ -113,6 +114,10 @@ export function Historique() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold text-white">Historique & progression</h1>
+
+      {/* Ouvert à tous, contrairement à la courbe de progression : c'est le
+          garde-fou anti-surentraînement, pas un argument commercial. */}
+      <ChargeChart />
 
       {hasFullAccess ? (
         <ProgressChart sessions={sessions} />

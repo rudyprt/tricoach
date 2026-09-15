@@ -26,6 +26,7 @@ import {
   reprisePromptLines,
 } from "../lib/pause.js";
 import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../lib/races.js";
+import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -577,8 +578,12 @@ async function prepareGeneration(
   const courses = await coursesDeLAthlete(userId, weekStart);
   const lignesCourses = coursesPromptLines(courses, weekStart);
   const facteurCourses = facteurVolumeCourses(courses, weekStart) ?? 1;
+  // La charge accumulée dit ce que le volume des sept derniers jours ne dit
+  // pas : avec quelle fatigue l'athlète aborde la semaine.
+  const charge = await bilanDeCharge(userId);
+
   const facteurContexte = facteurReprise * facteurCourses;
-  const lignesContexte = [...lignesReprise, ...lignesCourses];
+  const lignesContexte = [...lignesReprise, ...lignesCourses, ...chargePromptLines(charge)];
 
   if (kind === "premiere_semaine") {
     const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte);

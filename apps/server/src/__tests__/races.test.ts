@@ -9,7 +9,7 @@ import {
 
 const LUNDI = new Date("2026-05-04T00:00:00.000Z");
 
-function course(partial: Partial<CourseInscrite> & { nom: string; date: string }): CourseInscrite {
+function course(partial: Omit<Partial<CourseInscrite>, "date"> & { nom: string; date: string }): CourseInscrite {
   return {
     id: partial.nom,
     nom: partial.nom,
