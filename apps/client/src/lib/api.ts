@@ -382,3 +382,30 @@ export interface FitnessTestsResponse {
   enCours: FitnessTest[];
   historique: FitnessTest[];
 }
+
+/** Interruption d'entraînement : blessure, maladie, indisponibilité. */
+export type RaisonPause = "blessure" | "maladie" | "indisponibilite";
+
+export interface PauseEnCours {
+  id: string;
+  raison: RaisonPause;
+  libelle: string;
+  detail: string;
+  debut: string;
+  finPrevue: string | null;
+  joursEcoules: number;
+}
+
+export interface Reprise {
+  semaine: number;
+  total: number;
+  facteurVolume: number;
+  joursArret: number;
+  raison: string;
+}
+
+export interface EtatEntrainement {
+  etat: "normal" | "en_pause" | "en_reprise";
+  pause: PauseEnCours | null;
+  reprise: Reprise | null;
+}

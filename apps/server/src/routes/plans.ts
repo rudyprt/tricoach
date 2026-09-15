@@ -19,6 +19,13 @@ import {
 } from "../lib/training.js";
 import { buildZoneInputs } from "../lib/zoneInputs.js";
 import { planWeeklyTest, testPromptLines } from "../lib/testScheduling.js";
+import {
+  dernierePauseTerminee,
+  etatDeReprise,
+  pauseEnCours,
+  reprisePromptLines,
+  type Reprise,
+} from "../lib/pause.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -471,7 +478,9 @@ async function prepareAdjustment(
   weekStart: Date,
   phase: Periodization,
   motif: string | null,
-  zones: TrainingZones
+  zones: TrainingZones,
+  reprise: Reprise | null,
+  lignesReprise: string[]
 ): Promise<PreparedGeneration> {
   const aujourdHui = localCalendarDate(new Date(), timezone);
   const joursRestants = weekDays(weekStart).filter((jour) => jour >= aujourdHui);
@@ -499,7 +508,7 @@ async function prepareAdjustment(
 
   // Le volume restant est celui de la semaine moins ce qui a déjà été fait :
   // réajuster ne doit pas devenir un prétexte à s'entraîner davantage.
-  const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
+  const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * (reprise?.facteurVolume ?? 1));
   const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
 
   const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants);
@@ -520,7 +529,7 @@ async function prepareAdjustment(
       motif,
       await measuredActivityLines(userId, weekStart),
       zones,
-      test ? testPromptLines(test) : []
+      [...(test ? testPromptLines(test) : []), ...lignesReprise]
     ),
   };
 }
@@ -538,14 +547,32 @@ async function prepareGeneration(
   const user = await requireGenerationAccess(userId);
   const profile = await requireProfile(userId);
 
+  // Produire une semaine d'entraînement à quelqu'un qui s'est déclaré blessé
+  // serait pire qu'inutile : c'est exactement ce qu'un coach ne ferait pas.
+  const interruption = await pauseEnCours(userId);
+  if (interruption) {
+    throw new HttpError(
+      400,
+      "Votre entraînement est en pause. Indiquez que vous reprenez pour recevoir une nouvelle semaine, adaptée à votre retour.",
+      "TRAINING_PAUSED"
+    );
+  }
+
   const weekStart = startOfWeek(new Date(), user.timezone);
   const phase = periodization(weekStart, profile.objectifDate);
   // Les zones sont calculées une seule fois, à partir du profil et de ce que
   // les séances importées révèlent (fréquence cardiaque maximale observée).
   const zones = computeTrainingZones(await buildZoneInputs(userId, profile));
 
+  // Après un arrêt, le volume ne repart pas d'où il s'était arrêté : il remonte
+  // par paliers sur quelques semaines.
+  const dernierePause = await dernierePauseTerminee(userId, weekStart);
+  const reprise = dernierePause ? etatDeReprise(dernierePause, weekStart) : null;
+  const facteurReprise = reprise?.facteurVolume ?? 1;
+  const lignesReprise = reprise ? reprisePromptLines(reprise, dernierePause?.detail ?? "") : [];
+
   if (kind === "premiere_semaine") {
-    const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
+    const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurReprise);
     const recentSessions = await prisma.session.findMany({
       where: { userId, status: { in: ["faite", "manquee"] } },
       orderBy: { date: "desc" },
@@ -569,13 +596,13 @@ async function prepareGeneration(
         recentSessions,
         await measuredActivityLines(userId, addDays(weekStart, -21)),
         zones,
-        test ? testPromptLines(test) : []
+        [...(test ? testPromptLines(test) : []), ...lignesReprise]
       ),
     };
   }
 
   if (kind === "ajustement_semaine") {
-    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif, zones);
+    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif, zones, reprise, lignesReprise);
   }
 
   const previousPlan = await prisma.trainingPlan.findFirst({
@@ -599,7 +626,7 @@ async function prepareGeneration(
     realizedVolumeMin > 0 ? realizedVolumeMin : plannedVolumeMin > 0 ? plannedVolumeMin : profile.heuresSemaine * 60;
   // La progression de charge est plafonnée à +10%, puis la phase de
   // périodisation peut encore la réduire (affûtage, semaine de course).
-  const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor);
+  const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurReprise);
 
   const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
 
@@ -616,7 +643,10 @@ async function prepareGeneration(
       missedCount,
       totalCount: nonRestSessions.length,
       maxVolumeMin,
-    }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones, test ? testPromptLines(test) : []),
+    }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones, [
+    ...(test ? testPromptLines(test) : []),
+    ...lignesReprise,
+  ]),
   };
 }
 

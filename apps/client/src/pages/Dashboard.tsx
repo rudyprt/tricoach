@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { InstallerApp } from "../components/InstallerApp";
+import { PauseCard } from "../components/PauseCard";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
@@ -251,6 +252,10 @@ export function Dashboard() {
 
       <div className="mb-4">
         <InstallerApp />
+      </div>
+
+      <div className="mb-4">
+        <PauseCard onChange={loadPlan} />
       </div>
 
       {plan && !generating && (

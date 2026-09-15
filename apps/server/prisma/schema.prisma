@@ -53,6 +53,7 @@ model User {
   Activity               Activity[]
   fitnessTests           FitnessTest[]
   reminders              Reminder[]
+  pauses                 TrainingPause[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -314,4 +315,27 @@ model Reminder {
 
   @@unique([userId, kind, periode])
   @@index([userId, sentAt])
+}
+
+/// Interruption d'entraînement : blessure, maladie, indisponibilité.
+///
+/// Sans elle, l'application continuait de produire des semaines comme si de
+/// rien n'était, et la progression de charge repartait du volume d'avant
+/// l'arrêt — le meilleur moyen de re-blesser quelqu'un à la reprise.
+model TrainingPause {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "blessure" | "maladie" | "indisponibilite"
+  raison    String
+  detail    String    @default("")
+  debut     DateTime
+  /// Date de reprise envisagée, si l'athlète la connaît.
+  finPrevue DateTime?
+  /// Date de reprise effective. Tant qu'elle est nulle, la pause est en cours.
+  finReelle DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, debut])
+  @@index([userId, finReelle])
 }
