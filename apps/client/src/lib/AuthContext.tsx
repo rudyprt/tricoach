@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { purgerCacheHorsLigne } from "./pwa";
 import { api, type CurrentUser } from "./api";
 
 interface AuthContextValue {
@@ -28,6 +29,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function logout() {
     await api.post("/auth/logout");
     setUser(null);
+    // Sur un téléphone partagé, les données mises en cache hors ligne
+    // resteraient lisibles par la personne suivante.
+    purgerCacheHorsLigne();
   }
 
   useEffect(() => {

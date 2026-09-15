@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import { AnimatedBackground } from "./components/AnimatedBackground";
+import { IndicateurHorsLigne } from "./components/IndicateurHorsLigne";
 import { SplashScreen } from "./components/SplashScreen";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
@@ -40,6 +41,7 @@ function AppShell() {
   return (
     <>
       <AnimatedBackground />
+      <IndicateurHorsLigne />
       {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
       <Suspense
         fallback={

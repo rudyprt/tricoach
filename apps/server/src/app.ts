@@ -55,7 +55,24 @@ export function createApp() {
   // En production, ce même serveur sert aussi le frontend compilé (même origine :
   // pas de souci CORS ni de cookies cross-domain).
   const clientDist = path.join(__dirname, "../../client/dist");
-  app.use(express.static(clientDist));
+  app.use(
+    express.static(clientDist, {
+      setHeaders(res, filePath) {
+        // Les fichiers de /assets portent un hachage : leur contenu ne change
+        // jamais, ils peuvent être gardés un an.
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          return;
+        }
+        // Le service worker, lui, doit être revalidé à chaque visite : un
+        // exemplaire figé en cache empêcherait toute mise à jour de
+        // l'application installée.
+        if (filePath.endsWith("sw.js") || filePath.endsWith("manifest.webmanifest")) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    })
+  );
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) {
       next();
