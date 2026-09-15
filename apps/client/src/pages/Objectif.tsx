@@ -11,6 +11,21 @@ const DISCIPLINES = [
 
 type DisciplineKey = (typeof DISCIPLINES)[number]["key"];
 
+/** "4:10" ou "4:10/km" → 250 secondes. Renvoie null si la saisie est vide. */
+function allureVersSecondes(saisie: string): number | null {
+  const propre = saisie.trim().replace(/\/(km|100m)$/i, "");
+  if (propre === "") return null;
+  const match = propre.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function secondesVersAllure(secondes: number): string {
+  const m = Math.floor(secondes / 60);
+  const s = secondes % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export function Objectif() {
   const [loaded, setLoaded] = useState(false);
   const [objectif, setObjectif] = useState("");
@@ -23,6 +38,11 @@ export function Objectif() {
   const [heuresSemaine, setHeuresSemaine] = useState(6);
   const [contraintes, setContraintes] = useState("");
   const [ftpWatts, setFtpWatts] = useState("");
+  // Valeurs de seuil : saisies en texte lisible, converties en secondes pour l'API.
+  const [seuilCourse, setSeuilCourse] = useState("");
+  const [css, setCss] = useState("");
+  const [fcSeuil, setFcSeuil] = useState("");
+  const [fcMax, setFcMax] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,6 +60,10 @@ export function Objectif() {
         setHeuresSemaine(data.heuresSemaine);
         setContraintes(data.contraintes);
         setFtpWatts(data.ftpWatts ? String(data.ftpWatts) : "");
+        setSeuilCourse(data.seuilCourseSecParKm ? secondesVersAllure(data.seuilCourseSecParKm) : "");
+        setCss(data.cssSecPer100m ? secondesVersAllure(data.cssSecPer100m) : "");
+        setFcSeuil(data.fcSeuil ? String(data.fcSeuil) : "");
+        setFcMax(data.fcMax ? String(data.fcMax) : "");
       }
       setLoaded(true);
     });
@@ -58,6 +82,10 @@ export function Objectif() {
         heuresSemaine,
         contraintes,
         ftpWatts: ftpWatts.trim() === "" ? null : Number(ftpWatts),
+        seuilCourseSecParKm: allureVersSecondes(seuilCourse),
+        cssSecPer100m: allureVersSecondes(css),
+        fcSeuil: fcSeuil.trim() === "" ? null : Number(fcSeuil),
+        fcMax: fcMax.trim() === "" ? null : Number(fcMax),
       });
       setSaved(true);
     } catch (err) {
@@ -135,6 +163,66 @@ export function Objectif() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+          <p className="text-sm font-medium text-white">Vos valeurs de seuil (facultatif)</p>
+          <p className="mt-0.5 mb-3 text-xs text-zinc-500">
+            Si vous les connaissez, elles remplacent l'estimation faite à partir de vos temps de référence — et vos
+            zones deviennent exactes plutôt qu'approchées.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-400">Allure au seuil en course (min:s par km)</label>
+              <input
+                placeholder="Ex : 4:10"
+                value={seuilCourse}
+                onChange={(e) => setSeuilCourse(e.target.value)}
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-400">CSS natation (min:s aux 100 m)</label>
+              <input
+                placeholder="Ex : 1:45"
+                value={css}
+                onChange={(e) => setCss(e.target.value)}
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-400">FC au seuil (bpm)</label>
+              <input
+                type="number"
+                min={100}
+                max={220}
+                placeholder="Ex : 168"
+                value={fcSeuil}
+                onChange={(e) => setFcSeuil(e.target.value)}
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-400">FC maximale (bpm)</label>
+              <input
+                type="number"
+                min={120}
+                max={230}
+                placeholder="Ex : 188"
+                value={fcMax}
+                onChange={(e) => setFcMax(e.target.value)}
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-zinc-600">
+            Sans FC au seuil, elle est estimée à 92 % de votre FC max. Si vous ne renseignez pas non plus votre FC
+            max, elle est déduite de vos séances importées.
+          </p>
         </div>
 
         <div className="space-y-1">

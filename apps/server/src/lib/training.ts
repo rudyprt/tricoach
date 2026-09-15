@@ -94,27 +94,59 @@ export interface TrainingZones {
   course: ZoneRange[] | null;
   natation: ZoneRange[] | null;
   velo: ZoneRange[] | null;
+  /** Zones de fréquence cardiaque, communes aux trois disciplines. */
+  frequenceCardiaque: ZoneRange[] | null;
   /** Explique d'où viennent les valeurs, pour l'affichage et pour le prompt. */
   notes: string[];
 }
 
-const RUN_ZONE_OFFSETS_S_PER_KM: { zone: string; label: string; offset: number }[] = [
-  { zone: "Z1", label: "récupération", offset: 105 },
-  { zone: "Z2", label: "endurance fondamentale", offset: 75 },
-  { zone: "Z3", label: "tempo", offset: 35 },
-  { zone: "Z4", label: "seuil", offset: 15 },
-  { zone: "Z5", label: "VMA", offset: -15 },
+/* ------------------------------------------------------------------ */
+/* Modèle de zones                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Les zones sont exprimées en fraction de la vitesse (ou de la puissance) au
+ * seuil, et non par des écarts fixes en secondes par kilomètre.
+ *
+ * C'est la différence entre un modèle juste et un modèle faux : avec des
+ * écarts fixes, « allure 10 km + 75 s » représente +19 % pour un coureur à
+ * 6:30/km mais +40 % pour un coureur à 3:06/km. Le débutant se retrouvait avec
+ * une endurance fondamentale bien trop rapide — or c'est exactement lui qui
+ * court déjà trop vite à l'entraînement.
+ */
+interface ZoneBand {
+  zone: string;
+  label: string;
+  /** Borne basse, en fraction de la valeur au seuil. */
+  from: number;
+  /** Borne haute, en fraction de la valeur au seuil. */
+  to: number;
+}
+
+/** Course à pied : fractions de la vitesse au seuil (VMA anaérobie exclue). */
+const RUN_BANDS: ZoneBand[] = [
+  { zone: "Z1", label: "récupération", from: 0.65, to: 0.8 },
+  { zone: "Z2", label: "endurance fondamentale", from: 0.8, to: 0.88 },
+  { zone: "Z3", label: "tempo", from: 0.88, to: 0.95 },
+  { zone: "Z4", label: "seuil", from: 0.95, to: 1.02 },
+  { zone: "Z5", label: "VO2max", from: 1.02, to: 1.12 },
 ];
 
-const SWIM_ZONE_OFFSETS_S_PER_100M: { zone: string; label: string; offset: number }[] = [
-  { zone: "Z1", label: "récupération", offset: 15 },
-  { zone: "Z2", label: "endurance fondamentale", offset: 10 },
-  { zone: "Z3", label: "tempo", offset: 5 },
-  { zone: "Z4", label: "seuil (CSS)", offset: 0 },
-  { zone: "Z5", label: "vitesse", offset: -5 },
+/**
+ * Natation : les zones sont bien plus resserrées qu'en course. L'eau impose
+ * une résistance qui croît avec le carré de la vitesse, si bien qu'un écart de
+ * quelques secondes aux 100 m change radicalement l'effort.
+ */
+const SWIM_BANDS: ZoneBand[] = [
+  { zone: "Z1", label: "récupération", from: 0.85, to: 0.9 },
+  { zone: "Z2", label: "endurance fondamentale", from: 0.9, to: 0.95 },
+  { zone: "Z3", label: "tempo", from: 0.95, to: 0.98 },
+  { zone: "Z4", label: "seuil (CSS)", from: 0.98, to: 1.02 },
+  { zone: "Z5", label: "vitesse", from: 1.02, to: 1.1 },
 ];
 
-const BIKE_ZONE_FTP_PCT: { zone: string; label: string; from: number; to: number }[] = [
+/** Vélo : pourcentages de FTP, selon le découpage de référence de Coggan. */
+const BIKE_BANDS: ZoneBand[] = [
   { zone: "Z1", label: "récupération", from: 0.4, to: 0.55 },
   { zone: "Z2", label: "endurance fondamentale", from: 0.56, to: 0.75 },
   { zone: "Z3", label: "tempo", from: 0.76, to: 0.9 },
@@ -122,11 +154,65 @@ const BIKE_ZONE_FTP_PCT: { zone: string; label: string; from: number; to: number
   { zone: "Z5", label: "PMA", from: 1.06, to: 1.2 },
 ];
 
+/** Fréquence cardiaque : pourcentages de la FC au seuil. */
+const HR_BANDS: ZoneBand[] = [
+  { zone: "Z1", label: "récupération", from: 0.7, to: 0.81 },
+  { zone: "Z2", label: "endurance fondamentale", from: 0.81, to: 0.89 },
+  { zone: "Z3", label: "tempo", from: 0.89, to: 0.93 },
+  { zone: "Z4", label: "seuil", from: 0.94, to: 0.99 },
+  { zone: "Z5", label: "VO2max", from: 1.0, to: 1.06 },
+];
+
+/**
+ * Vitesse soutenable pendant `targetS` secondes, déduite d'une performance de
+ * référence par la formule de Riegel.
+ *
+ * Le seuil correspond à l'effort tenable environ une heure en course, environ
+ * trente minutes en natation : on résout donc Riegel pour cette durée plutôt
+ * que de ramener à une distance étalon arbitraire.
+ */
+export function thresholdSpeed(perf: ParsedPerformance, targetS: number, exponent: number): number {
+  const distance = perf.distanceM * Math.pow(targetS / perf.durationS, 1 / exponent);
+  return distance / targetS;
+}
+
+/** Plage d'allure, de la plus rapide à la plus lente, unité mentionnée une fois. */
+function formatPaceBand(thresholdSpeedMs: number, band: ZoneBand, per: 1000 | 100): string {
+  // Une fraction de vitesse basse correspond à une allure lente : les bornes
+  // s'inversent au passage de la vitesse à l'allure.
+  const lent = per / (thresholdSpeedMs * band.from);
+  const rapide = per / (thresholdSpeedMs * band.to);
+  const unite = per === 1000 ? "/km" : "/100m";
+  const fmt = (v: number) => (per === 1000 ? formatPacePerKm(v) : formatPacePer100m(v)).replace(unite, "");
+  return `${fmt(rapide)}–${fmt(lent)}${unite}`;
+}
+
+function formatWattBand(ftp: number, band: ZoneBand): string {
+  return `${Math.round(ftp * band.from)}–${Math.round(ftp * band.to)} W`;
+}
+
+function formatHrBand(lthr: number, band: ZoneBand): string {
+  return `${Math.round(lthr * band.from)}–${Math.round(lthr * band.to)} bpm`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Calcul des zones                                                    */
+/* ------------------------------------------------------------------ */
+
 export interface ZoneInputs {
   tempsCourse?: string | null;
   tempsNatation?: string | null;
   tempsVelo?: string | null;
+  /** Puissance au seuil, si l'athlète la connaît. */
   ftpWatts?: number | null;
+  /** Allure au seuil en course, en secondes par kilomètre, si elle est connue. */
+  seuilCourseSecParKm?: number | null;
+  /** Vitesse critique en natation, en secondes aux 100 m, si elle est connue. */
+  cssSecPer100m?: number | null;
+  /** Fréquence cardiaque au seuil. */
+  fcSeuil?: number | null;
+  /** Fréquence cardiaque maximale observée ou testée. */
+  fcMax?: number | null;
   /** Corrections saisies par l'athlète, prioritaires sur le calcul. */
   overrides?: ZoneOverrides | null;
 }
@@ -140,18 +226,16 @@ export interface ZoneInputs {
 function applyOverrides(
   computed: ZoneRange[] | null,
   overrides: Record<string, string> | undefined,
-  defs: { zone: string; label: string }[]
+  bands: ZoneBand[]
 ): ZoneRange[] | null {
   const manual = Object.entries(overrides ?? {}).filter(([, value]) => value.trim() !== "");
   if (manual.length === 0) return computed;
 
   const byZone = new Map(manual.map(([zone, value]) => [zone, value.trim()]));
-  const base = computed ?? defs.map((d) => ({ zone: d.zone, label: d.label, value: "" }));
+  const base = computed ?? bands.map((b) => ({ zone: b.zone, label: b.label, value: "" }));
 
   const merged = base.map((range) =>
-    byZone.has(range.zone)
-      ? { ...range, value: byZone.get(range.zone)!, custom: true }
-      : range
+    byZone.has(range.zone) ? { ...range, value: byZone.get(range.zone)!, custom: true } : range
   );
 
   // Un sport sans aucune valeur reste absent plutôt qu'affiché vide.
@@ -162,83 +246,128 @@ function applyOverrides(
  * Calcule les zones une bonne fois côté serveur, au lieu de demander au modèle
  * de refaire l'arithmétique à chaque génération (source d'incohérences d'une
  * semaine à l'autre).
+ *
+ * Priorité des sources : une valeur de seuil saisie par l'athlète l'emporte sur
+ * une estimation tirée d'un temps de référence, qui l'emporte sur rien.
  */
 export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   const notes: string[] = [];
 
+  /* --- Course à pied ------------------------------------------------ */
   let course: ZoneRange[] | null = null;
-  const runPerf = parsePerformance(inputs.tempsCourse);
-  if (runPerf) {
-    // Exposant 1.06 : valeur classique de Riegel pour la course à pied.
-    const equivalent10k = riegelEquivalent(runPerf, 10_000, 1.06);
-    const pace10k = equivalent10k / 10;
-    course = RUN_ZONE_OFFSETS_S_PER_KM.map((z) => ({
-      zone: z.zone,
-      label: z.label,
-      value: formatPacePerKm(pace10k + z.offset),
-    }));
-    notes.push(`Course : allures dérivées d'un 10 km équivalent en ${formatPacePerKm(pace10k)}.`);
-  }
+  let vitesseSeuilCourse: number | null = null;
 
-  let natation: ZoneRange[] | null = null;
-  const swimPerf = parsePerformance(inputs.tempsNatation);
-  if (swimPerf) {
-    // Exposant 1.02 : la fatigue progresse plus lentement en natation.
-    const equivalent1500 = riegelEquivalent(swimPerf, 1500, 1.02);
-    const css = equivalent1500 / 15; // secondes par 100 m
-    natation = SWIM_ZONE_OFFSETS_S_PER_100M.map((z) => ({
-      zone: z.zone,
-      label: z.label,
-      value: formatPacePer100m(css + z.offset),
-    }));
-    notes.push(`Natation : CSS estimée à ${formatPacePer100m(css)}.`);
-  }
-
-  let velo: ZoneRange[] | null = null;
-  if (inputs.ftpWatts && inputs.ftpWatts > 50) {
-    const ftp = inputs.ftpWatts;
-    velo = BIKE_ZONE_FTP_PCT.map((z) => ({
-      zone: z.zone,
-      label: z.label,
-      value: `${Math.round(ftp * z.from)}-${Math.round(ftp * z.to)} W`,
-    }));
-    notes.push(`Vélo : zones de puissance calculées sur une FTP de ${ftp} W.`);
+  if (inputs.seuilCourseSecParKm && inputs.seuilCourseSecParKm > 120) {
+    vitesseSeuilCourse = 1000 / inputs.seuilCourseSecParKm;
+    notes.push(`Course : allure au seuil renseignée (${formatPacePerKm(inputs.seuilCourseSecParKm)}).`);
   } else {
-    const bikePerf = parsePerformance(inputs.tempsVelo);
-    if (bikePerf) {
-      const speedKmh = (bikePerf.distanceM / 1000) / (bikePerf.durationS / 3600);
-      velo = [
-        { zone: "Z1", label: "récupération", value: `~${(speedKmh * 0.7).toFixed(1)} km/h` },
-        { zone: "Z2", label: "endurance fondamentale", value: `~${(speedKmh * 0.82).toFixed(1)} km/h` },
-        { zone: "Z3", label: "tempo", value: `~${(speedKmh * 0.92).toFixed(1)} km/h` },
-        { zone: "Z4", label: "seuil", value: `~${speedKmh.toFixed(1)} km/h` },
-        { zone: "Z5", label: "PMA", value: `> ${(speedKmh * 1.08).toFixed(1)} km/h` },
-      ];
+    const perf = parsePerformance(inputs.tempsCourse);
+    if (perf) {
+      // Exposant 1.06 : valeur classique de Riegel pour la course à pied.
+      // Le seuil correspond à l'effort tenable une heure.
+      vitesseSeuilCourse = thresholdSpeed(perf, 3600, 1.06);
       notes.push(
-        `Vélo : zones estimées à partir d'une vitesse de référence de ${speedKmh.toFixed(1)} km/h (renseignez votre FTP pour des zones de puissance).`
+        `Course : seuil estimé à ${formatPacePerKm(1000 / vitesseSeuilCourse)} à partir de votre temps de référence.`
       );
     }
   }
 
-  const overrides = inputs.overrides ?? {};
-  course = applyOverrides(course, overrides.course, RUN_ZONE_OFFSETS_S_PER_KM);
-  natation = applyOverrides(natation, overrides.natation, SWIM_ZONE_OFFSETS_S_PER_100M);
-  velo = applyOverrides(velo, overrides.velo, BIKE_ZONE_FTP_PCT);
+  if (vitesseSeuilCourse) {
+    course = RUN_BANDS.map((b) => ({
+      zone: b.zone,
+      label: b.label,
+      value: formatPaceBand(vitesseSeuilCourse!, b, 1000),
+    }));
+  }
 
-  const correctedSports = ZONE_SPORTS.filter((sport) =>
-    ({ course, natation, velo })[sport]?.some((z) => z.custom)
-  );
-  if (correctedSports.length > 0) {
+  /* --- Natation ----------------------------------------------------- */
+  let natation: ZoneRange[] | null = null;
+  let vitesseCss: number | null = null;
+
+  if (inputs.cssSecPer100m && inputs.cssSecPer100m > 40) {
+    vitesseCss = 100 / inputs.cssSecPer100m;
+    notes.push(`Natation : CSS renseignée (${formatPacePer100m(inputs.cssSecPer100m)}).`);
+  } else {
+    const perf = parsePerformance(inputs.tempsNatation);
+    if (perf) {
+      // Exposant 1.03 : la fatigue progresse plus lentement en natation.
+      // La CSS correspond à l'effort tenable environ trente minutes.
+      vitesseCss = thresholdSpeed(perf, 1800, 1.03);
+      notes.push(`Natation : CSS estimée à ${formatPacePer100m(100 / vitesseCss)}.`);
+    }
+  }
+
+  if (vitesseCss) {
+    natation = SWIM_BANDS.map((b) => ({
+      zone: b.zone,
+      label: b.label,
+      value: formatPaceBand(vitesseCss!, b, 100),
+    }));
+  }
+
+  /* --- Vélo --------------------------------------------------------- */
+  let velo: ZoneRange[] | null = null;
+
+  if (inputs.ftpWatts && inputs.ftpWatts > 50) {
+    velo = BIKE_BANDS.map((b) => ({
+      zone: b.zone,
+      label: b.label,
+      value: formatWattBand(inputs.ftpWatts!, b),
+    }));
+    notes.push(`Vélo : zones de puissance calculées sur une FTP de ${inputs.ftpWatts} W.`);
+  } else {
+    // Volontairement aucune zone en km/h : à effort égal, la vitesse varie du
+    // simple au triple selon la pente, le vent et l'abri. Donner « Z2 = 26 km/h »
+    // serait une fausse précision, pas une aide.
     notes.push(
-      `Zones corrigées à la main pour : ${correctedSports.join(", ")}. Ces valeurs remplacent le calcul automatique.`
+      "Vélo : sans FTP, aucune zone chiffrée n'est proposée — la vitesse dépend trop de la pente et du vent pour refléter l'effort. Renseignez votre FTP, ou faites un test de 20 minutes (FTP ≈ 95 % de la puissance moyenne)."
     );
   }
 
-  if (!course && !natation && !velo) {
-    notes.push("Aucun temps de référence exploitable : renseignez vos temps récents pour obtenir des zones chiffrées.");
+  /* --- Fréquence cardiaque ------------------------------------------ */
+  let frequenceCardiaque: ZoneRange[] | null = null;
+  let seuilFc: number | null = null;
+
+  if (inputs.fcSeuil && inputs.fcSeuil > 100) {
+    seuilFc = inputs.fcSeuil;
+    notes.push(`Fréquence cardiaque : zones calculées sur une FC au seuil de ${seuilFc} bpm.`);
+  } else if (inputs.fcMax && inputs.fcMax > 120) {
+    // Approximation usuelle en l'absence de test de seuil. Signalée comme telle :
+    // la FC au seuil varie sensiblement d'un athlète à l'autre.
+    seuilFc = Math.round(inputs.fcMax * 0.92);
+    notes.push(
+      `Fréquence cardiaque : FC au seuil estimée à ${seuilFc} bpm (92 % de votre FC max de ${inputs.fcMax}). Un test de 30 minutes donnerait une valeur plus juste.`
+    );
   }
 
-  return { course, natation, velo, notes };
+  if (seuilFc) {
+    frequenceCardiaque = HR_BANDS.map((b) => ({
+      zone: b.zone,
+      label: b.label,
+      value: formatHrBand(seuilFc!, b),
+    }));
+  }
+
+  /* --- Corrections manuelles ---------------------------------------- */
+  const overrides = inputs.overrides ?? {};
+  course = applyOverrides(course, overrides.course, RUN_BANDS);
+  natation = applyOverrides(natation, overrides.natation, SWIM_BANDS);
+  velo = applyOverrides(velo, overrides.velo, BIKE_BANDS);
+
+  const corriges = ZONE_SPORTS.filter((sport) => ({ course, natation, velo })[sport]?.some((z) => z.custom));
+  if (corriges.length > 0) {
+    notes.push(
+      `Zones corrigées à la main pour : ${corriges.join(", ")}. Ces valeurs remplacent le calcul automatique.`
+    );
+  }
+
+  if (!course && !natation && !velo && !frequenceCardiaque) {
+    notes.push(
+      "Aucune donnée exploitable : renseignez un temps de référence, votre FTP ou votre FC au seuil pour obtenir des zones chiffrées."
+    );
+  }
+
+  return { course, natation, velo, frequenceCardiaque, notes };
 }
 
 export function formatZonesForPrompt(zones: TrainingZones): string {
@@ -256,7 +385,17 @@ export function formatZonesForPrompt(zones: TrainingZones): string {
   push("Course à pied", zones.course);
   push("Natation", zones.natation);
   push("Vélo", zones.velo);
-  return lines.length ? lines.join("\n") : "Zones non calculables (temps de référence manquants ou non exploitables).";
+  push("Fréquence cardiaque", zones.frequenceCardiaque);
+
+  if (!zones.velo) {
+    lines.push(
+      "Vélo : aucune zone de puissance disponible. Prescris l'intensité vélo par la fréquence cardiaque si elle est donnée, sinon par la sensation (échelle de perception), jamais par une vitesse en km/h."
+    );
+  }
+
+  return lines.length
+    ? lines.join("\n")
+    : "Zones non calculables (temps de référence manquants ou non exploitables).";
 }
 
 export type TrainingPhase = "base" | "developpement" | "specifique" | "affutage" | "course" | "transition";

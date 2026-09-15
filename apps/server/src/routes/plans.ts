@@ -15,8 +15,9 @@ import {
   formatZonesForPrompt,
   periodization,
   type Periodization,
+  type TrainingZones,
 } from "../lib/training.js";
-import { parseZoneOverrides } from "../lib/zoneOverrides.js";
+import { buildZoneInputs } from "../lib/zoneInputs.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -51,6 +52,10 @@ interface ProfileForPrompt {
   heuresSemaine: number;
   contraintes: string;
   ftpWatts: number | null;
+  seuilCourseSecParKm: number | null;
+  cssSecPer100m: number | null;
+  fcSeuil: number | null;
+  fcMax: number | null;
   customZones: unknown;
 }
 
@@ -111,14 +116,12 @@ async function measuredActivityLines(userId: string, since: Date): Promise<strin
   ];
 }
 
-function profileLines(profile: ProfileForPrompt, phase: Periodization, maxVolumeMin: number): string[] {
-  const zones = computeTrainingZones({
-    tempsCourse: profile.tempsCourse,
-    tempsNatation: profile.tempsNatation,
-    tempsVelo: profile.tempsVelo,
-    ftpWatts: profile.ftpWatts,
-    overrides: parseZoneOverrides(profile.customZones),
-  });
+function profileLines(
+  profile: ProfileForPrompt,
+  phase: Periodization,
+  maxVolumeMin: number,
+  zones: TrainingZones
+): string[] {
 
   return [
     `Objectif de l'athlète : ${profile.objectif}`,
@@ -142,7 +145,8 @@ function buildFirstWeekPrompt(
   phase: Periodization,
   maxVolumeMin: number,
   recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
-  mesurees: string[]
+  mesurees: string[],
+  zones: TrainingZones
 ): string {
   const historyLines = recentSessions.length
     ? recentSessions
@@ -154,7 +158,7 @@ function buildFirstWeekPrompt(
     : "aucun historique disponible";
 
   return [
-    ...profileLines(profile, phase, maxVolumeMin),
+    ...profileLines(profile, phase, maxVolumeMin, zones),
     ...mesurees,
     "",
     `Séances récentes (pour adapter la charge et les zones) : ${historyLines}`,
@@ -168,7 +172,8 @@ function buildProgressionPrompt(
   phase: Periodization,
   pastSessions: { date: Date; sport: string; titre: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
   stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number },
-  mesurees: string[]
+  mesurees: string[],
+  zones: TrainingZones
 ): string {
   const pastLines = pastSessions.length
     ? pastSessions
@@ -180,7 +185,7 @@ function buildProgressionPrompt(
     : "aucune séance la semaine passée";
 
   return [
-    ...profileLines(profile, phase, stats.maxVolumeMin),
+    ...profileLines(profile, phase, stats.maxVolumeMin, zones),
     ...mesurees,
     "",
     `Détail de LA SEMAINE QUI VIENT DE SE TERMINER : ${pastLines}`,
@@ -209,7 +214,8 @@ function buildAdjustmentUserPrompt(
   dejaVecu: { date: Date; sport: string; titre: string; dureeMin: number; status: string; ressenti: string | null }[],
   maxVolumeMin: number,
   motif: string | null,
-  mesurees: string[]
+  mesurees: string[],
+  zones: TrainingZones
 ): string {
   const bilan = dejaVecu.length
     ? dejaVecu
@@ -224,7 +230,7 @@ function buildAdjustmentUserPrompt(
   const manquees = dejaVecu.filter((s) => s.status === "manquee");
 
   return [
-    ...profileLines(profile, phase, maxVolumeMin),
+    ...profileLines(profile, phase, maxVolumeMin, zones),
     ...mesurees,
     "",
     `Début de semaine déjà vécu : ${bilan}`,
@@ -457,7 +463,8 @@ async function prepareAdjustment(
   profile: ProfileForPrompt,
   weekStart: Date,
   phase: Periodization,
-  motif: string | null
+  motif: string | null,
+  zones: TrainingZones
 ): Promise<PreparedGeneration> {
   const aujourdHui = localCalendarDate(new Date(), timezone);
   const joursRestants = weekDays(weekStart).filter((jour) => jour >= aujourdHui);
@@ -502,7 +509,8 @@ async function prepareAdjustment(
       dejaVecu,
       maxVolumeMin,
       motif,
-      await measuredActivityLines(userId, weekStart)
+      await measuredActivityLines(userId, weekStart),
+      zones
     ),
   };
 }
@@ -522,6 +530,9 @@ async function prepareGeneration(
 
   const weekStart = startOfWeek(new Date(), user.timezone);
   const phase = periodization(weekStart, profile.objectifDate);
+  // Les zones sont calculées une seule fois, à partir du profil et de ce que
+  // les séances importées révèlent (fréquence cardiaque maximale observée).
+  const zones = computeTrainingZones(await buildZoneInputs(userId, profile));
 
   if (kind === "premiere_semaine") {
     const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
@@ -544,13 +555,14 @@ async function prepareGeneration(
         phase,
         maxVolumeMin,
         recentSessions,
-        await measuredActivityLines(userId, addDays(weekStart, -21))
+        await measuredActivityLines(userId, addDays(weekStart, -21)),
+        zones
       ),
     };
   }
 
   if (kind === "ajustement_semaine") {
-    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif);
+    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif, zones);
   }
 
   const previousPlan = await prisma.trainingPlan.findFirst({
@@ -589,7 +601,7 @@ async function prepareGeneration(
       missedCount,
       totalCount: nonRestSessions.length,
       maxVolumeMin,
-    }, await measuredActivityLines(userId, addDays(weekStart, -14))),
+    }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones),
   };
 }
 

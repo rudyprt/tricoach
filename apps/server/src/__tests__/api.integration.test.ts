@@ -233,6 +233,7 @@ describeIfDb("API", () => {
         heuresSemaine: 8,
         contraintes: "",
         ftpWatts: 240,
+        fcMax: 188,
       });
       expect(put.status).toBe(200);
 
@@ -240,6 +241,8 @@ describeIfDb("API", () => {
       expect(zones.status).toBe(200);
       expect(zones.body.zones.course).toHaveLength(5);
       expect(zones.body.zones.velo[3].value).toContain("W");
+      // Les zones de fréquence cardiaque apparaissent dès qu'une FC est connue.
+      expect(zones.body.zones.frequenceCardiaque).not.toBeNull();
       expect(zones.body.periodization.phase).toBe("base");
     });
 
@@ -253,7 +256,10 @@ describeIfDb("API", () => {
       });
 
       const avant = await agent.get("/api/profile/zones");
-      expect(avant.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:45/km");
+      // Une zone est une plage, pas une valeur unique.
+      expect(avant.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toMatch(
+        /^\d+:\d{2}–\d+:\d{2}\/km$/
+      );
       expect(avant.body.overrides).toEqual({});
 
       const put = await agent.put("/api/profile/zones").send({ course: { Z2: "5:30/km" } });
@@ -267,7 +273,10 @@ describeIfDb("API", () => {
       // consultable pour pouvoir y revenir.
       const apres = await agent.get("/api/profile/zones");
       expect(apres.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:30/km");
-      expect(apres.body.computedZones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:45/km");
+      // La valeur calculée reste consultable, pour pouvoir y revenir.
+      expect(apres.body.computedZones.course.find((z: { zone: string }) => z.zone === "Z2").value).toMatch(
+        /^\d+:\d{2}–\d+:\d{2}\/km$/
+      );
       expect(apres.body.overrides).toEqual({ course: { Z2: "5:30/km" } });
     });
 
@@ -284,7 +293,9 @@ describeIfDb("API", () => {
       const reset = await agent.delete("/api/profile/zones");
       expect(reset.status).toBe(200);
       expect(reset.body.overrides).toEqual({});
-      expect(reset.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toBe("5:45/km");
+      expect(reset.body.zones.course.find((z: { zone: string }) => z.zone === "Z2").value).toMatch(
+        /^\d+:\d{2}–\d+:\d{2}\/km$/
+      );
     });
 
     it("refuse une zone inconnue ou une valeur démesurée", async () => {

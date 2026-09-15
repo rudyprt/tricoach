@@ -6,6 +6,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
 import { computeTrainingZones, periodization } from "../lib/training.js";
 import { parseZoneOverrides, zoneOverridesSchema } from "../lib/zoneOverrides.js";
+import { buildZoneInputs, suggestFtp } from "../lib/zoneInputs.js";
 import { startOfWeek } from "../lib/week.js";
 
 export const profileRouter = Router();
@@ -23,6 +24,12 @@ const profileSchema = z.object({
   heuresSemaine: z.number().positive("Indiquez un nombre d'heures positif.").max(40, "40 heures maximum par semaine."),
   contraintes: z.string().max(1000).optional().default(""),
   ftpWatts: z.number().int().min(50).max(600).nullable().optional(),
+  // Bornes larges mais physiologiquement plausibles : elles écartent les fautes
+  // de frappe sans contraindre les extrêmes réels.
+  seuilCourseSecParKm: z.number().int().min(150, "Allure trop rapide.").max(900, "Allure trop lente.").nullable().optional(),
+  cssSecPer100m: z.number().int().min(50, "Allure trop rapide.").max(300, "Allure trop lente.").nullable().optional(),
+  fcSeuil: z.number().int().min(100).max(220).nullable().optional(),
+  fcMax: z.number().int().min(120).max(230).nullable().optional(),
 });
 
 profileRouter.get(
@@ -41,8 +48,16 @@ profileRouter.put(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Données invalides." });
       return;
     }
-    const { objectifDate, ftpWatts, ...rest } = parsed.data;
-    const data = { ...rest, ftpWatts: ftpWatts ?? null, objectifDate: new Date(`${objectifDate}T00:00:00.000Z`) };
+    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcMax, ...rest } = parsed.data;
+    const data = {
+      ...rest,
+      ftpWatts: ftpWatts ?? null,
+      seuilCourseSecParKm: seuilCourseSecParKm ?? null,
+      cssSecPer100m: cssSecPer100m ?? null,
+      fcSeuil: fcSeuil ?? null,
+      fcMax: fcMax ?? null,
+      objectifDate: new Date(`${objectifDate}T00:00:00.000Z`),
+    };
 
     const profile = await prisma.athleteProfile.upsert({
       where: { userId: req.userId! },
@@ -69,22 +84,18 @@ profileRouter.get(
       throw new HttpError(400, "Complétez d'abord votre profil (onboarding).");
     }
 
-    const overrides = parseZoneOverrides(profile.customZones);
-    const inputs = {
-      tempsCourse: profile.tempsCourse,
-      tempsNatation: profile.tempsNatation,
-      tempsVelo: profile.tempsVelo,
-      ftpWatts: profile.ftpWatts,
-    };
+    const inputs = await buildZoneInputs(req.userId!, profile);
     const phase = periodization(startOfWeek(new Date(), user?.timezone ?? undefined), profile.objectifDate);
 
     res.json({
-      zones: computeTrainingZones({ ...inputs, overrides }),
+      zones: computeTrainingZones(inputs),
       // Les zones purement calculées sont renvoyées en plus : l'écran de
       // modification doit pouvoir montrer la valeur d'origine à côté de la
       // valeur corrigée, et proposer d'y revenir.
-      computedZones: computeTrainingZones(inputs),
-      overrides: overrides ?? {},
+      computedZones: computeTrainingZones({ ...inputs, overrides: null }),
+      overrides: inputs.overrides ?? {},
+      // Proposition de FTP tirée des séances importées, jamais appliquée seule.
+      ftpSuggere: await suggestFtp(req.userId!),
       periodization: { phase: phase.phase, label: phase.label, weeksToGoal: phase.weeksToGoal },
     });
   })

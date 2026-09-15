@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaPersonSwimming, FaPersonBiking, FaPersonRunning, FaFlagCheckered, FaPen } from "react-icons/fa6";
+import { FaPersonSwimming, FaPersonBiking, FaPersonRunning, FaFlagCheckered, FaPen, FaHeartPulse } from "react-icons/fa6";
 import {
   api,
   apiErrorMessage,
@@ -269,13 +269,40 @@ export function Zones() {
               <ZoneTable ranges={ranges} />
             ) : (
               <p className="text-sm text-zinc-500">
-                Renseignez un temps de référence en {label.toLowerCase()}, ou saisissez vos zones à la main avec
-                « Modifier ».
+                {key === "velo"
+                  ? "Sans FTP, aucune zone chiffrée : à effort égal, la vitesse varie trop selon la pente et le vent. Renseignez votre FTP dans « Mon objectif », ou saisissez vos zones à la main."
+                  : `Renseignez un temps de référence en ${label.toLowerCase()}, ou saisissez vos zones à la main avec « Modifier ».`}
               </p>
             )}
           </div>
         );
       })}
+
+      {!editing && zones.frequenceCardiaque && (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <FaHeartPulse className="text-red-400" size={15} />
+            <h2 className="text-sm font-bold text-white">Fréquence cardiaque</h2>
+          </div>
+          <ZoneTable ranges={zones.frequenceCardiaque} />
+          <p className="mt-2 text-xs text-zinc-500">
+            Utile surtout à vélo, où la puissance n'est pas toujours disponible.
+          </p>
+        </div>
+      )}
+
+      {!editing && data.ftpSuggere && (
+        <div className="rounded-xl border border-sky-900/50 bg-sky-950/20 p-3">
+          <p className="text-sm text-sky-200">
+            Vos séances importées montrent une moyenne de {data.ftpSuggere.puissanceMoy} W sur une sortie
+            d'entraînement. Votre FTP est probablement proche de{" "}
+            <strong>{data.ftpSuggere.ftpSuggere} W</strong>.
+          </p>
+          <Link to="/objectif" className="mt-1.5 inline-block text-xs font-semibold text-sky-300 hover:underline">
+            Renseigner ma FTP →
+          </Link>
+        </div>
+      )}
 
       {editing ? (
         <div className="flex flex-wrap gap-2">

@@ -9,7 +9,17 @@ son coach IA en chat.
 Le programme est construit sur une **périodisation** (fondation → développement
 → spécifique → affûtage → course) et sur des **zones d'entraînement calculées**
 à partir des temps de référence de l'athlète, pas réinventées à chaque
-génération. Chaque zone reste **modifiable à la main** : un athlète qui connaît
+génération.
+
+Les zones sont exprimées en **pourcentage de la vitesse au seuil**, et non par
+des écarts fixes en secondes : un écart constant représenterait +19 % pour un
+coureur à 6:30/km mais +40 % pour un coureur à 3:06/km, ce qui donnait au
+débutant une endurance fondamentale bien trop rapide. Chaque zone est une
+**plage**, et non une valeur unique. À vélo, aucune zone n'est proposée sans
+FTP : à effort égal, la vitesse varie trop selon la pente et le vent pour
+vouloir dire quoi que ce soit.
+
+Chaque zone reste **modifiable à la main** : un athlète qui connaît
 ses allures les saisit, et ce sont ces valeurs qui servent aux programmes. Les
 séances sont exportables vers un agenda au format iCalendar.
 

@@ -176,22 +176,30 @@ model AdminAction {
 }
 
 model AthleteProfile {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  objectif      String
-  objectifDate  DateTime
-  tempsNatation String   @default("")
-  tempsVelo     String   @default("")
-  tempsCourse   String   @default("")
-  heuresSemaine Float
-  contraintes   String   @default("")
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectif            String
+  objectifDate        DateTime
+  tempsNatation       String   @default("")
+  tempsVelo           String   @default("")
+  tempsCourse         String   @default("")
+  heuresSemaine       Float
+  contraintes         String   @default("")
   /// Zones de puissance vélo si l'athlète connaît sa FTP (sinon estimation par la vitesse).
-  ftpWatts      Int?
+  ftpWatts            Int?
+  /// Allure au seuil en course, en secondes par kilomètre, si l'athlète la connaît.
+  seuilCourseSecParKm Int?
+  /// Vitesse critique en natation (CSS), en secondes aux 100 m.
+  cssSecPer100m       Int?
+  /// Fréquence cardiaque au seuil, mesurée lors d'un test.
+  fcSeuil             Int?
+  /// Fréquence cardiaque maximale connue.
+  fcMax               Int?
   /// Zones corrigées à la main par l'athlète : { course: { Z2: "5:30/km" }, ... }.
   /// Une valeur saisie ici prime sur le calcul automatique.
-  customZones   Json?
-  updatedAt     DateTime @updatedAt
+  customZones         Json?
+  updatedAt           DateTime @updatedAt
 }
 
 model TrainingPlan {

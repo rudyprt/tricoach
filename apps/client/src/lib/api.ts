@@ -38,6 +38,10 @@ export interface AthleteProfile {
   heuresSemaine: number;
   contraintes: string;
   ftpWatts: number | null;
+  seuilCourseSecParKm: number | null;
+  cssSecPer100m: number | null;
+  fcSeuil: number | null;
+  fcMax: number | null;
 }
 
 export type TrainingPhase =
@@ -71,6 +75,8 @@ export interface TrainingZones {
   course: ZoneRange[] | null;
   natation: ZoneRange[] | null;
   velo: ZoneRange[] | null;
+  /** Zones de fréquence cardiaque, communes aux trois disciplines. */
+  frequenceCardiaque: ZoneRange[] | null;
   notes: string[];
 }
 
@@ -79,6 +85,8 @@ export interface ZonesResponse {
   /** Zones telles que calculées, sans les corrections : sert à y revenir. */
   computedZones: TrainingZones;
   overrides: ZoneOverrides;
+  /** Proposition de FTP tirée des séances importées, jamais appliquée seule. */
+  ftpSuggere: { puissanceMoy: number; ftpSuggere: number } | null;
   periodization: Periodization;
 }
 
