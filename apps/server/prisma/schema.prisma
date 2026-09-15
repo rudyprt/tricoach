@@ -34,6 +34,9 @@ model User {
   /// version acceptée : une évolution des conditions doit être re-consentie.
   consentAcceptedAt DateTime?
   consentVersion    String?
+  /// Rappels par e-mail (semaine à générer, séances oubliées, fin d'essai).
+  /// Désactivable en un clic depuis chaque message, sans se connecter.
+  rappelsEmail      Boolean   @default(true)
   createdAt         DateTime  @default(now())
 
   profile                AthleteProfile?
@@ -49,6 +52,7 @@ model User {
   StravaAccount          StravaAccount?
   Activity               Activity[]
   fitnessTests           FitnessTest[]
+  reminders              Reminder[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -293,4 +297,21 @@ model FitnessTest {
 
   @@index([userId, scheduledFor])
   @@index([userId, sport, status])
+}
+
+/// Trace des rappels envoyés. La contrainte d'unicité est le garde-fou : sans
+/// elle, un redémarrage du serveur, ou deux instances tournant en parallèle,
+/// enverraient deux fois le même message au même athlète.
+model Reminder {
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "semaine_a_generer" | "seances_oubliees" | "fin_essai"
+  kind    String
+  /// Clé de période qui rend l'envoi idempotent ("2026-W38", "2026-09-15"...).
+  periode String
+  sentAt  DateTime @default(now())
+
+  @@unique([userId, kind, periode])
+  @@index([userId, sentAt])
 }

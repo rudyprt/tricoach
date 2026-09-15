@@ -21,6 +21,7 @@ const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin
 const Compte = lazy(() => import("./pages/Compte").then((m) => ({ default: m.Compte })));
 const StravaReturn = lazy(() => import("./pages/StravaReturn").then((m) => ({ default: m.StravaReturn })));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail").then((m) => ({ default: m.VerifyEmail })));
+const Desabonnement = lazy(() => import("./pages/Desabonnement").then((m) => ({ default: m.Desabonnement })));
 const Conditions = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Conditions })));
 const Confidentialite = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Confidentialite })));
 const MentionsLegales = lazy(() => import("./pages/Legal").then((m) => ({ default: m.MentionsLegales })));
@@ -56,6 +57,7 @@ function AppShell() {
         <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
         <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
         <Route path="/verifier-email" element={<VerifyEmail />} />
+        <Route path="/desabonnement" element={<Desabonnement />} />
         <Route
           path="/strava/retour"
           element={

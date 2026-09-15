@@ -184,6 +184,8 @@ export interface CurrentUser {
   emailVerified: boolean;
   /** true quand les conditions ont changé depuis la dernière acceptation. */
   needsConsent: boolean;
+  /** Rappels par e-mail : semaine à générer, séances oubliées, fin d'essai. */
+  rappelsEmail: boolean;
   profile: AthleteProfile | null;
 }
 

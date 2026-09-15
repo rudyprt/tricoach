@@ -12,6 +12,7 @@ import { CONSENT_VERSION } from "../lib/consent.js";
 import { passwordResetRateLimit } from "../lib/rateLimit.js";
 import { emailVerificationMail, sendMail } from "../lib/mailer.js";
 import { isProduction } from "../lib/env.js";
+import { verifyUnsubscribeToken } from "../lib/reminders.js";
 
 export const privacyRouter = Router();
 
@@ -236,5 +237,51 @@ privacyRouter.delete(
     await prisma.user.delete({ where: { id: user.id } });
     res.clearCookie("token", { httpOnly: true, sameSite: "lax", secure: isProduction() });
     res.json({ ok: true });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Rappels par e-mail                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Désabonnement sans connexion. Un lien de désinscription qui exige de se
+ * connecter n'en est pas un : il faut que le geste aboutisse d'un clic, depuis
+ * le message lui-même, sur n'importe quel appareil.
+ */
+privacyRouter.post(
+  "/rappels/desabonner",
+  ah(async (req, res) => {
+    const schema = z.object({ userId: z.string().min(1), token: z.string().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "Lien de désabonnement invalide.");
+
+    const { userId, token } = parsed.data;
+    if (!verifyUnsubscribeToken(userId, token)) {
+      throw new HttpError(400, "Lien de désabonnement invalide ou expiré.");
+    }
+
+    // updateMany plutôt que update : un compte supprimé entre-temps ne doit pas
+    // produire une erreur, le résultat attendu est le même.
+    await prisma.user.updateMany({ where: { id: userId }, data: { rappelsEmail: false } });
+    res.json({ ok: true });
+  })
+);
+
+/** Réglage depuis le compte, pour se réabonner ou couper les rappels. */
+privacyRouter.patch(
+  "/rappels",
+  requireAuth,
+  ah(async (req: AuthedRequest, res) => {
+    const schema = z.object({ rappelsEmail: z.boolean() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "Valeur attendue : vrai ou faux.");
+
+    const user = await prisma.user.update({
+      where: { id: req.userId! },
+      data: { rappelsEmail: parsed.data.rappelsEmail },
+      select: { rappelsEmail: true },
+    });
+    res.json(user);
   })
 );

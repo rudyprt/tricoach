@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createApp } from "./app.js";
 import { env } from "./lib/env.js";
+import { startReminderScheduler } from "./lib/reminders.js";
 
 // Une configuration incomplète doit arrêter le démarrage ici, avec un message
 // lisible, plutôt que produire des erreurs 500 à la première requête.
@@ -14,4 +15,7 @@ try {
 
 createApp().listen(config.PORT, () => {
   console.log(`Serveur API démarré sur http://localhost:${config.PORT}`);
+  // Démarré ici et non dans createApp : aucun test d'intégration ne doit
+  // déclencher d'envoi d'e-mail.
+  startReminderScheduler();
 });

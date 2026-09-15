@@ -5,6 +5,12 @@ export interface Mail {
   to: string;
   subject: string;
   text: string;
+  /**
+   * En-têtes supplémentaires. Sert au désabonnement en un clic : les messageries
+   * affichent alors leur propre bouton, et l'athlète n'a pas à chercher le lien
+   * — c'est aussi ce qui évite qu'il signale le message comme indésirable.
+   */
+  headers?: Record<string, string>;
 }
 
 let transporter: Transporter | null = null;
@@ -54,6 +60,7 @@ export async function sendMail(mail: Mail): Promise<void> {
     to: mail.to,
     subject: mail.subject,
     text: mail.text,
+    headers: mail.headers,
   });
 }
 

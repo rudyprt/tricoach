@@ -48,6 +48,7 @@ const USER_SELECT = {
   emailVerifiedAt: true,
   consentAcceptedAt: true,
   consentVersion: true,
+  rappelsEmail: true,
   createdAt: true,
 } as const;
 
