@@ -48,6 +48,7 @@ model User {
   EmailVerificationToken EmailVerificationToken[]
   StravaAccount          StravaAccount?
   Activity               Activity[]
+  fitnessTests           FitnessTest[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -261,4 +262,35 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+/// Un test de terrain programmé par le coach IA, puis son résultat. C'est la
+/// mesure qui remplace l'estimation : tant qu'aucun test n'a été réalisé, les
+/// zones reposent sur un temps de référence déclaré, parfois ancien.
+model FitnessTest {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "course" | "velo" | "natation"
+  sport        String
+  /// Protocole appliqué : "course_30min", "velo_20min", "natation_css".
+  kind         String
+  /// Jour où le test est programmé, et semaine à laquelle il appartient.
+  scheduledFor DateTime
+  weekStart    DateTime
+  /// "planifie" | "realise" | "abandonne"
+  status       String    @default("planifie")
+  /// Résultats bruts saisis par l'athlète (ou repris d'une activité importée).
+  distanceM    Int?
+  puissanceMoy Int?
+  temps400S    Int?
+  temps200S    Int?
+  fcMoyenne    Int?
+  /// Valeurs de seuil déduites du résultat, et date de leur application au profil.
+  resume       String?
+  appliedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, scheduledFor])
+  @@index([userId, sport, status])
 }

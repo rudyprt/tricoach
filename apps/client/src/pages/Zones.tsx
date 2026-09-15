@@ -11,6 +11,7 @@ import {
   type ZonesResponse,
 } from "../lib/api";
 import { Spinner } from "../components/Spinner";
+import { TestsCard } from "../components/TestsCard";
 
 const PHASE_HINTS: Record<TrainingPhase, string> = {
   base: "Priorité au volume en endurance fondamentale et à la technique.",
@@ -242,6 +243,8 @@ export function Zones() {
           </p>
         </div>
       )}
+
+      {!editing && <TestsCard />}
 
       {editing && (
         <p className="rounded-xl border border-amber-900/50 bg-amber-950/20 px-3 py-2.5 text-sm text-amber-200">

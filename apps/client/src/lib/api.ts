@@ -352,3 +352,31 @@ export function formatUsd(microUsd: number): string {
   if (dollars > 0 && dollars < 0.01) return "< 0,01 $";
   return `${dollars.toFixed(2).replace(".", ",")} $`;
 }
+
+/**
+ * Test de terrain programmé par le coach. Son résultat sert à recaler les
+ * valeurs de seuil, donc toutes les zones, sur le niveau réel du moment.
+ */
+export interface FitnessTest {
+  id: string;
+  sport: "course" | "velo" | "natation";
+  kind: string;
+  date: string;
+  status: "planifie" | "realise" | "abandonne";
+  titre: string;
+  protocole: string;
+  mesures: string;
+  resultat: {
+    distanceM: number | null;
+    puissanceMoy: number | null;
+    temps400S: number | null;
+    temps200S: number | null;
+    fcMoyenne: number | null;
+  };
+  resume: string | null;
+}
+
+export interface FitnessTestsResponse {
+  enCours: FitnessTest[];
+  historique: FitnessTest[];
+}

@@ -18,6 +18,7 @@ import {
   type TrainingZones,
 } from "../lib/training.js";
 import { buildZoneInputs } from "../lib/zoneInputs.js";
+import { planWeeklyTest, testPromptLines } from "../lib/testScheduling.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -146,7 +147,8 @@ function buildFirstWeekPrompt(
   maxVolumeMin: number,
   recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
   mesurees: string[],
-  zones: TrainingZones
+  zones: TrainingZones,
+  testLines: string[]
 ): string {
   const historyLines = recentSessions.length
     ? recentSessions
@@ -160,6 +162,7 @@ function buildFirstWeekPrompt(
   return [
     ...profileLines(profile, phase, maxVolumeMin, zones),
     ...mesurees,
+    ...testLines,
     "",
     `Séances récentes (pour adapter la charge et les zones) : ${historyLines}`,
     `Génère le programme pour les 7 jours suivants (dans cet ordre) : ${weekDays(weekStart).join(", ")}`,
@@ -173,7 +176,8 @@ function buildProgressionPrompt(
   pastSessions: { date: Date; sport: string; titre: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
   stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number },
   mesurees: string[],
-  zones: TrainingZones
+  zones: TrainingZones,
+  testLines: string[]
 ): string {
   const pastLines = pastSessions.length
     ? pastSessions
@@ -187,6 +191,7 @@ function buildProgressionPrompt(
   return [
     ...profileLines(profile, phase, stats.maxVolumeMin, zones),
     ...mesurees,
+    ...testLines,
     "",
     `Détail de LA SEMAINE QUI VIENT DE SE TERMINER : ${pastLines}`,
     `Bilan chiffré de cette semaine passée : ${stats.completedCount}/${stats.totalCount} séances complétées, ${stats.missedCount} manquée(s), volume réalisé ≈ ${Math.round(stats.realizedVolumeMin)} min (volume prévu était ${Math.round(stats.plannedVolumeMin)} min).`,
@@ -215,7 +220,8 @@ function buildAdjustmentUserPrompt(
   maxVolumeMin: number,
   motif: string | null,
   mesurees: string[],
-  zones: TrainingZones
+  zones: TrainingZones,
+  testLines: string[]
 ): string {
   const bilan = dejaVecu.length
     ? dejaVecu
@@ -232,6 +238,7 @@ function buildAdjustmentUserPrompt(
   return [
     ...profileLines(profile, phase, maxVolumeMin, zones),
     ...mesurees,
+    ...testLines,
     "",
     `Début de semaine déjà vécu : ${bilan}`,
     `Bilan : ${faites.length} séance(s) réalisée(s) pour ${faites.reduce((sum, s) => sum + s.dureeMin, 0)} min, ${manquees.length} manquée(s).`,
@@ -495,6 +502,8 @@ async function prepareAdjustment(
   const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
   const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
 
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants);
+
   return {
     weekStart,
     phase,
@@ -510,7 +519,8 @@ async function prepareAdjustment(
       maxVolumeMin,
       motif,
       await measuredActivityLines(userId, weekStart),
-      zones
+      zones,
+      test ? testPromptLines(test) : []
     ),
   };
 }
@@ -543,6 +553,8 @@ async function prepareGeneration(
       select: { date: true, sport: true, dureeMin: true, distanceKm: true, status: true, ressenti: true },
     });
 
+    const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
+
     return {
       weekStart,
       phase,
@@ -556,7 +568,8 @@ async function prepareGeneration(
         maxVolumeMin,
         recentSessions,
         await measuredActivityLines(userId, addDays(weekStart, -21)),
-        zones
+        zones,
+        test ? testPromptLines(test) : []
       ),
     };
   }
@@ -588,6 +601,8 @@ async function prepareGeneration(
   // périodisation peut encore la réduire (affûtage, semaine de course).
   const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor);
 
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
+
   return {
     weekStart,
     phase,
@@ -601,7 +616,7 @@ async function prepareGeneration(
       missedCount,
       totalCount: nonRestSessions.length,
       maxVolumeMin,
-    }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones),
+    }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones, test ? testPromptLines(test) : []),
   };
 }
 
