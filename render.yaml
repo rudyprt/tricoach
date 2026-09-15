@@ -33,6 +33,8 @@ services:
         sync: false
       - key: MAIL_FROM
         sync: false
+      # Les rappels par e-mail partent dès que SMTP_HOST est renseigné :
+      # ils utilisent la même configuration d'envoi que le reste.
       # Connexion Strava (facultatif) : sans ces valeurs, la fonctionnalité
       # n'apparaît pas dans l'application.
       - key: STRAVA_CLIENT_ID
