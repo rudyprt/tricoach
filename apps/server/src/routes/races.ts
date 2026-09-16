@@ -1,4 +1,15 @@
 import { Router } from "express";
+import { athleteWriteRateLimit, byUser, rateLimit } from "../lib/rateLimit.js";
+import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropic.js";
+import { recordAiCall } from "../lib/aiUsage.js";
+import { computeTrainingZones } from "../lib/training.js";
+import { buildZoneInputs } from "../lib/zoneInputs.js";
+import {
+  buildRacePlanSystemPrompt,
+  buildRacePlanUserPrompt,
+  parseRacePlan,
+  parseRacePlanResponse,
+} from "../lib/racePlan.js";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -15,6 +26,7 @@ import {
 
 export const racesRouter = Router();
 racesRouter.use(requireAuth);
+racesRouter.use(athleteWriteRateLimit);
 
 const courseSchema = z.object({
   nom: z.string().trim().min(1, "Donnez un nom à votre course.").max(120, "Nom trop long."),
@@ -110,5 +122,93 @@ racesRouter.delete(
 
     await synchroniserObjectif(userId);
     res.json({ ok: true });
+  })
+);
+
+/**
+ * Plan de course : allures, nutrition, hydratation, transitions.
+ *
+ * Généré à la demande puis conservé : c'est un document que l'athlète relit la
+ * veille, pas une réponse jetable. Le régénérer est possible, mais l'appel au
+ * modèle coûte, d'où la limitation dédiée.
+ */
+const planCourseRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: "Trop de plans de course générés en une heure. Réessayez plus tard.",
+  keyFor: byUser,
+});
+
+racesRouter.post(
+  "/:id/plan",
+  planCourseRateLimit,
+  ah(async (req: AuthedRequest, res) => {
+    const userId = req.userId!;
+    if (!isAiConfigured()) throw new HttpError(503, new AiNotConfiguredError().message);
+
+    const course = await prisma.race.findFirst({ where: { id: req.params.id, userId } });
+    if (!course) throw new HttpError(404, "Course introuvable.");
+
+    const profile = await prisma.athleteProfile.findUnique({ where: { userId } });
+    const zones = profile ? computeTrainingZones(await buildZoneInputs(userId, profile)) : null;
+
+    // « Première fois sur la distance » change tout le conseil : on le déduit
+    // des courses passées plutôt que de le demander à l'athlète.
+    const dejaCourue = await prisma.race.count({
+      where: { userId, format: course.format, date: { lt: new Date() }, id: { not: course.id } },
+    });
+
+    const system = buildRacePlanSystemPrompt();
+    const userPrompt = buildRacePlanUserPrompt({
+      nom: course.nom,
+      date: course.date,
+      format: course.format,
+      lieu: course.lieu,
+      objectifTemps: course.objectifTemps,
+      priorite: course.priorite,
+      zones,
+      contraintes: profile?.contraintes ?? "",
+      premiereFois: dejaCourue === 0,
+    });
+
+    let plan;
+    try {
+      const response = await askClaude({ system, messages: [{ role: "user", content: userPrompt }], maxTokens: 4000 });
+      // L'appel est enregistré avant la validation : une réponse mal formée a
+      // été facturée quand même, et le coût affiché doit rester fidèle.
+      try {
+        plan = parseRacePlanResponse(response.text);
+        await recordAiCall({ userId, kind: "plan_course", response, succeeded: true });
+      } catch (erreur) {
+        await recordAiCall({ userId, kind: "plan_course", response, succeeded: false });
+        throw erreur;
+      }
+    } catch (erreur) {
+      console.error("Plan de course impossible :", erreur);
+      throw new HttpError(502, "Le coach n'a pas pu produire votre plan de course. Réessayez dans un instant.");
+    }
+
+    await prisma.race.update({
+      where: { id: course.id },
+      data: { planCourse: plan, planGenereLe: new Date() },
+    });
+
+    res.json({ plan, genereLe: new Date().toISOString() });
+  })
+);
+
+racesRouter.get(
+  "/:id/plan",
+  ah(async (req: AuthedRequest, res) => {
+    const course = await prisma.race.findFirst({
+      where: { id: req.params.id, userId: req.userId! },
+      select: { planCourse: true, planGenereLe: true },
+    });
+    if (!course) throw new HttpError(404, "Course introuvable.");
+
+    res.json({
+      plan: parseRacePlan(course.planCourse),
+      genereLe: course.planGenereLe?.toISOString() ?? null,
+    });
   })
 );

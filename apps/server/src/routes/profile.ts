@@ -8,6 +8,7 @@ import { computeTrainingZones, periodization } from "../lib/training.js";
 import { parseZoneOverrides, zoneOverridesSchema } from "../lib/zoneOverrides.js";
 import { buildZoneInputs, suggestFtp } from "../lib/zoneInputs.js";
 import { startOfWeek } from "../lib/week.js";
+import { disponibilitesSchema, materielSchema } from "../lib/disponibilites.js";
 
 export const profileRouter = Router();
 profileRouter.use(requireAuth);
@@ -30,6 +31,8 @@ const profileSchema = z.object({
   cssSecPer100m: z.number().int().min(50, "Allure trop rapide.").max(300, "Allure trop lente.").nullable().optional(),
   fcSeuil: z.number().int().min(100).max(220).nullable().optional(),
   fcMax: z.number().int().min(120).max(230).nullable().optional(),
+  disponibilites: disponibilitesSchema,
+  materiel: materielSchema,
 });
 
 profileRouter.get(
@@ -48,9 +51,14 @@ profileRouter.put(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Données invalides." });
       return;
     }
-    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcMax, ...rest } = parsed.data;
+    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcMax, disponibilites, materiel, ...rest } =
+      parsed.data;
     const data = {
       ...rest,
+      // Prisma distingue « absent » de « null » sur une colonne JSON : sans
+      // DbNull, effacer ses créneaux écrirait le littéral JSON null.
+      disponibilites: disponibilites ?? Prisma.DbNull,
+      materiel: materiel ?? Prisma.DbNull,
       ftpWatts: ftpWatts ?? null,
       seuilCourseSecParKm: seuilCourseSecParKm ?? null,
       cssSecPer100m: cssSecPer100m ?? null,

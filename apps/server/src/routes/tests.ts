@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { athleteWriteRateLimit } from "../lib/rateLimit.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
@@ -7,6 +8,7 @@ import { applyTestResult } from "../lib/testScheduling.js";
 
 export const testsRouter = Router();
 testsRouter.use(requireAuth);
+testsRouter.use(athleteWriteRateLimit);
 
 function serialize(test: {
   id: string;

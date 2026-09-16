@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { api, apiErrorMessage, type AthleteProfile } from "../lib/api";
+import { api, apiErrorMessage, type AthleteProfile, type Disponibilites, type Materiel } from "../lib/api";
+import { CreneauxForm } from "../components/CreneauxForm";
+import { MaterielForm, MATERIEL_PAR_DEFAUT } from "../components/MaterielForm";
 import { Spinner } from "../components/Spinner";
 import { CalendrierCourses } from "../components/CalendrierCourses";
 
@@ -37,6 +39,8 @@ export function Objectif() {
     tempsCourse: "",
   });
   const [heuresSemaine, setHeuresSemaine] = useState(6);
+  const [disponibilites, setDisponibilites] = useState<Disponibilites>({});
+  const [materiel, setMateriel] = useState<Materiel>(MATERIEL_PAR_DEFAUT);
   const [contraintes, setContraintes] = useState("");
   const [ftpWatts, setFtpWatts] = useState("");
   // Valeurs de seuil : saisies en texte lisible, converties en secondes pour l'API.
@@ -61,6 +65,8 @@ export function Objectif() {
           tempsCourse: data.tempsCourse,
         });
         setHeuresSemaine(data.heuresSemaine);
+        setDisponibilites(data.disponibilites ?? {});
+        setMateriel(data.materiel ?? MATERIEL_PAR_DEFAUT);
         setContraintes(data.contraintes);
         setFtpWatts(data.ftpWatts ? String(data.ftpWatts) : "");
         setSeuilCourse(data.seuilCourseSecParKm ? secondesVersAllure(data.seuilCourseSecParKm) : "");
@@ -88,6 +94,8 @@ export function Objectif() {
         ...temps,
         heuresSemaine,
         contraintes,
+        disponibilites: Object.keys(disponibilites).length > 0 ? disponibilites : null,
+        materiel,
         ftpWatts: ftpWatts.trim() === "" ? null : Number(ftpWatts),
         seuilCourseSecParKm: allureVersSecondes(seuilCourse),
         cssSecPer100m: allureVersSecondes(css),
@@ -174,6 +182,14 @@ export function Objectif() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+          <CreneauxForm valeur={disponibilites} onChange={setDisponibilites} />
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+          <MaterielForm valeur={materiel} onChange={setMateriel} />
         </div>
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">

@@ -27,6 +27,14 @@ import {
 } from "../lib/pause.js";
 import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../lib/races.js";
 import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
+import {
+  disponibilitesPromptLines,
+  joursIndisponibles,
+  materielPromptLines,
+  parseDisponibilites,
+  parseMateriel,
+  volumeAtteignableMin,
+} from "../lib/disponibilites.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -66,6 +74,8 @@ interface ProfileForPrompt {
   fcSeuil: number | null;
   fcMax: number | null;
   customZones: unknown;
+  disponibilites: unknown;
+  materiel: unknown;
 }
 
 function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): string {
@@ -263,7 +273,11 @@ function buildAdjustmentUserPrompt(
  * une date absente ou mal formée produit un `Invalid Date` qui fait échouer
  * l'insertion Prisma bien plus loin, avec un message incompréhensible.
  */
-export function parseAiPlan(raw: string, allowedDates: string[]): AiPlanResponse {
+export function parseAiPlan(
+  raw: string,
+  allowedDates: string[],
+  datesRepos: ReadonlySet<string> = new Set()
+): AiPlanResponse {
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error("Réponse IA invalide (pas de JSON trouvé).");
@@ -282,7 +296,25 @@ export function parseAiPlan(raw: string, allowedDates: string[]): AiPlanResponse
   }
 
   const allowed = new Set(allowedDates);
-  const sessions = parsed.data.sessions.filter((s) => allowed.has(s.date));
+  const sessions = parsed.data.sessions
+    .filter((s) => allowed.has(s.date))
+    // Un jour déclaré indisponible reste un jour de repos, quoi qu'ait produit
+    // le modèle : la consigne du prompt ne suffit pas à le garantir, et une
+    // séance ce jour-là ne sera de toute façon pas faite.
+    .map((s) =>
+      datesRepos.has(s.date) && s.sport !== "repos"
+        ? {
+            ...s,
+            sport: "repos" as const,
+            titre: "Repos",
+            dureeMin: 0,
+            distanceKm: null,
+            description: "Jour indisponible déclaré dans vos créneaux.",
+            objectif: null,
+            structure: null,
+          }
+        : s
+    );
   if (sessions.length === 0) {
     throw new Error("Réponse IA invalide (aucune séance sur la semaine demandée).");
   }
@@ -295,7 +327,8 @@ async function runGeneration(
   kind: AiCallKind,
   system: string,
   userPrompt: string,
-  allowedDates: string[]
+  allowedDates: string[],
+  datesRepos: ReadonlySet<string> = new Set()
 ): Promise<{ aiPlan: AiPlanResponse; raw: string }> {
   const attempts = 2;
   let lastError: unknown = null;
@@ -309,7 +342,7 @@ async function runGeneration(
         maxTokens: 8192,
       });
       raw = response.text;
-      const aiPlan = parseAiPlan(raw, allowedDates);
+      const aiPlan = parseAiPlan(raw, allowedDates, datesRepos);
       // Une tentative facturée compte, qu'elle aboutisse ou non : c'est ce qui
       // rend le coût affiché dans l'admin fidèle à la facture Anthropic.
       await recordAiCall({ userId, kind, response, succeeded: true });
@@ -463,6 +496,8 @@ interface PreparedGeneration {
   aiKind: AiCallKind;
   /** Jours que la génération est autorisée à produire. */
   allowedDates: string[];
+  /** Jours déclarés indisponibles : forcés en repos après génération. */
+  datesRepos: string[];
   /** Borne de remplacement : les séances antérieures sont conservées. */
   replaceFrom?: Date;
 }
@@ -481,7 +516,9 @@ async function prepareAdjustment(
   motif: string | null,
   zones: TrainingZones,
   facteurContexte: number,
-  lignesContexte: string[]
+  lignesContexte: string[],
+  datesRepos: string[],
+  plafondCreneaux: number | null
 ): Promise<PreparedGeneration> {
   const aujourdHui = localCalendarDate(new Date(), timezone);
   const joursRestants = weekDays(weekStart).filter((jour) => jour >= aujourdHui);
@@ -509,7 +546,8 @@ async function prepareAdjustment(
 
   // Le volume restant est celui de la semaine moins ce qui a déjà été fait :
   // réajuster ne doit pas devenir un prétexte à s'entraîner davantage.
-  const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte);
+  const volumeBrut = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte);
+  const volumeSemaine = plafondCreneaux ? Math.min(volumeBrut, plafondCreneaux) : volumeBrut;
   const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
 
   const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants);
@@ -518,6 +556,7 @@ async function prepareAdjustment(
     weekStart,
     phase,
     allowedDates: joursRestants,
+    datesRepos: datesRepos.filter((d) => joursRestants.includes(d)),
     replaceFrom: debutRestant,
     aiKind: "plan_generation",
     system: buildAdjustmentSystemPrompt(phase, joursRestants),
@@ -582,11 +621,27 @@ async function prepareGeneration(
   // pas : avec quelle fatigue l'athlète aborde la semaine.
   const charge = await bilanDeCharge(userId);
 
+  // Les créneaux déclarés ne sont pas une préférence, ce sont des bornes : le
+  // volume ne peut pas dépasser ce qui tient dedans.
+  const disponibilites = parseDisponibilites(profile.disponibilites);
+  const materiel = parseMateriel(profile.materiel);
+  const datesRepos = joursIndisponibles(disponibilites, weekStart);
+  const plafondCreneaux = volumeAtteignableMin(disponibilites);
+
   const facteurContexte = facteurReprise * facteurCourses;
-  const lignesContexte = [...lignesReprise, ...lignesCourses, ...chargePromptLines(charge)];
+  const lignesContexte = [
+    ...lignesReprise,
+    ...lignesCourses,
+    ...chargePromptLines(charge),
+    ...disponibilitesPromptLines(disponibilites, weekStart),
+    ...materielPromptLines(materiel),
+  ];
+
+  /** Applique le plafond des créneaux au volume calculé par la périodisation. */
+  const borner = (volume: number) => (plafondCreneaux ? Math.min(volume, plafondCreneaux) : volume);
 
   if (kind === "premiere_semaine") {
-    const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte);
+    const maxVolumeMin = borner(Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte));
     const recentSessions = await prisma.session.findMany({
       where: { userId, status: { in: ["faite", "manquee"] } },
       orderBy: { date: "desc" },
@@ -600,6 +655,7 @@ async function prepareGeneration(
       weekStart,
       phase,
       allowedDates: weekDays(weekStart),
+      datesRepos,
       aiKind: "plan_generation",
       system: buildSystemPrompt(false, phase),
       userPrompt: buildFirstWeekPrompt(
@@ -616,7 +672,19 @@ async function prepareGeneration(
   }
 
   if (kind === "ajustement_semaine") {
-    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif, zones, facteurContexte, lignesContexte);
+    return prepareAdjustment(
+      userId,
+      user.timezone,
+      profile,
+      weekStart,
+      phase,
+      motif,
+      zones,
+      facteurContexte,
+      lignesContexte,
+      datesRepos,
+      plafondCreneaux
+    );
   }
 
   const previousPlan = await prisma.trainingPlan.findFirst({
@@ -640,7 +708,7 @@ async function prepareGeneration(
     realizedVolumeMin > 0 ? realizedVolumeMin : plannedVolumeMin > 0 ? plannedVolumeMin : profile.heuresSemaine * 60;
   // La progression de charge est plafonnée à +10%, puis la phase de
   // périodisation peut encore la réduire (affûtage, semaine de course).
-  const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurContexte);
+  const maxVolumeMin = borner(Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurContexte));
 
   const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
 
@@ -648,6 +716,7 @@ async function prepareGeneration(
     weekStart,
     phase,
     allowedDates: weekDays(weekStart),
+    datesRepos,
     aiKind: "plan_progression",
     system: buildSystemPrompt(true, phase),
     userPrompt: buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, {
@@ -680,7 +749,8 @@ async function processJob(jobId: string, userId: string, prepared: PreparedGener
       prepared.aiKind,
       prepared.system,
       prepared.userPrompt,
-      prepared.allowedDates
+      prepared.allowedDates,
+      new Set(prepared.datesRepos)
     );
 
     const plan = await persistPlan({

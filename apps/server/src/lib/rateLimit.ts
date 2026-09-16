@@ -105,3 +105,15 @@ export const passwordResetRateLimit = rateLimit({
   max: 5,
   message: "Trop de demandes de réinitialisation. Réessayez plus tard.",
 });
+
+/**
+ * Écritures courantes d'un athlète : résultats de test, interruptions,
+ * calendrier de courses. Généreux — ce sont des gestes normaux — mais borné :
+ * sans limite, une boucle côté client pourrait saturer la base.
+ */
+export const athleteWriteRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: "Trop de modifications en une minute. Patientez quelques secondes.",
+  keyFor: byUser,
+});

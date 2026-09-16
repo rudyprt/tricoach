@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { FaFlagCheckered, FaPlus, FaTrash } from "react-icons/fa6";
 import { api, apiErrorMessage, type Course, type FormatCourse, type PrioriteCourse } from "../lib/api";
+import { PlanCourseCard } from "./PlanCourseCard";
 
 const FORMATS: { valeur: FormatCourse; label: string }[] = [
   { valeur: "sprint", label: "Sprint" },
@@ -56,6 +57,7 @@ function formatJour(date: string): string {
 export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [ouvert, setOuvert] = useState(false);
+  const [planOuvert, setPlanOuvert] = useState<string | null>(null);
   const [nom, setNom] = useState("");
   const [date, setDate] = useState("");
   const [format, setFormat] = useState<FormatCourse>("olympique");
@@ -143,6 +145,14 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
                   {course.objectifTemps && ` · objectif ${course.objectifTemps}`}
                 </p>
               </div>
+              {course.priorite !== "C" && (
+                <button
+                  onClick={() => setPlanOuvert(planOuvert === course.id ? null : course.id)}
+                  className="shrink-0 rounded-full border border-emerald-900/50 px-2 py-1 text-[11px] font-semibold text-emerald-300 transition-colors hover:border-emerald-700"
+                >
+                  Plan
+                </button>
+              )}
               <button
                 onClick={() => void supprimer(course.id)}
                 aria-label={`Retirer ${course.nom}`}
@@ -153,6 +163,12 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {planOuvert && courses.some((c) => c.id === planOuvert) && (
+        <div className="mb-3">
+          <PlanCourseCard course={courses.find((c) => c.id === planOuvert)!} />
+        </div>
       )}
 
       {ouvert ? (

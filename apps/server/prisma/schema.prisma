@@ -206,6 +206,13 @@ model AthleteProfile {
   /// Zones corrigées à la main par l'athlète : { course: { Z2: "5:30/km" }, ... }.
   /// Une valeur saisie ici prime sur le calcul automatique.
   customZones         Json?
+  /// Créneaux d'entraînement, jour par jour :
+  /// { lundi: { disponible: true, dureeMaxMin: 90, moment: "soir" }, ... }
+  /// Sans cela, le coach placerait une sortie longue un mardi soir de travail.
+  disponibilites      Json?
+  /// Matériel et accès : home-trainer, piscine, vélo, capteurs.
+  /// Une séance que l'athlète ne peut pas réaliser ne sert à rien.
+  materiel            Json?
   updatedAt           DateTime @updatedAt
 }
 
@@ -348,21 +355,25 @@ model TrainingPause {
 /// l'objectif principal ferait affûter quatre fois dans la saison ; les ignorer
 /// ferait courir un objectif intermédiaire en pleine fatigue.
 model Race {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   nom           String
   date          DateTime
   /// "sprint" | "olympique" | "half" | "ironman" | "autre"
-  format        String   @default("autre")
+  format        String    @default("autre")
   /// "A" : objectif principal, affûtage complet.
   /// "B" : objectif secondaire, affûtage court.
   /// "C" : course d'entraînement, aucun allègement.
-  priorite      String   @default("A")
-  lieu          String   @default("")
+  priorite      String    @default("A")
+  lieu          String    @default("")
   /// Temps visé, texte libre ("2h30").
-  objectifTemps String   @default("")
-  createdAt     DateTime @default(now())
+  objectifTemps String    @default("")
+  /// Plan de course : allures cible, nutrition, hydratation, transitions.
+  /// Généré à la demande, puis conservé — l'athlète le relit la veille.
+  planCourse    Json?
+  planGenereLe  DateTime?
+  createdAt     DateTime  @default(now())
 
   @@index([userId, date])
 }

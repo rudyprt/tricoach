@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage, type Disponibilites, type Materiel } from "../lib/api";
+import { CreneauxForm } from "../components/CreneauxForm";
+import { MaterielForm, MATERIEL_PAR_DEFAUT } from "../components/MaterielForm";
 import { useAuth } from "../lib/AuthContext";
 
 const DISCIPLINES = [
@@ -20,6 +22,9 @@ export function Onboarding() {
     tempsCourse: "",
   });
   const [heuresSemaine, setHeuresSemaine] = useState(6);
+  const [debutant, setDebutant] = useState(false);
+  const [disponibilites, setDisponibilites] = useState<Disponibilites>({});
+  const [materiel, setMateriel] = useState<Materiel>(MATERIEL_PAR_DEFAUT);
   const [contraintes, setContraintes] = useState("");
   const [ftpWatts, setFtpWatts] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +42,15 @@ export function Onboarding() {
         objectifDate,
         ...temps,
         heuresSemaine,
-        contraintes,
+        // Un débutant complet ne peut pas donner de temps de référence. Le dire
+        // explicitement au coach vaut mieux que de le laisser deviner à partir
+        // de trois champs vides.
+        contraintes: debutant
+          ? [contraintes, "Débutant : aucune course ni entraînement structuré à ce jour."].filter(Boolean).join(" — ")
+          : contraintes,
         ftpWatts: ftpWatts.trim() === "" ? null : Number(ftpWatts),
+        disponibilites: Object.keys(disponibilites).length > 0 ? disponibilites : null,
+        materiel,
       });
       await refresh();
       navigate("/dashboard?generate=1");
@@ -81,6 +93,24 @@ export function Onboarding() {
             />
           </div>
 
+          <button
+            type="button"
+            onClick={() => setDebutant((v) => !v)}
+            aria-pressed={debutant}
+            className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+              debutant
+                ? "border-rose-800 bg-rose-950/30 text-rose-200"
+                : "border-zinc-800 text-zinc-400 hover:border-zinc-700"
+            }`}
+          >
+            <span className="font-semibold">Je débute, je n'ai pas de temps de référence</span>
+            <span className="mt-0.5 block text-xs opacity-80">
+              Votre coach partira d'une base prudente et vous testera dans les premières semaines pour établir vos
+              allures.
+            </span>
+          </button>
+
+          {!debutant && (
           <div className="space-y-2">
             <label className="text-sm text-zinc-300">Temps sur votre dernière course, par discipline (facultatif)</label>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -103,7 +133,9 @@ export function Onboarding() {
               ))}
             </div>
           </div>
+          )}
 
+          {!debutant && (
           <div className="space-y-1">
             <label className="text-sm text-zinc-300">FTP vélo en watts (facultatif)</label>
             <input
@@ -120,6 +152,7 @@ export function Onboarding() {
               Renseignée, elle permet des zones vélo en puissance plutôt qu'une estimation par la vitesse.
             </p>
           </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-sm text-zinc-300">Heures disponibles pour vous entraîner cette semaine</label>
@@ -133,6 +166,14 @@ export function Onboarding() {
               onChange={(e) => setHeuresSemaine(Number(e.target.value))}
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+            <CreneauxForm valeur={disponibilites} onChange={setDisponibilites} />
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+            <MaterielForm valeur={materiel} onChange={setMateriel} />
           </div>
 
           <div className="space-y-1">

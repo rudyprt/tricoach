@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { athleteWriteRateLimit } from "../lib/rateLimit.js";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -15,6 +16,7 @@ import { startOfWeek } from "../lib/week.js";
 
 export const pausesRouter = Router();
 pausesRouter.use(requireAuth);
+pausesRouter.use(athleteWriteRateLimit);
 
 /** L'état d'entraînement de l'athlète : en pause, en reprise, ou normal. */
 pausesRouter.get(

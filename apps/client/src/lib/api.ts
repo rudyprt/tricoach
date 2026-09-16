@@ -42,6 +42,31 @@ export interface AthleteProfile {
   cssSecPer100m: number | null;
   fcSeuil: number | null;
   fcMax: number | null;
+  disponibilites: Disponibilites | null;
+  materiel: Materiel | null;
+}
+
+/** Créneaux d'entraînement, jour par jour. */
+export const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"] as const;
+export type Jour = (typeof JOURS)[number];
+export type Moment = "matin" | "midi" | "soir" | "libre";
+
+export interface JourDisponible {
+  disponible: boolean;
+  dureeMaxMin?: number | null;
+  moment?: Moment;
+}
+
+export type Disponibilites = Partial<Record<Jour, JourDisponible>>;
+
+export interface Materiel {
+  homeTrainer: boolean;
+  capteurPuissance: boolean;
+  montreGps: boolean;
+  cardiofrequencemetre: boolean;
+  tapisCourse: boolean;
+  piscine: "aucune" | "25m" | "50m" | "eau_libre";
+  velo: "route" | "contre_la_montre" | "vtt" | "aucun";
 }
 
 export type TrainingPhase =
@@ -447,4 +472,25 @@ export interface BilanDeCharge {
   };
   seancesEstimees: number;
   seancesTotal: number;
+}
+
+/** Plan de course : allures, nutrition, hydratation, transitions. */
+export interface BlocCourse {
+  titre: string;
+  allure: string;
+  nutrition: string;
+  hydratation: string;
+  erreurs: string;
+}
+
+export interface PlanCourse {
+  resume: string;
+  veille: string;
+  matin: string;
+  natation: BlocCourse;
+  transition1: string;
+  velo: BlocCourse;
+  transition2: string;
+  course: BlocCourse;
+  reperes: string[];
 }
