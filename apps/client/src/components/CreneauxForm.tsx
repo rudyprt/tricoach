@@ -1,5 +1,6 @@
 import { FaCalendarDay } from "react-icons/fa6";
 import { JOURS, type Disponibilites, type Jour, type Moment } from "../lib/api";
+import { formatDuree, totalCreneauxMin } from "../lib/formats";
 
 const MOMENTS: { valeur: Moment; label: string }[] = [
   { valeur: "matin", label: "Matin" },
@@ -29,10 +30,7 @@ export function CreneauxForm({
     onChange({ ...valeur, [jour]: { ...actuel, ...patch } });
   }
 
-  const totalMin = JOURS.reduce((somme, jour) => {
-    const j = valeur[jour];
-    return somme + (j?.disponible && j.dureeMaxMin ? j.dureeMaxMin : 0);
-  }, 0);
+  const totalMin = totalCreneauxMin(valeur);
 
   return (
     <div className="space-y-2">
@@ -113,7 +111,7 @@ export function CreneauxForm({
 
       {totalMin > 0 && (
         <p className="text-xs text-zinc-500">
-          Total déclaré : {Math.floor(totalMin / 60)} h {totalMin % 60 ? `${totalMin % 60} min` : ""} par semaine.
+          Total déclaré : {formatDuree(totalMin)} par semaine.
           Votre programme ne dépassera pas ce volume.
         </p>
       )}

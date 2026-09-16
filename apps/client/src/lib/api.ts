@@ -494,3 +494,15 @@ export interface PlanCourse {
   course: BlocCourse;
   reperes: string[];
 }
+
+/** Progression des valeurs de seuil, test après test. */
+export interface PointProgression {
+  date: string;
+  valeur: number;
+  libelle: string;
+}
+
+export interface ProgressionSeuils {
+  sens: Record<"course" | "velo" | "natation", "plus_bas_mieux" | "plus_haut_mieux">;
+  series: Record<"course" | "velo" | "natation", PointProgression[]>;
+}

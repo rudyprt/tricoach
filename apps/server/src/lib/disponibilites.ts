@@ -33,7 +33,13 @@ export const jourSchema = z.object({
 
 export const disponibilitesSchema = z.record(z.enum(JOURS), jourSchema).nullable().optional();
 
-export type JourDisponible = z.infer<typeof jourSchema>;
+/**
+ * Type d'ENTRÉE et non de sortie : `moment` a une valeur par défaut, donc zod
+ * le rend obligatoire en sortie. Ceux qui construisent des créneaux — le
+ * client, les tests — doivent pouvoir l'omettre, et le code qui les lit écrit
+ * déjà `moment ?? "libre"`.
+ */
+export type JourDisponible = z.input<typeof jourSchema>;
 export type Disponibilites = Partial<Record<Jour, JourDisponible>>;
 
 export const PISCINES = ["aucune", "25m", "50m", "eau_libre"] as const;

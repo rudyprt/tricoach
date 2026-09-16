@@ -35,6 +35,16 @@ services:
         sync: false
       # Les rappels par e-mail partent dès que SMTP_HOST est renseigné :
       # ils utilisent la même configuration d'envoi que le reste.
+      # Notifications poussées (facultatif mais recommandé) : elles arrivent
+      # sur l'écran tout de suite, sans dépendre d'un envoi d'e-mail.
+      # Générer la paire de clés : npx web-push generate-vapid-keys
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      # Contact exigé par la spécification : "mailto:vous@exemple.fr"
+      - key: VAPID_SUBJECT
+        sync: false
       # Connexion Strava (facultatif) : sans ces valeurs, la fonctionnalité
       # n'apparaît pas dans l'application.
       - key: STRAVA_CLIENT_ID

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { FaFlagCheckered, FaPlus, FaTrash } from "react-icons/fa6";
 import { api, apiErrorMessage, type Course, type FormatCourse, type PrioriteCourse } from "../lib/api";
 import { PlanCourseCard } from "./PlanCourseCard";
+import { formatJourCourt } from "../lib/formats";
 
 const FORMATS: { valeur: FormatCourse; label: string }[] = [
   { valeur: "sprint", label: "Sprint" },
@@ -37,14 +38,6 @@ const COULEURS_PASTILLE: Record<PrioriteCourse, string> = {
   B: "bg-amber-500/15 text-amber-300",
   C: "bg-sky-500/15 text-sky-300",
 };
-
-function formatJour(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
 
 /**
  * Calendrier de la saison.
@@ -140,7 +133,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-white">{course.nom}</p>
                 <p className="text-xs text-zinc-500">
-                  {formatJour(course.date)}
+                  {formatJourCourt(course.date)}
                   {course.format !== "autre" && ` · ${FORMATS.find((f) => f.valeur === course.format)?.label}`}
                   {course.objectifTemps && ` · objectif ${course.objectifTemps}`}
                 </p>

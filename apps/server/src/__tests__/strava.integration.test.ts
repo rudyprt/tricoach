@@ -12,7 +12,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 
 const fetchMock = vi.fn();
 
@@ -58,7 +58,7 @@ describeIfDb("import Strava", () => {
   });
 
   beforeEach(async () => {
-    resetAllRateLimits();
+    await resetAllRateLimits();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -138,7 +138,7 @@ describeIfDb("import Strava", () => {
       const { agent: alice } = await athlete("alice-strava@example.com");
       expect((await relier(alice, 999)).status).toBe(200);
 
-      resetAllRateLimits();
+      await resetAllRateLimits();
       const { agent: bob } = await athlete("bob-strava@example.com");
       const res = await relier(bob, 999);
 
@@ -319,7 +319,7 @@ describeIfDb("import Strava", () => {
         },
       });
 
-      resetAllRateLimits();
+      await resetAllRateLimits();
       const { agent: bob } = await athlete("bob-act@example.com");
       const res = await bob.get("/api/strava/activities");
 

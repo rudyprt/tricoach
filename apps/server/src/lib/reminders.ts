@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { prisma } from "./prisma.js";
 import { env } from "./env.js";
 import { isMailConfigured, sendMail, type Mail } from "./mailer.js";
+import { isPushConfigured, notifier } from "./push.js";
 import { trialEndsAt } from "./subscription.js";
 import { addDays, localCalendarDate, safeTimeZone, startOfWeek } from "./week.js";
 
@@ -151,6 +152,25 @@ export interface RappelDu {
   mail: Mail;
 }
 
+/** Version courte du rappel, pour l'écran verrouillé d'un téléphone. */
+const NOTIFICATIONS: Record<ReminderKind, { titre: string; corps: string; url: string }> = {
+  semaine_a_generer: {
+    titre: "Votre semaine vous attend",
+    corps: "Votre coach peut construire la suivante à partir de ce que vous avez fait.",
+    url: "/",
+  },
+  seances_oubliees: {
+    titre: "Des séances attendent votre retour",
+    corps: "Dites simplement si vous les avez faites : c'est de là que part la semaine suivante.",
+    url: "/",
+  },
+  fin_essai: {
+    titre: "Votre essai se termine bientôt",
+    corps: "Vos programmes et vos zones restent enregistrés. Rien n'est perdu.",
+    url: "/compte",
+  },
+};
+
 /**
  * Détermine ce qu'il y a à envoyer à un athlète donné, à cet instant. Un seul
  * rappel à la fois : recevoir trois e-mails le même soir est le meilleur moyen
@@ -249,10 +269,40 @@ export interface BilanRappels {
  * l'insertion, c'est qu'un autre passage — ou une autre instance — a déjà
  * traité ce rappel, et rien ne part. Mieux vaut un rappel perdu qu'un doublon.
  */
+/**
+ * Identifiant du verrou consultatif PostgreSQL qui sérialise les passages.
+ *
+ * Deux instances du serveur lanceraient chacune leur minuterie horaire. La
+ * contrainte d'unicité empêche déjà le double envoi, mais les deux passages
+ * balaieraient toute la base en parallèle pour rien. Le verrou laisse une seule
+ * instance travailler ; l'autre repasse à l'heure suivante.
+ */
+const VERROU_RAPPELS = 862_001;
+
 export async function runReminders(now: Date = new Date()): Promise<BilanRappels> {
   const bilan: BilanRappels = { examines: 0, envoyes: 0, parType: {} };
-  if (!isMailConfigured()) return bilan;
+  // Une des deux voies suffit : sur un serveur sans SMTP mais avec des clés
+  // VAPID, les rappels partent quand même — en notification.
+  if (!isMailConfigured() && !isPushConfigured()) return bilan;
 
+  // pg_try_advisory_lock ne bloque pas : s'il est déjà pris, on repart
+  // immédiatement plutôt que d'accumuler des connexions en attente.
+  const [{ obtenu }] = await prisma.$queryRaw<{ obtenu: boolean }[]>`
+    SELECT pg_try_advisory_lock(${VERROU_RAPPELS}::bigint) AS obtenu
+  `;
+  if (!obtenu) return bilan;
+
+  try {
+    return await passerLesRappels(now, bilan);
+  } finally {
+    // Libéré quoi qu'il arrive : un verrou consultatif survit à l'erreur mais
+    // pas à la fin de la connexion, et laisser traîner bloquerait l'heure
+    // suivante sur une instance qui, elle, tourne toujours.
+    await prisma.$queryRaw`SELECT pg_advisory_unlock(${VERROU_RAPPELS}::bigint)`;
+  }
+}
+
+async function passerLesRappels(now: Date, bilan: BilanRappels): Promise<BilanRappels> {
   const candidats = await prisma.user.findMany({
     where: {
       rappelsEmail: true,
@@ -285,7 +335,19 @@ export async function runReminders(now: Date = new Date()): Promise<BilanRappels
     }
 
     try {
-      await sendMail(rappel.mail);
+      // La notification part en premier : elle arrive sur l'écran, tout de
+      // suite, là où l'e-mail attend que la personne relève sa boîte.
+      const push = await notifier(user.id, {
+        ...NOTIFICATIONS[rappel.kind],
+        tag: rappel.kind,
+      }).catch(() => ({ envoyees: 0, appareilsRetires: 0 }));
+
+      // L'e-mail reste envoyé même si la notification est passée : tous les
+      // appareils ne sont pas abonnés, et un athlète peut avoir désinstallé
+      // l'application de son téléphone sans le dire.
+      if (isMailConfigured()) await sendMail(rappel.mail);
+      else if (push.envoyees === 0) throw new Error("Ni e-mail ni notification n'ont pu partir.");
+
       bilan.envoyes += 1;
       bilan.parType[rappel.kind] = (bilan.parType[rappel.kind] ?? 0) + 1;
     } catch (erreur) {
@@ -312,7 +374,7 @@ let minuterie: NodeJS.Timeout | null = null;
  * d'envoi.
  */
 export function startReminderScheduler(): void {
-  if (minuterie || !isMailConfigured()) return;
+  if (minuterie || (!isMailConfigured() && !isPushConfigured())) return;
   minuterie = setInterval(() => {
     runReminders().catch((erreur) => console.error("[rappels] passage échoué", erreur));
   }, INTERVALLE_RAPPELS_MS);

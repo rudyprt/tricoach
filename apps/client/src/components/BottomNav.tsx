@@ -10,7 +10,7 @@ const items = [
 
 export function BottomNav() {
   return (
-    <nav className="shrink-0 border-t border-zinc-900 bg-black">
+    <nav data-impression="masquer" className="shrink-0 border-t border-zinc-900 bg-black">
       <div className="flex items-stretch justify-around">
         {items.map((item) => (
           <NavLink

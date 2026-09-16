@@ -14,7 +14,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 
 describeIfDb("API", () => {
   beforeAll(async () => {
@@ -36,7 +36,7 @@ describeIfDb("API", () => {
   beforeEach(async () => {
     // Les limiteurs sont volontairement stricts : sans remise à zéro, la suite
     // se ferait bloquer par sa propre protection anti-bourrage.
-    resetAllRateLimits();
+    await resetAllRateLimits();
 
     // L'ordre suit les dépendances : les cascades font le reste.
     await prisma.chatMessage.deleteMany();
@@ -475,7 +475,7 @@ describeIfDb("API", () => {
   describe("protection anti-bourrage", () => {
     it("verrouille le compte après plusieurs tentatives infructueuses", async () => {
       await signUp("bruteforce@example.com");
-      resetAllRateLimits();
+      await resetAllRateLimits();
 
       const attempt = () =>
         request(app).post("/api/auth/login").send({ email: "bruteforce@example.com", password: "mauvais" });
@@ -500,7 +500,7 @@ describeIfDb("API", () => {
 
     it("remet le compteur à zéro après une connexion réussie", async () => {
       await signUp("compteur@example.com");
-      resetAllRateLimits();
+      await resetAllRateLimits();
 
       await request(app).post("/api/auth/login").send({ email: "compteur@example.com", password: "faux" });
       await request(app).post("/api/auth/login").send({ email: "compteur@example.com", password: "faux" });
@@ -524,7 +524,7 @@ describeIfDb("API", () => {
         where: { id: user.id },
         data: { failedLogins: 20, lockedUntil: new Date(Date.now() + 3600_000) },
       });
-      resetAllRateLimits();
+      await resetAllRateLimits();
 
       const connexion = () =>
         request(app).post("/api/auth/login").send({ email: "deverrouille@example.com", password: "nouveaumotdepasse" });
@@ -549,7 +549,7 @@ describeIfDb("API", () => {
       expect(reset.status).toBe(200);
 
       // Réinitialiser son mot de passe est la sortie légitime du verrou.
-      resetAllRateLimits();
+      await resetAllRateLimits();
       expect((await connexion()).status).toBe(200);
       const apres = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
       expect(apres.failedLogins).toBe(0);

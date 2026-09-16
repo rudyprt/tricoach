@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "TZ=Europe/Paris vitest run"
   },
   "dependencies": {
     "axios": "^1.7.9",
@@ -20,10 +20,13 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^25.0.1",
     "oxlint": "^1.79.0",
     "tailwindcss": "^4.0.0",
     "typescript": "~6.0.2",

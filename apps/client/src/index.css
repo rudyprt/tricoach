@@ -64,3 +64,32 @@ body {
 .animate-splash-glow {
   animation: splash-glow 1.15s ease-in-out infinite;
 }
+
+/*
+ * Impression : la page écran est sombre et pleine d'éléments d'interface qui
+ * n'ont aucun sens sur papier. Un athlète imprime son programme pour le glisser
+ * dans un sac, ou son coach pour l'annoter.
+ */
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Fonds et dégradés animés : coûteux en encre, illisibles en niveaux de gris. */
+  canvas,
+  video,
+  [data-impression="masquer"] {
+    display: none !important;
+  }
+
+  /* Une séance ne doit pas être coupée entre deux pages. */
+  article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

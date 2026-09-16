@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FaBell } from "react-icons/fa6";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { activerPush, desactiverPush, etatPush, type EtatPush } from "../lib/push";
 
 /**
  * Réglage des rappels. Un athlète qui ne revient pas ne s'entraîne pas : ces
@@ -12,6 +13,49 @@ export function RappelsCard() {
   const { user, refresh } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [push, setPush] = useState<EtatPush | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void etatPush().then(setPush);
+  }, []);
+
+  async function basculerPush() {
+    setPushBusy(true);
+    setPushMessage(null);
+    try {
+      if (push === "actif") {
+        await desactiverPush();
+        setPush("inactif");
+      } else {
+        const obtenu = await activerPush();
+        setPush(obtenu);
+        if (obtenu === "refuse") {
+          setPushMessage(
+            "Votre navigateur a refusé les notifications. Réautorisez-les dans ses réglages pour ce site."
+          );
+        }
+      }
+    } catch {
+      setPushMessage("Activation impossible sur cet appareil.");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function testerPush() {
+    setPushBusy(true);
+    setPushMessage(null);
+    try {
+      await api.post("/push/test");
+      setPushMessage("Notification envoyée. Elle devrait apparaître dans quelques secondes.");
+    } catch (err) {
+      setPushMessage(apiErrorMessage(err, "Envoi impossible."));
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   if (!user) return null;
   const actif = user.rappelsEmail;
@@ -61,6 +105,47 @@ export function RappelsCard() {
           />
         </span>
       </button>
+
+      {push && push !== "indisponible" && (
+        <div className="mt-3 border-t border-zinc-800 pt-3">
+          <p className="mb-1 text-sm font-semibold text-zinc-200">Notifications sur cet appareil</p>
+          <p className="mb-2 text-xs text-zinc-500">
+            Elles arrivent sur votre écran tout de suite, sans passer par votre boîte mail.
+          </p>
+
+          {push === "installation_requise" ? (
+            <p className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
+              Sur iPhone, ajoutez d'abord TriCoach à votre écran d'accueil : les notifications ne sont possibles
+              qu'une fois l'application installée.
+            </p>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => void basculerPush()}
+                disabled={pushBusy || push === "refuse"}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                  push === "actif"
+                    ? "border-rose-900/50 bg-rose-950/20 text-rose-200 hover:border-rose-700"
+                    : "border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                {push === "actif" ? "Notifications activées" : "Activer les notifications"}
+              </button>
+              {push === "actif" && (
+                <button
+                  onClick={() => void testerPush()}
+                  disabled={pushBusy}
+                  className="rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+                >
+                  Tester
+                </button>
+              )}
+            </div>
+          )}
+
+          {pushMessage && <p className="mt-2 text-xs text-zinc-400">{pushMessage}</p>}
+        </div>
+      )}
     </div>
   );
 }

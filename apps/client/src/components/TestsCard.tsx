@@ -1,32 +1,13 @@
 import { useEffect, useState } from "react";
 import { FaFlask, FaPersonSwimming, FaPersonBiking, FaPersonRunning, FaCheck } from "react-icons/fa6";
 import { api, apiErrorMessage, type FitnessTest, type FitnessTestsResponse } from "../lib/api";
+import { formatJourLong, parseChrono } from "../lib/formats";
 
 const SPORT_ICONS = {
   natation: FaPersonSwimming,
   velo: FaPersonBiking,
   course: FaPersonRunning,
 } as const;
-
-function formatJour(date: string): string {
-  const d = new Date(`${date}T12:00:00`);
-  return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-}
-
-/** Saisie « 7:42 » ou « 462 » → secondes. Un athlète lit son chrono, pas des secondes. */
-function parseChrono(valeur: string): number | null {
-  const propre = valeur.trim().replace(",", ":");
-  if (!propre) return null;
-  if (propre.includes(":")) {
-    const [m, s] = propre.split(":");
-    const minutes = Number(m);
-    const secondes = Number(s);
-    if (!Number.isFinite(minutes) || !Number.isFinite(secondes)) return null;
-    return Math.round(minutes * 60 + secondes);
-  }
-  const n = Number(propre);
-  return Number.isFinite(n) ? Math.round(n) : null;
-}
 
 interface ChampsFormulaire {
   distanceKm: string;
@@ -179,7 +160,7 @@ export function TestsCard() {
               <Icon className="mt-0.5 shrink-0 text-emerald-400" size={14} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-white">{test.titre}</p>
-                <p className="text-xs capitalize text-zinc-400">{formatJour(test.date)}</p>
+                <p className="text-xs capitalize text-zinc-400">{formatJourLong(test.date)}</p>
                 <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">{test.protocole}</p>
                 <p className="mt-1.5 text-xs text-emerald-300/80">À relever : {test.mesures}</p>
               </div>

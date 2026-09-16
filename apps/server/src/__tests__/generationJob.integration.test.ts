@@ -20,7 +20,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 
 const WEEK = () => {
   const d = new Date();
@@ -76,7 +76,7 @@ describeIfDb("génération en tâche de fond", () => {
   });
 
   beforeEach(async () => {
-    resetAllRateLimits();
+    await resetAllRateLimits();
     askClaude.mockReset();
     await prisma.generationJob.deleteMany();
     await prisma.aiCall.deleteMany();
@@ -212,7 +212,7 @@ describeIfDb("génération en tâche de fond", () => {
     const job = await alice.post("/api/plans/generate");
     await waitForJob(alice, job.body.id);
 
-    resetAllRateLimits();
+    await resetAllRateLimits();
     const { agent: bob } = await athlete("bob-job@example.com");
     expect((await bob.get(`/api/plans/jobs/${job.body.id}`)).status).toBe(404);
     expect((await bob.get("/api/plans/jobs/latest")).body).toBeNull();

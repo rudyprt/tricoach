@@ -53,6 +53,8 @@ model User {
   Activity               Activity[]
   fitnessTests           FitnessTest[]
   reminders              Reminder[]
+  pushSubscriptions      PushSubscription[]
+  partages               SharedWeek[]
   pauses                 TrainingPause[]
   races                  Race[]
 
@@ -376,4 +378,62 @@ model Race {
   createdAt     DateTime  @default(now())
 
   @@index([userId, date])
+}
+
+/// Abonnement aux notifications poussées, un par appareil.
+///
+/// L'e-mail dépend d'un prestataire d'envoi et arrive quand la personne relève
+/// sa boîte. Une notification arrive sur l'écran, tout de suite, et fonctionne
+/// sur iPhone dès lors que l'application est installée sur l'écran d'accueil.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Point de terminaison fourni par le navigateur : identifie l'appareil.
+  endpoint   String    @unique
+  /// Clés de chiffrement du navigateur, sans lesquelles il refuse le message.
+  p256dh     String
+  auth       String
+  /// Mis à jour à chaque envoi réussi ; sert à repérer les appareils muets.
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Partage en lecture seule d'une semaine de programme.
+///
+/// Un athlète veut montrer sa semaine à un coach humain, à un partenaire
+/// d'entraînement ou à son kiné. Sans cela, la seule option était la capture
+/// d'écran. Le lien porte un jeton imprévisible, expire, et ne donne accès
+/// qu'aux séances de cette semaine — jamais au compte.
+model SharedWeek {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Seul le hash est conservé : une fuite de la base ne livre aucun lien actif.
+  tokenHash String   @unique
+  weekStart DateTime
+  expiresAt DateTime
+  /// Compte les consultations, pour que l'athlète voie si son lien a servi.
+  vues      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId, weekStart])
+}
+
+/// Compteur de limitation de débit partagé entre les instances du serveur.
+///
+/// Le compteur en mémoire suffit tant qu'une seule instance tourne, mais avec
+/// deux instances derrière un répartiteur, chacune autorise le quota entier :
+/// une protection contre le bourrage de mots de passe qui double dès qu'on
+/// monte en charge n'en est plus une. Seules les routes sensibles l'utilisent,
+/// pour ne pas ajouter une écriture à chaque requête.
+model RateLimitCounter {
+  /// Clé du limiteur et de l'appelant, plus le début de fenêtre.
+  id        String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }

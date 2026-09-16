@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage, type AthleteProfile, type Disponibilites, type Materiel } from "../lib/api";
+import { allureVersSecondes, secondesVersAllure } from "../lib/formats";
 import { CreneauxForm } from "../components/CreneauxForm";
 import { MaterielForm, MATERIEL_PAR_DEFAUT } from "../components/MaterielForm";
 import { Spinner } from "../components/Spinner";
@@ -13,21 +14,6 @@ const DISCIPLINES = [
 ] as const;
 
 type DisciplineKey = (typeof DISCIPLINES)[number]["key"];
-
-/** "4:10" ou "4:10/km" → 250 secondes. Renvoie null si la saisie est vide. */
-function allureVersSecondes(saisie: string): number | null {
-  const propre = saisie.trim().replace(/\/(km|100m)$/i, "");
-  if (propre === "") return null;
-  const match = propre.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function secondesVersAllure(secondes: number): string {
-  const m = Math.floor(secondes / 60);
-  const s = secondes % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 export function Objectif() {
   const [loaded, setLoaded] = useState(false);

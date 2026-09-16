@@ -25,7 +25,7 @@ vi.mock("../lib/mailer.js", async () => {
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 let runReminders: typeof import("../lib/reminders.js").runReminders;
 let unsubscribeToken: typeof import("../lib/reminders.js").unsubscribeToken;
 let cleSemaine: typeof import("../lib/reminders.js").cleSemaine;
@@ -55,7 +55,7 @@ describeIfDb("rappels par e-mail", () => {
 
   beforeEach(async () => {
     envoyes.length = 0;
-    resetAllRateLimits();
+    await resetAllRateLimits();
     await prisma.reminder.deleteMany();
     await prisma.session.deleteMany();
     await prisma.trainingPlan.deleteMany();

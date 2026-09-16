@@ -22,6 +22,7 @@ const Compte = lazy(() => import("./pages/Compte").then((m) => ({ default: m.Com
 const StravaReturn = lazy(() => import("./pages/StravaReturn").then((m) => ({ default: m.StravaReturn })));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail").then((m) => ({ default: m.VerifyEmail })));
 const Desabonnement = lazy(() => import("./pages/Desabonnement").then((m) => ({ default: m.Desabonnement })));
+const SemainePartagee = lazy(() => import("./pages/SemainePartagee").then((m) => ({ default: m.SemainePartagee })));
 const Conditions = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Conditions })));
 const Confidentialite = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Confidentialite })));
 const MentionsLegales = lazy(() => import("./pages/Legal").then((m) => ({ default: m.MentionsLegales })));
@@ -58,6 +59,7 @@ function AppShell() {
         <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
         <Route path="/verifier-email" element={<VerifyEmail />} />
         <Route path="/desabonnement" element={<Desabonnement />} />
+        <Route path="/semaine/:token" element={<SemainePartagee />} />
         <Route
           path="/strava/retour"
           element={

@@ -17,6 +17,8 @@ import { activitiesRouter } from "./routes/activities.js";
 import { testsRouter } from "./routes/tests.js";
 import { pausesRouter } from "./routes/pauses.js";
 import { racesRouter } from "./routes/races.js";
+import { pushRouter } from "./routes/push.js";
+import { partageRouter } from "./routes/partage.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
 import { env } from "./lib/env.js";
 
@@ -51,6 +53,8 @@ export function createApp() {
   app.use("/api/tests", testsRouter);
   app.use("/api/pauses", pausesRouter);
   app.use("/api/races", racesRouter);
+  app.use("/api/push", pushRouter);
+  app.use("/api/partage", partageRouter);
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });

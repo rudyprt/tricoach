@@ -3,7 +3,7 @@ import { athleteWriteRateLimit } from "../lib/rateLimit.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
-import { PROTOCOLS, type TestSport } from "../lib/fitnessTests.js";
+import { PROTOCOLS, deriveThresholds, type TestSport } from "../lib/fitnessTests.js";
 import { applyTestResult } from "../lib/testScheduling.js";
 
 export const testsRouter = Router();
@@ -111,3 +111,71 @@ testsRouter.post(
     res.json({ ok: true });
   })
 );
+
+/**
+ * Progression des valeurs de seuil, test après test.
+ *
+ * L'historique existait, mais sous forme de phrases. Voir sa FTP monter sur
+ * douze mois est précisément ce qui donne envie de refaire un test dans six
+ * semaines — et c'est la seule preuve tangible que l'entraînement paie.
+ */
+testsRouter.get(
+  "/progression",
+  ah(async (req: AuthedRequest, res) => {
+    const tests = await prisma.fitnessTest.findMany({
+      where: { userId: req.userId!, status: "realise", appliedAt: { not: null } },
+      orderBy: { scheduledFor: "asc" },
+      take: 60,
+    });
+
+    const series: Record<string, { date: string; valeur: number; libelle: string }[]> = {
+      course: [],
+      velo: [],
+      natation: [],
+    };
+
+    for (const test of tests) {
+      const derive = deriveThresholds(test.kind, {
+        distanceM: test.distanceM,
+        puissanceMoy: test.puissanceMoy,
+        temps400S: test.temps400S,
+        temps200S: test.temps200S,
+        fcMoyenne: test.fcMoyenne,
+      });
+      if (!derive) continue;
+
+      const date = test.scheduledFor.toISOString().slice(0, 10);
+      if (derive.seuilCourseSecParKm) {
+        series.course.push({
+          date,
+          valeur: derive.seuilCourseSecParKm,
+          libelle: `${formatMinSec(derive.seuilCourseSecParKm)}/km`,
+        });
+      }
+      if (derive.ftpWatts) {
+        series.velo.push({ date, valeur: derive.ftpWatts, libelle: `${derive.ftpWatts} W` });
+      }
+      if (derive.cssSecPer100m) {
+        series.natation.push({
+          date,
+          valeur: derive.cssSecPer100m,
+          libelle: `${formatMinSec(derive.cssSecPer100m)}/100 m`,
+        });
+      }
+    }
+
+    res.json({
+      // Pour une allure, plus bas vaut mieux ; pour une puissance, l'inverse.
+      // Le client en a besoin pour orienter la lecture du graphique.
+      sens: { course: "plus_bas_mieux", natation: "plus_bas_mieux", velo: "plus_haut_mieux" },
+      series,
+    });
+  })
+);
+
+/** Reprise du format lisible du calcul des seuils, pour l'affichage. */
+function formatMinSec(secondes: number): string {
+  const m = Math.floor(secondes / 60);
+  const s = Math.round(secondes % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}

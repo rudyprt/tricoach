@@ -20,7 +20,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 
 /** Semaine courante, en UTC, comme le serveur la calcule. */
 function semaine(): string[] {
@@ -80,7 +80,7 @@ describeIfDb("réajustement de la semaine", () => {
   });
 
   beforeEach(async () => {
-    resetAllRateLimits();
+    await resetAllRateLimits();
     askClaude.mockReset();
     await prisma.generationJob.deleteMany();
     await prisma.aiCall.deleteMany();

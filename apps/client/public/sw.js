@@ -117,3 +117,49 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(cachePuisReseau(request));
   }
 });
+
+/* ------------------------------------------------------------------ */
+/* Notifications poussées                                              */
+/* ------------------------------------------------------------------ */
+
+self.addEventListener("push", (event) => {
+  let donnees = { titre: "TriCoach", corps: "", url: "/", tag: "tricoach" };
+  try {
+    if (event.data) donnees = { ...donnees, ...event.data.json() };
+  } catch {
+    /* Charge illisible : on affiche quand même quelque chose plutôt que rien,
+       sinon le navigateur affiche sa propre notification générique. */
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(donnees.titre, {
+      body: donnees.corps,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      /* Regroupe les rappels de même nature : deux relances « séances
+         oubliées » remplacent l'ancienne au lieu de s'empiler. */
+      tag: donnees.tag,
+      data: { url: donnees.url },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const cible = event.notification.data?.url ?? "/";
+
+  event.waitUntil(
+    (async () => {
+      const fenetres = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      /* Réutiliser un onglet déjà ouvert plutôt que d'en empiler un nouveau à
+         chaque notification. */
+      for (const fenetre of fenetres) {
+        if (new URL(fenetre.url).origin === self.location.origin) {
+          await fenetre.focus();
+          return fenetre.navigate ? fenetre.navigate(cible) : undefined;
+        }
+      }
+      return self.clients.openWindow(cible);
+    })()
+  );
+});
