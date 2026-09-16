@@ -4,6 +4,8 @@ import { PauseCard } from "../components/PauseCard";
 import { PartagerSemaine } from "../components/PartagerSemaine";
 import { GenerationEnCours } from "../components/GenerationEnCours";
 import { Bouton } from "../ui/Bouton";
+import { VueSemaine } from "../components/VueSemaine";
+import { useReconnexion } from "../lib/useReconnexion";
 import { useToasts } from "../ui/Toasts";
 import { useConfirmation } from "../ui/Confirmation";
 import { Link, useSearchParams } from "react-router-dom";
@@ -152,6 +154,10 @@ export function Dashboard() {
       setError(apiErrorMessage(err, "Impossible de réajuster votre semaine."));
     }
   }, [followJob, demander]);
+
+  // Au retour du réseau, la semaine affichée vient du cache : elle doit être
+  // rechargée, sans quoi l'athlète lit une copie en croyant qu'elle est à jour.
+  useReconnexion(loadPlan);
 
   useEffect(() => {
     loadPlan();
@@ -428,6 +434,10 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="space-y-5">
+          {/* La forme de la semaine avant son détail : où sont les jours durs,
+              où sont les jours de repos. */}
+          <VueSemaine sessions={plan.sessions} selectionId={selectedId} onSelect={setSelectedId} />
+
           {next && (
             <div
               role="button"

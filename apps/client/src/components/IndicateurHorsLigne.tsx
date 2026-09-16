@@ -10,7 +10,12 @@ export function IndicateurHorsLigne() {
   const [horsLigne, setHorsLigne] = useState(() => !navigator.onLine);
 
   useEffect(() => {
-    const enLigne = () => setHorsLigne(false);
+    const enLigne = () => {
+      setHorsLigne(false);
+      // Le bandeau disparaissait, mais les données affichées restaient celles
+      // du cache : rien ne les rafraîchissait au retour du réseau.
+      window.dispatchEvent(new CustomEvent("tricoach:reconnecte"));
+    };
     const perdu = () => setHorsLigne(true);
     window.addEventListener("online", enLigne);
     window.addEventListener("offline", perdu);
@@ -26,7 +31,7 @@ export function IndicateurHorsLigne() {
     <div
       role="status"
       className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-amber-900/90 px-3 py-1.5 text-xs font-medium text-amber-100 backdrop-blur"
-      style={{ paddingTop: "calc(0.375rem + env(safe-area-inset-top, 0px))" }}
+      style={{ paddingTop: "calc(0.375rem + var(--marge-haute))" }}
     >
       <FaWifi size={11} />
       Hors ligne — vous consultez la dernière version enregistrée.

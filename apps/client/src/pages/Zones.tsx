@@ -14,6 +14,7 @@ import { Spinner } from "../components/Spinner";
 import { TestsCard } from "../components/TestsCard";
 import { useConfirmation } from "../ui/Confirmation";
 import { useToasts } from "../ui/Toasts";
+import { Terme } from "../ui/Glossaire";
 import { ProgressionSeuilsChart } from "../components/ProgressionSeuilsChart";
 
 const PHASE_HINTS: Record<TrainingPhase, string> = {
@@ -219,8 +220,11 @@ export function Zones() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Mes zones d'entraînement</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-doux">
             Calculées à partir de vos temps de référence. Votre programme est construit sur ces allures.
+          </p>
+          <p className="mt-2 text-sm text-doux">
+            <Terme cle="zones" /> · <Terme cle="seuil" /> · <Terme cle="ftp" /> · <Terme cle="css" />
           </p>
         </div>
         {!editing && (

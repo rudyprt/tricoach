@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { IndicateurHorsLigne } from "./components/IndicateurHorsLigne";
+import { NouvelleVersion } from "./components/NouvelleVersion";
 import { SplashScreen } from "./components/SplashScreen";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
@@ -46,6 +47,7 @@ function AppShell() {
     <>
       <AnimatedBackground />
       <IndicateurHorsLigne />
+      <NouvelleVersion />
       {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
       <Suspense
         fallback={

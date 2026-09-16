@@ -4,6 +4,7 @@ import { api, type Session, type SessionPage, type Activity, formatAllure } from
 import { useAuth } from "../lib/AuthContext";
 import { ProgressChart } from "../components/ProgressChart";
 import { ChargeChart } from "../components/ChargeChart";
+import { RegulariteCard } from "../components/RegulariteCard";
 import { Spinner } from "../components/Spinner";
 import { SessionDetailModal } from "../components/SessionDetailModal";
 
@@ -49,6 +50,7 @@ export function Historique() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recherche, setRecherche] = useState("");
   const [sportFilter, setSportFilter] = useState<string>("tous");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hrZones, setHrZones] = useState<HrZones | null>(null);
@@ -99,6 +101,19 @@ export function Historique() {
   const pastSessions = hasFullAccess ? allPastSessions : allPastSessions.slice(0, LIMITED_HISTORY_COUNT);
   const hiddenCount = allPastSessions.length - pastSessions.length;
 
+  // La recherche porte sur ce que l'athlète a sous les yeux : le titre de la
+  // séance et son propre ressenti, qui est souvent ce dont il se souvient.
+  const sessionsAffichees = useMemo(() => {
+    const terme = recherche.trim().toLowerCase();
+    if (!terme) return pastSessions;
+    return pastSessions.filter(
+      (s) =>
+        s.titre.toLowerCase().includes(terme) ||
+        (s.ressenti ?? "").toLowerCase().includes(terme) ||
+        (s.description ?? "").toLowerCase().includes(terme)
+    );
+  }, [pastSessions, recherche]);
+
   const maxZoneMinutes = hrZones ? Math.max(1, ...hrZones.zones.map((z) => z.minutes)) : 1;
 
   // Les données mesurées s'affichent à côté du prévu : c'est l'écart entre les
@@ -117,6 +132,8 @@ export function Historique() {
 
       {/* Ouvert à tous, contrairement à la courbe de progression : c'est le
           garde-fou anti-surentraînement, pas un argument commercial. */}
+      <RegulariteCard />
+
       <ChargeChart />
 
       {hasFullAccess ? (
@@ -155,12 +172,26 @@ export function Historique() {
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <label className="text-sm text-zinc-400">Filtrer :</label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor="recherche-seances" className="sr-only">
+          Rechercher une séance
+        </label>
+        <input
+          id="recherche-seances"
+          type="search"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Rechercher un titre, un ressenti…"
+          className="min-w-0 flex-1 rounded-lg border border-bordure bg-surface px-3 py-2 text-sm text-fort placeholder:text-tres-doux focus:border-accent"
+        />
+        <label htmlFor="filtre-sport" className="sr-only">
+          Filtrer par sport
+        </label>
         <select
+          id="filtre-sport"
           value={sportFilter}
           onChange={(e) => setSportFilter(e.target.value)}
-          className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-white outline-none transition-colors focus:border-rose-500"
+          className="rounded-lg border border-bordure bg-surface px-2 py-2 text-sm text-fort focus:border-accent"
         >
           <option value="tous">Tous les sports</option>
           <option value="natation">Natation</option>
@@ -174,11 +205,23 @@ export function Historique() {
         <p className="flex items-center gap-2 text-zinc-500">
           <Spinner /> Chargement...
         </p>
-      ) : pastSessions.length === 0 ? (
-        <p className="text-zinc-500">Aucune séance passée pour le moment.</p>
+      ) : sessionsAffichees.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-bordure p-8 text-center">
+          <span aria-hidden="true" className="mb-3 block text-4xl">
+            {recherche || sportFilter !== "tous" ? "🔍" : "📈"}
+          </span>
+          <p className="text-sm font-semibold text-fort">
+            {recherche || sportFilter !== "tous" ? "Aucune séance ne correspond" : "Pas encore de séance passée"}
+          </p>
+          <p className="mx-auto mt-1.5 max-w-xs text-sm text-doux">
+            {recherche || sportFilter !== "tous"
+              ? "Essayez un autre mot, ou remettez le filtre sur tous les sports."
+              : "Vos séances validées apparaîtront ici, avec vos progrès semaine après semaine."}
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
-          {pastSessions.map((s, i) => (
+          {sessionsAffichees.map((s, i) => (
             <div
               key={s.id}
               role="button"

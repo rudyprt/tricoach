@@ -506,3 +506,37 @@ export interface ProgressionSeuils {
   sens: Record<"course" | "velo" | "natation", "plus_bas_mieux" | "plus_haut_mieux">;
   series: Record<"course" | "velo" | "natation", PointProgression[]>;
 }
+
+/** Régularité, jalons et records personnels. */
+export interface SemaineTenue {
+  weekStart: string;
+  prevuMin: number;
+  realiseMin: number;
+  seancesPrevues: number;
+  seancesFaites: number;
+  tenue: boolean;
+}
+
+export interface Jalon {
+  cle: string;
+  titre: string;
+  detail: string;
+  atteintLe: string;
+}
+
+export interface RecordPersonnel {
+  sport: string;
+  libelle: string;
+  valeur: string;
+  date: string;
+}
+
+export interface BilanRegularite {
+  serie: number;
+  meilleureSerie: number;
+  semaines: SemaineTenue[];
+  totalSeances: number;
+  totalHeures: number;
+  jalons: Jalon[];
+  records: RecordPersonnel[];
+}

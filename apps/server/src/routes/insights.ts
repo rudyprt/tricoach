@@ -6,6 +6,7 @@ import { isPremium } from "../lib/subscription.js";
 import { ah, HttpError } from "../lib/http.js";
 import { sessionStructureSchema } from "../lib/session.js";
 import { bilanDeCharge } from "../lib/trainingLoad.js";
+import { bilanRegularite, recordsPersonnels } from "../lib/regularite.js";
 
 export const insightsRouter = Router();
 insightsRouter.use(requireAuth);
@@ -137,5 +138,26 @@ insightsRouter.get(
   "/charge",
   ah(async (req: AuthedRequest, res) => {
     res.json(await bilanDeCharge(req.userId!));
+  })
+);
+
+/**
+ * Régularité, jalons et records. Ouvert à tous : c'est ce qui donne envie de
+ * revenir, pas un argument de vente.
+ */
+insightsRouter.get(
+  "/regularite",
+  ah(async (req: AuthedRequest, res) => {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: req.userId! },
+      select: { timezone: true },
+    });
+
+    const [bilan, records] = await Promise.all([
+      bilanRegularite(req.userId!, user.timezone),
+      recordsPersonnels(req.userId!),
+    ]);
+
+    res.json({ ...bilan, records });
   })
 );

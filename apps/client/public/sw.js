@@ -23,9 +23,11 @@ const LECTURES_HORS_LIGNE = ["/api/plans/current", "/api/profile", "/api/profile
 const COQUILLE_FICHIERS = ["/", "/manifest.webmanifest", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(COQUILLE).then((cache) => cache.addAll(COQUILLE_FICHIERS)).then(() => self.skipWaiting())
-  );
+  /* Pas de skipWaiting automatique : remplacer le code sous les pieds de
+     quelqu'un en pleine saisie lui ferait perdre ce qu'il écrit. La nouvelle
+     version attend, l'interface propose de recharger, et c'est le message
+     ci-dessous qui déclenche la bascule. */
+  event.waitUntil(caches.open(COQUILLE).then((cache) => cache.addAll(COQUILLE_FICHIERS)));
 });
 
 self.addEventListener("activate", (event) => {
@@ -48,6 +50,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data === "purge-donnees") {
     event.waitUntil(caches.delete(DONNEES));
+  }
+  if (event.data === "activer-maintenant") {
+    self.skipWaiting();
   }
 });
 
