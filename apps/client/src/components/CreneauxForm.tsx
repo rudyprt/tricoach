@@ -38,7 +38,7 @@ export function CreneauxForm({
         <FaCalendarDay className="text-rose-400" size={13} />
         <label className="text-sm font-semibold text-zinc-200">Mes créneaux d'entraînement</label>
       </div>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-doux">
         Décochez les jours où vous ne pouvez pas vous entraîner, et indiquez le temps dont vous disposez. Votre
         programme sera construit dans ces limites, pas au-delà.
       </p>
@@ -50,7 +50,7 @@ export function CreneauxForm({
             <div
               key={jour}
               className={`rounded-lg border px-2.5 py-2 transition-colors ${
-                j.disponible ? "border-zinc-800 bg-zinc-900/40" : "border-zinc-900 bg-zinc-950/60"
+                j.disponible ? "border-bordure bg-zinc-900/40" : "border-bordure bg-zinc-950/60"
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -69,7 +69,7 @@ export function CreneauxForm({
                   />
                 </button>
                 <span
-                  className={`w-20 shrink-0 text-sm capitalize ${j.disponible ? "text-white" : "text-zinc-600"}`}
+                  className={`w-20 shrink-0 text-sm capitalize ${j.disponible ? "text-white" : "text-tres-doux"}`}
                 >
                   {jour}
                 </span>
@@ -79,7 +79,7 @@ export function CreneauxForm({
                     <select
                       value={j.dureeMaxMin ?? ""}
                       onChange={(e) => majJour(jour, { dureeMaxMin: e.target.value ? Number(e.target.value) : null })}
-                      className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-white outline-none focus:border-rose-600"
+                      className="min-w-0 flex-1 rounded border border-bordure bg-zinc-900 px-2 py-1 text-xs text-white outline-none focus:border-rose-600"
                     >
                       <option value="">Durée libre</option>
                       {DUREES.map((d) => (
@@ -91,7 +91,7 @@ export function CreneauxForm({
                     <select
                       value={j.moment ?? "libre"}
                       onChange={(e) => majJour(jour, { moment: e.target.value as Moment })}
-                      className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-white outline-none focus:border-rose-600"
+                      className="min-w-0 flex-1 rounded border border-bordure bg-zinc-900 px-2 py-1 text-xs text-white outline-none focus:border-rose-600"
                     >
                       {MOMENTS.map((m) => (
                         <option key={m.valeur} value={m.valeur}>
@@ -101,7 +101,7 @@ export function CreneauxForm({
                     </select>
                   </div>
                 ) : (
-                  <span className="flex-1 text-xs text-zinc-600">Repos imposé</span>
+                  <span className="flex-1 text-xs text-tres-doux">Repos imposé</span>
                 )}
               </div>
             </div>
@@ -110,7 +110,7 @@ export function CreneauxForm({
       </div>
 
       {totalMin > 0 && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-doux">
           Total déclaré : {formatDuree(totalMin)} par semaine.
           Votre programme ne dépassera pas ce volume.
         </p>

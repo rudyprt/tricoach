@@ -63,8 +63,8 @@ export function PartagerSemaine() {
       {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
 
       {url ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3">
-          <p className="mb-2 text-xs text-zinc-500">
+        <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-3">
+          <p className="mb-2 text-xs text-doux">
             Lien de consultation, valable 30 jours. Il ne donne accès qu'à cette semaine.
           </p>
           <div className="flex gap-2">
@@ -72,12 +72,12 @@ export function PartagerSemaine() {
               readOnly
               value={url}
               onFocus={(e) => e.currentTarget.select()}
-              className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-2 font-mono text-xs text-zinc-300 outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-bordure bg-zinc-900 px-2.5 py-2 font-mono text-xs text-zinc-300 outline-none"
             />
             <button
               onClick={() => void copier()}
               aria-label="Copier le lien"
-              className="shrink-0 rounded-lg border border-zinc-800 px-3 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              className="shrink-0 rounded-lg border border-bordure px-3 text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200"
             >
               {copie ? <FaCheck size={12} className="text-emerald-400" /> : <FaCopy size={12} />}
             </button>
@@ -85,7 +85,7 @@ export function PartagerSemaine() {
           <button
             onClick={() => void revoquer()}
             disabled={busy}
-            className="mt-2 text-xs text-zinc-500 transition-colors hover:text-red-400 disabled:opacity-50"
+            className="mt-2 text-xs text-doux transition-colors hover:text-red-400 disabled:opacity-50"
           >
             Désactiver ce lien
           </button>
@@ -95,7 +95,7 @@ export function PartagerSemaine() {
           <button
             onClick={() => void creer()}
             disabled={busy}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-rose-800/70 hover:text-zinc-200 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-dashed border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-rose-800/70 hover:text-zinc-200 disabled:opacity-50"
           >
             <FaShareNodes size={12} />
             Partager ma semaine
@@ -103,7 +103,7 @@ export function PartagerSemaine() {
           <button
             onClick={() => window.print()}
             aria-label="Imprimer ma semaine"
-            className="rounded-2xl border border-dashed border-zinc-800 px-3 py-2.5 text-zinc-400 transition-colors hover:border-rose-800/70 hover:text-zinc-200"
+            className="rounded-2xl border border-dashed border-bordure px-3 py-2.5 text-doux transition-colors hover:border-rose-800/70 hover:text-zinc-200"
           >
             <FaPrint size={12} />
           </button>

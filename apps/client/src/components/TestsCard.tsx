@@ -55,20 +55,20 @@ function FormulaireResultat({ test, onDone }: { test: FitnessTest; onDone: () =>
   }
 
   const champStyle =
-    "w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-700";
+    "w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-700";
 
   return (
-    <form onSubmit={submit} className="mt-3 space-y-2.5 border-t border-zinc-800 pt-3">
+    <form onSubmit={submit} className="mt-3 space-y-2.5 border-t border-bordure pt-3">
       {test.kind === "course_30min" && (
         <label className="block">
-          <span className="text-xs text-zinc-400">Distance parcourue en 30 min (km)</span>
+          <span className="text-xs text-doux">Distance parcourue en 30 min (km)</span>
           <input className={champStyle} inputMode="decimal" placeholder="7,2" value={champs.distanceKm} onChange={set("distanceKm")} />
         </label>
       )}
 
       {test.kind === "velo_20min" && (
         <label className="block">
-          <span className="text-xs text-zinc-400">Puissance moyenne sur 20 min (watts)</span>
+          <span className="text-xs text-doux">Puissance moyenne sur 20 min (watts)</span>
           <input className={champStyle} inputMode="numeric" placeholder="235" value={champs.puissanceMoy} onChange={set("puissanceMoy")} />
         </label>
       )}
@@ -76,18 +76,18 @@ function FormulaireResultat({ test, onDone }: { test: FitnessTest; onDone: () =>
       {test.kind === "natation_css" && (
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
-            <span className="text-xs text-zinc-400">Temps 400 m</span>
+            <span className="text-xs text-doux">Temps 400 m</span>
             <input className={champStyle} placeholder="7:20" value={champs.temps400} onChange={set("temps400")} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-400">Temps 200 m</span>
+            <span className="text-xs text-doux">Temps 200 m</span>
             <input className={champStyle} placeholder="3:25" value={champs.temps200} onChange={set("temps200")} />
           </label>
         </div>
       )}
 
       <label className="block">
-        <span className="text-xs text-zinc-400">Fréquence cardiaque moyenne (facultatif)</span>
+        <span className="text-xs text-doux">Fréquence cardiaque moyenne (facultatif)</span>
         <input className={champStyle} inputMode="numeric" placeholder="168" value={champs.fcMoyenne} onChange={set("fcMoyenne")} />
       </label>
 
@@ -135,13 +135,13 @@ export function TestsCard() {
   if (!data || (data.enCours.length === 0 && data.historique.length === 0)) return null;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
       <div className="mb-3 flex items-center gap-2">
         <FaFlask className="text-emerald-400" size={14} />
         <h2 className="text-sm font-bold text-white">Tests de terrain</h2>
       </div>
 
-      <p className="mb-3 text-xs text-zinc-500">
+      <p className="mb-3 text-xs text-doux">
         Un coach ne devine pas vos allures : il vous teste, puis il réajuste. Ces tests sont insérés automatiquement
         dans votre semaine, environ toutes les six semaines par discipline.
       </p>
@@ -160,8 +160,8 @@ export function TestsCard() {
               <Icon className="mt-0.5 shrink-0 text-emerald-400" size={14} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-white">{test.titre}</p>
-                <p className="text-xs capitalize text-zinc-400">{formatJourLong(test.date)}</p>
-                <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">{test.protocole}</p>
+                <p className="text-xs capitalize text-doux">{formatJourLong(test.date)}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-doux">{test.protocole}</p>
                 <p className="mt-1.5 text-xs text-emerald-300/80">À relever : {test.mesures}</p>
               </div>
             </div>
@@ -185,7 +185,7 @@ export function TestsCard() {
                 </button>
                 <button
                   onClick={() => void ignorer(test.id)}
-                  className="rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+                  className="rounded-lg border border-bordure px-3 py-2 text-sm text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200"
                 >
                   Pas fait
                 </button>
@@ -196,12 +196,12 @@ export function TestsCard() {
       })}
 
       {data.historique.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t border-zinc-800 pt-3">
+        <ul className="mt-3 space-y-1.5 border-t border-bordure pt-3">
           {data.historique.map((test) => (
             <li key={test.id} className="flex items-start gap-2 text-xs">
               <FaCheck className="mt-0.5 shrink-0 text-emerald-500" size={10} />
-              <span className="text-zinc-400">
-                <span className="text-zinc-500">{new Date(`${test.date}T12:00:00`).toLocaleDateString("fr-FR")}</span>{" "}
+              <span className="text-doux">
+                <span className="text-doux">{new Date(`${test.date}T12:00:00`).toLocaleDateString("fr-FR")}</span>{" "}
                 — {test.resume ?? test.titre}
               </span>
             </li>

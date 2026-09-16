@@ -103,15 +103,15 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
   }
 
   const champ =
-    "w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500";
+    "w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500";
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
       <div className="mb-1 flex items-center gap-2">
         <FaFlagCheckered className="text-rose-500" size={14} />
         <h2 className="text-sm font-bold text-white">Mes courses de la saison</h2>
       </div>
-      <p className="mb-3 text-xs text-zinc-500">
+      <p className="mb-3 text-xs text-doux">
         Votre préparation est construite pour votre course A. Les courses B et C s'y insèrent sans casser la
         progression.
       </p>
@@ -123,7 +123,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
           {courses.map((course) => (
             <li
               key={course.id}
-              className="flex items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2"
+              className="flex items-center gap-2.5 rounded-lg border border-bordure bg-zinc-900/40 px-3 py-2"
             >
               <span
                 className={`w-6 shrink-0 rounded px-1 py-0.5 text-center text-xs font-bold ${COULEURS_PASTILLE[course.priorite]}`}
@@ -132,7 +132,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-white">{course.nom}</p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-doux">
                   {formatJourCourt(course.date)}
                   {course.format !== "autre" && ` · ${FORMATS.find((f) => f.valeur === course.format)?.label}`}
                   {course.objectifTemps && ` · objectif ${course.objectifTemps}`}
@@ -149,7 +149,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
               <button
                 onClick={() => void supprimer(course.id)}
                 aria-label={`Retirer ${course.nom}`}
-                className="shrink-0 rounded p-1.5 text-zinc-600 transition-colors hover:text-red-400"
+                className="shrink-0 rounded p-1.5 text-tres-doux transition-colors hover:text-red-400"
               >
                 <FaTrash size={11} />
               </button>
@@ -165,7 +165,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
       )}
 
       {ouvert ? (
-        <form onSubmit={ajouter} className="space-y-2 border-t border-zinc-800 pt-3">
+        <form onSubmit={ajouter} className="space-y-2 border-t border-bordure pt-3">
           <input
             required
             value={nom}
@@ -197,7 +197,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
                 type="button"
                 onClick={() => setPriorite(p.valeur)}
                 className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
-                  priorite === p.valeur ? p.couleur : "border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                  priorite === p.valeur ? p.couleur : "border-bordure text-doux hover:border-bordure-forte"
                 }`}
               >
                 <span className="block text-xs font-bold">{p.titre}</span>
@@ -217,7 +217,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
             <button
               type="button"
               onClick={() => setOuvert(false)}
-              className="rounded-lg border border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+              className="rounded-lg border border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200"
             >
               Annuler
             </button>
@@ -226,7 +226,7 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
       ) : (
         <button
           onClick={() => setOuvert(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-rose-800/70 hover:text-zinc-200"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-rose-800/70 hover:text-zinc-200"
         >
           <FaPlus size={11} />
           Ajouter une course

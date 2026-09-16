@@ -60,6 +60,12 @@ sessionsRouter.get(
 const completeSchema = z.object({
   status: z.enum(["planifiee", "faite", "manquee"]),
   ressenti: z.string().max(1000, "Ressenti trop long (1000 caractères maximum).").optional(),
+  /**
+   * Durée réellement effectuée, si elle diffère du prévu. Corriger une séance
+   * passée n'était possible qu'en important un fichier de montre — or on écourte
+   * ou on rallonge une séance pour mille raisons.
+   */
+  dureeReelleMin: z.number().int().min(1).max(1440, "Durée invalide.").nullable().optional(),
 });
 
 sessionsRouter.patch(
@@ -78,6 +84,10 @@ sessionsRouter.patch(
       data: {
         status: parsed.data.status,
         ressenti: parsed.data.ressenti,
+        // `undefined` laisse la valeur en place ; seul un null explicite
+        // l'efface, ce qui distingue « je ne corrige pas » de « je reviens au
+        // prévu ».
+        ...(parsed.data.dureeReelleMin !== undefined ? { dureeReelleMin: parsed.data.dureeReelleMin } : {}),
         completedAt: parsed.data.status === "faite" ? new Date() : null,
       },
     });

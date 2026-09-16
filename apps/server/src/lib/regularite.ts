@@ -57,7 +57,7 @@ export async function bilanRegularite(userId: string, timezone: string): Promise
   const [sessions, total] = await Promise.all([
     prisma.session.findMany({
       where: { userId, date: { gte: debut }, sport: { not: "repos" } },
-      select: { date: true, dureeMin: true, status: true },
+      select: { date: true, dureeMin: true, dureeReelleMin: true, status: true },
       orderBy: { date: "asc" },
       take: 500,
     }),
@@ -89,7 +89,8 @@ export async function bilanRegularite(userId: string, timezone: string): Promise
     semaine.prevuMin += session.dureeMin;
     semaine.seancesPrevues += 1;
     if (session.status === "faite") {
-      semaine.realiseMin += session.dureeMin;
+      // Le réalisé est celui que l'athlète a corrigé, s'il l'a fait.
+      semaine.realiseMin += session.dureeReelleMin ?? session.dureeMin;
       semaine.seancesFaites += 1;
     }
   }

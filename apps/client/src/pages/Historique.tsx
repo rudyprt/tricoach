@@ -83,8 +83,13 @@ export function Historique() {
     }
   }, [user?.isPremium]);
 
-  async function updateSession(id: string, status: Session["status"], ressenti?: string) {
-    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti });
+  async function updateSession(
+    id: string,
+    status: Session["status"],
+    ressenti?: string,
+    dureeReelleMin?: number | null
+  ) {
+    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti, dureeReelleMin });
     setSessions((prev) => prev.map((s) => (s.id === id ? data : s)));
   }
 
@@ -139,8 +144,8 @@ export function Historique() {
       {hasFullAccess ? (
         <ProgressChart sessions={sessions} />
       ) : (
-        <div className="rounded-2xl border border-dashed border-zinc-800 p-6 text-center">
-          <p className="text-sm text-zinc-400">
+        <div className="rounded-2xl border border-dashed border-bordure p-6 text-center">
+          <p className="text-sm text-doux">
             Débloquez la courbe de progression (forme, volume, performance) avec l'offre Standard.
           </p>
           <Link
@@ -153,19 +158,19 @@ export function Historique() {
       )}
 
       {user?.isPremium && hrZones && hrZones.zones.length > 0 && (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+        <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
           <p className="mb-3 text-sm font-semibold text-white">Répartition par zone (30 derniers jours)</p>
           <div className="space-y-2">
             {hrZones.zones.map((z) => (
               <div key={z.zone} className="flex items-center gap-2">
-                <span className="w-16 shrink-0 text-xs text-zinc-400">{z.zone}</span>
+                <span className="w-16 shrink-0 text-xs text-doux">{z.zone}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-900">
                   <div
                     className="h-full rounded-full bg-rose-500"
                     style={{ width: `${(z.minutes / maxZoneMinutes) * 100}%` }}
                   />
                 </div>
-                <span className="w-14 shrink-0 text-right text-xs text-zinc-500">{z.minutes} min</span>
+                <span className="w-14 shrink-0 text-right text-xs text-doux">{z.minutes} min</span>
               </div>
             ))}
           </div>
@@ -202,7 +207,7 @@ export function Historique() {
       </div>
 
       {loading ? (
-        <p className="flex items-center gap-2 text-zinc-500">
+        <p className="flex items-center gap-2 text-doux">
           <Spinner /> Chargement...
         </p>
       ) : sessionsAffichees.length === 0 ? (
@@ -230,7 +235,7 @@ export function Historique() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") setSelectedId(s.id);
               }}
-              className="animate-fade-in-up flex cursor-pointer items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 transition-colors duration-200 hover:border-zinc-700"
+              className="animate-fade-in-up flex cursor-pointer items-center gap-3 rounded-2xl border border-bordure bg-zinc-950 px-3 py-2.5 transition-colors duration-200 hover:border-bordure-forte"
               style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
             >
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-lg">
@@ -242,7 +247,7 @@ export function Historique() {
                   {" · "}
                   {SPORT_LABELS[s.sport]} — {s.titre}
                 </p>
-                <p className="truncate text-xs text-zinc-500">
+                <p className="truncate text-xs text-doux">
                   {s.dureeMin} min{s.distanceKm ? ` · ${s.distanceKm} km` : ""}
                   {s.ressenti ? ` · Ressenti : ${s.ressenti}` : ""}
                 </p>
@@ -267,8 +272,8 @@ export function Historique() {
           ))}
 
           {!hasFullAccess && hiddenCount > 0 && (
-            <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-center">
-              <p className="text-sm text-zinc-400">
+            <div className="rounded-2xl border border-dashed border-bordure p-4 text-center">
+              <p className="text-sm text-doux">
                 {hiddenCount} séance{hiddenCount > 1 ? "s" : ""} supplémentaire{hiddenCount > 1 ? "s" : ""} masquée
                 {hiddenCount > 1 ? "s" : ""}. Passez à Standard pour un historique illimité.
               </p>

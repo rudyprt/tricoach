@@ -542,7 +542,7 @@ async function prepareAdjustment(
   const dejaVecu = sessions.filter((s) => s.date < debutRestant && s.sport !== "repos");
   const volumeRealise = dejaVecu
     .filter((s) => s.status === "faite")
-    .reduce((sum, s) => sum + s.dureeMin, 0);
+    .reduce((sum, s) => sum + (s.dureeReelleMin ?? s.dureeMin), 0);
 
   // Le volume restant est celui de la semaine moins ce qui a déjà été fait :
   // réajuster ne doit pas devenir un prétexte à s'entraîner davantage.
@@ -700,7 +700,9 @@ async function prepareGeneration(
   const plannedVolumeMin = nonRestSessions.reduce((sum, s) => sum + s.dureeMin, 0);
   const realizedVolumeMin = nonRestSessions
     .filter((s) => s.status === "faite")
-    .reduce((sum, s) => sum + s.dureeMin, 0);
+    // La durée corrigée prime : faire repartir la progression du volume prévu
+    // alors que l'athlète a écourté ses sorties le pousserait trop haut.
+    .reduce((sum, s) => sum + (s.dureeReelleMin ?? s.dureeMin), 0);
   const completedCount = nonRestSessions.filter((s) => s.status === "faite").length;
   const missedCount = nonRestSessions.filter((s) => s.status === "manquee").length;
 

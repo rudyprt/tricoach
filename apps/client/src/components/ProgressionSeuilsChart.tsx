@@ -39,12 +39,12 @@ export function ProgressionSeuilsChart() {
   if (tracables.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
       <div className="mb-1 flex items-center gap-2">
         <FaArrowTrendUp className="text-emerald-400" size={14} />
         <h2 className="text-sm font-bold text-white">Progression de mes seuils</h2>
       </div>
-      <p className="mb-3 text-xs text-zinc-500">
+      <p className="mb-3 text-xs text-doux">
         Chaque point est un test de terrain. C'est la mesure de ce que votre entraînement a réellement changé.
       </p>
 
@@ -64,7 +64,7 @@ export function ProgressionSeuilsChart() {
                 <span className="text-xs font-semibold text-zinc-300">{label}</span>
                 <span className="font-mono text-xs text-white">{dernier.libelle}</span>
                 {Math.abs(ecart) >= 1 && (
-                  <span className={`text-[11px] ${progresse ? "text-emerald-400" : "text-zinc-500"}`}>
+                  <span className={`text-[11px] ${progresse ? "text-emerald-400" : "text-doux"}`}>
                     {progresse ? "▲" : "▼"} {Math.abs(ecart).toFixed(1)} % depuis {premier.libelle}
                   </span>
                 )}

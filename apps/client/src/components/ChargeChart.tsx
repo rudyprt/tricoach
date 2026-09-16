@@ -39,12 +39,12 @@ export function ChargeChart() {
   const estime = bilan.seancesEstimees / bilan.seancesTotal > 0.5;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
       <div className="mb-1 flex items-center gap-2">
         <FaBatteryHalf className="text-sky-400" size={14} />
         <h2 className="text-sm font-bold text-white">Condition et fatigue</h2>
       </div>
-      <p className="mb-3 text-xs text-zinc-500">
+      <p className="mb-3 text-xs text-doux">
         Votre condition se construit lentement, votre fatigue monte et redescend vite. L'écart entre les deux est
         votre fraîcheur : elle doit être haute le jour d'une course.
       </p>
@@ -88,7 +88,7 @@ export function ChargeChart() {
       </div>
 
       {estime && (
-        <p className="mt-2 text-[11px] leading-snug text-zinc-600">
+        <p className="mt-2 text-[11px] leading-snug text-tres-doux">
           Ces valeurs sont estimées à partir de la durée de vos séances, faute de capteur de puissance ou de
           cardiofréquencemètre. Lisez-les comme une tendance, pas comme une mesure.
         </p>

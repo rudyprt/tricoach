@@ -234,22 +234,25 @@ model TrainingPlan {
 }
 
 model Session {
-  id          String       @id @default(cuid())
-  planId      String
-  plan        TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date        DateTime
-  sport       String
-  titre       String
-  dureeMin    Int
-  distanceKm  Float?
-  description String       @default("")
-  objectif    String?
-  structure   Json?
-  status      String       @default("planifiee")
-  ressenti    String?
-  completedAt DateTime?
+  id             String       @id @default(cuid())
+  planId         String
+  plan           TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime
+  sport          String
+  titre          String
+  dureeMin       Int
+  distanceKm     Float?
+  description    String       @default("")
+  objectif       String?
+  structure      Json?
+  status         String       @default("planifiee")
+  /// Durée réellement effectuée, quand elle diffère du prévu. Null tant que
+  /// l'athlète n'a rien corrigé : c'est alors `dureeMin` qui fait foi.
+  dureeReelleMin Int?
+  ressenti       String?
+  completedAt    DateTime?
 
   @@index([userId, date])
   @@index([planId])

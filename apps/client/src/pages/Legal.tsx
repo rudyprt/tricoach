@@ -12,11 +12,11 @@ import { EDITEUR, LIBELLES, champsManquants, editeurComplet } from "../config/ed
 function Page({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <Link to="/dashboard" className="text-sm text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline">
+      <Link to="/dashboard" className="text-sm text-doux underline-offset-4 hover:text-zinc-300 hover:underline">
         ← Retour
       </Link>
       <h1 className="mt-4 text-2xl font-black italic tracking-wide text-white">{title}</h1>
-      <p className="mt-1 text-xs text-zinc-500">Version {updated}</p>
+      <p className="mt-1 text-xs text-doux">Version {updated}</p>
 
       {!editeurComplet() && (
         <div className="mt-4 rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
@@ -39,14 +39,14 @@ function Page({ title, updated, children }: { title: string; updated: string; ch
 /** Affiche une valeur renseignée, ou un repli en italique si elle manque. */
 function Champ({ valeur, defaut }: { valeur: string | null; defaut: string }) {
   if (valeur) return <span className="text-zinc-300">{valeur}</span>;
-  return <span className="italic text-zinc-500">[{defaut}]</span>;
+  return <span className="italic text-doux">[{defaut}]</span>;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
       <h2 className="mb-1.5 text-base font-bold text-white">{title}</h2>
-      <div className="space-y-2 text-zinc-400">{children}</div>
+      <div className="space-y-2 text-doux">{children}</div>
     </section>
   );
 }
@@ -311,7 +311,7 @@ export function MentionsLegales() {
 function Ligne({ label, valeur }: { label: string; valeur: string | null }) {
   return (
     <div className="flex flex-wrap gap-x-2">
-      <dt className="text-zinc-500">{label} :</dt>
+      <dt className="text-doux">{label} :</dt>
       <dd>
         <Champ valeur={valeur} defaut="à compléter" />
       </dd>

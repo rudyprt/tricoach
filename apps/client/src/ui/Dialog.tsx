@@ -44,8 +44,10 @@ export function Dialog({ ouvert, onClose, titre, description, children, actions,
     // focus repart au début de la page et l'on perd sa place.
     declencheur.current = document.activeElement;
 
-    const premier = panneau.current?.querySelector<HTMLElement>(FOCUSABLES);
-    (premier ?? panneau.current)?.focus();
+    // La boîte elle-même, et non son premier bouton : un lecteur d'écran
+    // annonce alors le titre et la description avant que l'on agisse. Le
+    // premier bouton serait « Fermer », ce qui ne dit rien de ce qu'on ouvre.
+    panneau.current?.focus();
 
     function surTouche(e: KeyboardEvent) {
       if (e.key === "Escape") {

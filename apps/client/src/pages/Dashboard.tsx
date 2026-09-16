@@ -187,9 +187,14 @@ export function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function updateSession(id: string, status: Session["status"], ressenti?: string) {
+  async function updateSession(
+    id: string,
+    status: Session["status"],
+    ressenti?: string,
+    dureeReelleMin?: number | null
+  ) {
     const avant = plan?.sessions.find((s) => s.id === id)?.status ?? "planifiee";
-    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti });
+    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti, dureeReelleMin });
     setPlan((prev) =>
       prev ? { ...prev, sessions: prev.sessions.map((s) => (s.id === id ? data : s)) } : prev
     );
@@ -308,7 +313,7 @@ export function Dashboard() {
       {plan && !generating && (
         <button
           onClick={adjustWeek}
-          className="mb-4 w-full rounded-2xl border border-dashed border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-rose-800/70 hover:text-zinc-200"
+          className="mb-4 w-full rounded-2xl border border-dashed border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-rose-800/70 hover:text-zinc-200"
         >
           Je n'ai pas pu m'entraîner — réajuster ma semaine
         </button>
@@ -325,7 +330,7 @@ export function Dashboard() {
           </Link>
           <a
             href="/api/calendar/sessions.ics"
-            className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+            className="rounded-full border border-bordure px-3 py-1 text-xs text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200"
           >
             Ajouter à mon agenda
           </a>
@@ -339,7 +344,7 @@ export function Dashboard() {
             <button
               onClick={() => setDebriefDismissed(true)}
               aria-label="Fermer"
-              className="shrink-0 text-zinc-500 transition-colors hover:text-white"
+              className="shrink-0 text-doux transition-colors hover:text-white"
             >
               ✕
             </button>
@@ -349,8 +354,8 @@ export function Dashboard() {
       )}
 
       {trialDaysLeft !== null && (
-        <div className="animate-fade-in-up mb-4 flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-3.5 py-2.5">
-          <p className="text-xs text-zinc-400">
+        <div className="animate-fade-in-up mb-4 flex items-center justify-between gap-3 rounded-2xl border border-bordure bg-zinc-950/80 px-3.5 py-2.5">
+          <p className="text-xs text-doux">
             🎁 Essai gratuit : encore {trialDaysLeft} jour{trialDaysLeft > 1 ? "s" : ""}
           </p>
           <Link to="/abonnement" className="text-xs font-semibold text-rose-400 hover:underline">
@@ -368,7 +373,7 @@ export function Dashboard() {
           <p className={`text-sm font-semibold ${overtraining.risk === "high" ? "text-red-300" : "text-amber-300"}`}>
             ⚠️ Risque de surentraînement {overtraining.risk === "high" ? "élevé" : "modéré"}
           </p>
-          <ul className="mt-1 space-y-0.5 text-xs text-zinc-400">
+          <ul className="mt-1 space-y-0.5 text-xs text-doux">
             {overtraining.reasons.map((r) => (
               <li key={r}>• {r}</li>
             ))}
@@ -383,7 +388,7 @@ export function Dashboard() {
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">{profile.objectif}</p>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-doux">
               {daysRemaining > 0
                 ? `${daysRemaining} jour${daysRemaining > 1 ? "s" : ""} avant l'épreuve`
                 : daysRemaining === 0
@@ -446,19 +451,19 @@ export function Dashboard() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") setSelectedId(next.id);
               }}
-              className="animate-fade-in-up relative cursor-pointer overflow-hidden rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-black p-5 transition-colors duration-200 hover:border-zinc-700"
+              className="animate-fade-in-up relative cursor-pointer overflow-hidden rounded-3xl border border-bordure bg-gradient-to-br from-zinc-900 to-black p-5 transition-colors duration-200 hover:border-bordure-forte"
             >
               <span className="absolute right-4 top-4 rounded-full bg-rose-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                 À venir
               </span>
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
+              <p className="text-xs uppercase tracking-wide text-doux">
                 {new Date(next.date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" })}
               </p>
               <div className="mt-3 flex items-center gap-3">
                 <span className="text-4xl">{SPORT_ICON[next.sport]}</span>
                 <div>
                   <p className="text-lg font-bold leading-tight text-white">{next.titre}</p>
-                  <p className="text-sm text-zinc-400">
+                  <p className="text-sm text-doux">
                     {next.dureeMin} min{next.distanceKm ? ` · ${next.distanceKm} km` : ""}
                   </p>
                 </div>

@@ -91,7 +91,7 @@ export function TopBar() {
   }
 
   return (
-    <div data-impression="masquer" className="relative shrink-0 border-b border-zinc-900 bg-black">
+    <div data-impression="masquer" className="relative shrink-0 border-b border-bordure bg-black">
       <div className="flex items-center justify-between px-4 py-3.5">
         <button
           onClick={() => setOpen((o) => !o)}
@@ -142,14 +142,14 @@ export function TopBar() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="animate-fade-in-up absolute right-4 top-full z-20 mt-1 w-56 rounded-xl border border-zinc-800 bg-zinc-950 p-2 shadow-2xl">
+          <div className="animate-fade-in-up absolute right-4 top-full z-20 mt-1 w-56 rounded-xl border border-bordure bg-zinc-950 p-2 shadow-2xl">
             {!editingName ? (
               <div className="flex items-center justify-between gap-2 px-2 py-1.5">
                 <p className="truncate text-sm text-zinc-300">{user?.name}</p>
                 <button
                   onClick={startEditingName}
                   aria-label="Modifier le nom d'utilisateur"
-                  className="shrink-0 text-zinc-500 transition-colors hover:text-white"
+                  className="shrink-0 text-doux transition-colors hover:text-white"
                 >
                   <FaPen size={11} />
                 </button>
@@ -161,7 +161,7 @@ export function TopBar() {
                   value={nameDraft}
                   onChange={(e) => setNameDraft(e.target.value)}
                   maxLength={40}
-                  className="w-full min-w-0 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-white outline-none focus:border-rose-500"
+                  className="w-full min-w-0 rounded-md border border-bordure bg-zinc-900 px-2 py-1 text-sm text-white outline-none focus:border-rose-500"
                 />
                 <button
                   type="submit"
@@ -175,7 +175,7 @@ export function TopBar() {
                   type="button"
                   onClick={() => setEditingName(false)}
                   aria-label="Annuler"
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-900"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-doux transition-colors hover:bg-zinc-900"
                 >
                   <FaXmark size={11} />
                 </button>

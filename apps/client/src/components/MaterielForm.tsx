@@ -40,7 +40,7 @@ const EQUIPEMENTS: { cle: keyof Materiel; label: string }[] = [
  */
 export function MaterielForm({ valeur, onChange }: { valeur: Materiel; onChange: (v: Materiel) => void }) {
   const champ =
-    "w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500";
+    "w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500";
 
   return (
     <div className="space-y-2">
@@ -48,7 +48,7 @@ export function MaterielForm({ valeur, onChange }: { valeur: Materiel; onChange:
         <FaBicycle className="text-rose-400" size={13} />
         <label className="text-sm font-semibold text-zinc-200">Mon matériel</label>
       </div>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-doux">
         Votre coach n'écrira que des séances que vous pouvez réellement faire.
       </p>
 
@@ -89,7 +89,7 @@ export function MaterielForm({ valeur, onChange }: { valeur: Materiel; onChange:
               className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                 actif
                   ? "border-rose-800 bg-rose-950/40 text-rose-200"
-                  : "border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                  : "border-bordure text-doux hover:border-bordure-forte"
               }`}
             >
               {label}

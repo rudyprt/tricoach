@@ -6,10 +6,11 @@ import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "../components/Spinner";
 import { StravaCard } from "../components/StravaCard";
 import { ImportSeances } from "../components/ImportSeances";
+import { FraicheurDonnees } from "../components/FraicheurDonnees";
 import { RappelsCard } from "../components/RappelsCard";
 
 function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">{children}</div>;
+  return <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">{children}</div>;
 }
 
 export function Compte() {
@@ -112,7 +113,7 @@ export function Compte() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-bold text-white">Mon compte</h1>
-        <p className="mt-0.5 text-sm text-zinc-400">{user?.email}</p>
+        <p className="mt-0.5 text-sm text-doux">{user?.email}</p>
       </div>
 
       {message && (
@@ -130,7 +131,7 @@ export function Compte() {
             <FaEnvelopeCircleCheck className="text-amber-400" size={14} />
             <h2 className="text-sm font-bold text-white">Adresse non confirmée</h2>
           </div>
-          <p className="mb-3 text-sm text-zinc-400">
+          <p className="mb-3 text-sm text-doux">
             Confirmez votre adresse pour pouvoir récupérer votre compte en cas d'oubli de mot de passe.
           </p>
           <button
@@ -146,13 +147,15 @@ export function Compte() {
 
       <RappelsCard />
 
+      <FraicheurDonnees />
+
       <ImportSeances />
 
       <StravaCard />
 
       <Card>
         <div className="mb-2 flex items-center gap-2">
-          <FaLock className="text-zinc-400" size={13} />
+          <FaLock className="text-doux" size={13} />
           <h2 className="text-sm font-bold text-white">Mot de passe</h2>
         </div>
         <form onSubmit={changePassword} className="space-y-2">
@@ -162,7 +165,7 @@ export function Compte() {
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             placeholder="Mot de passe actuel"
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500"
+            className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500"
           />
           <input
             type="password"
@@ -171,12 +174,12 @@ export function Compte() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="Nouveau mot de passe (8 caractères minimum)"
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500"
+            className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-rose-500"
           />
           <button
             type="submit"
             disabled={busy !== null}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-rose-700 hover:text-white disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-bordure px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-rose-700 hover:text-white disabled:opacity-50"
           >
             {busy === "password" && <Spinner />}
             Changer mon mot de passe
@@ -186,17 +189,17 @@ export function Compte() {
 
       <Card>
         <div className="mb-2 flex items-center gap-2">
-          <FaDownload className="text-zinc-400" size={13} />
+          <FaDownload className="text-doux" size={13} />
           <h2 className="text-sm font-bold text-white">Mes données</h2>
         </div>
-        <p className="mb-3 text-sm text-zinc-400">
+        <p className="mb-3 text-sm text-doux">
           Téléchargez l'intégralité de ce que TriCoach conserve à votre sujet : profil, programmes, séances, ressentis
           et conversations avec le coach.
         </p>
         <button
           onClick={exportData}
           disabled={busy !== null}
-          className="flex items-center justify-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-rose-700 hover:text-white disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-lg border border-bordure px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-rose-700 hover:text-white disabled:opacity-50"
         >
           {busy === "export" && <Spinner />}
           Télécharger mes données
@@ -208,7 +211,7 @@ export function Compte() {
           <FaTriangleExclamation className="text-red-500" size={13} />
           <h2 className="text-sm font-bold text-white">Supprimer mon compte</h2>
         </div>
-        <p className="mb-3 text-sm text-zinc-400">
+        <p className="mb-3 text-sm text-doux">
           Efface définitivement votre compte, vos programmes, vos séances et vos conversations. Cette action est
           irréversible.
         </p>
@@ -231,14 +234,14 @@ export function Compte() {
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
               placeholder="Votre mot de passe"
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-red-600"
+              className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-red-600"
             />
             <input
               required
               value={deleteConfirmation}
               onChange={(e) => setDeleteConfirmation(e.target.value)}
               placeholder="Écrivez SUPPRIMER pour confirmer"
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-red-600"
+              className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-red-600"
             />
             <div className="flex gap-2">
               <button
@@ -252,7 +255,7 @@ export function Compte() {
               <button
                 type="button"
                 onClick={() => setShowDelete(false)}
-                className="rounded-lg border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-700"
+                className="rounded-lg border border-bordure px-4 py-2 text-sm text-zinc-300 hover:border-bordure-forte"
               >
                 Annuler
               </button>
@@ -261,16 +264,16 @@ export function Compte() {
         )}
       </Card>
 
-      <p className="pb-2 text-center text-xs text-zinc-600">
-        <Link to="/conditions" className="hover:text-zinc-400 hover:underline">
+      <p className="pb-2 text-center text-xs text-tres-doux">
+        <Link to="/conditions" className="hover:text-doux hover:underline">
           Conditions d'utilisation
         </Link>
         {" · "}
-        <Link to="/confidentialite" className="hover:text-zinc-400 hover:underline">
+        <Link to="/confidentialite" className="hover:text-doux hover:underline">
           Politique de confidentialité
         </Link>
         {" · "}
-        <Link to="/mentions-legales" className="hover:text-zinc-400 hover:underline">
+        <Link to="/mentions-legales" className="hover:text-doux hover:underline">
           Mentions légales
         </Link>
       </p>

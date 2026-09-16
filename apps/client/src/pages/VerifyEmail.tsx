@@ -36,11 +36,11 @@ export function VerifyEmail() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="animate-fade-in-up w-full max-w-sm space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 text-center shadow-2xl shadow-black/50">
+      <div className="animate-fade-in-up w-full max-w-sm space-y-4 rounded-2xl border border-bordure bg-zinc-950/80 p-6 text-center shadow-2xl shadow-black/50">
         {state === "encours" && (
           <>
             <Spinner />
-            <p className="text-sm text-zinc-400">Confirmation en cours…</p>
+            <p className="text-sm text-doux">Confirmation en cours…</p>
           </>
         )}
 
@@ -48,7 +48,7 @@ export function VerifyEmail() {
           <>
             <p className="text-3xl">✅</p>
             <h1 className="text-lg font-bold text-white">Adresse confirmée</h1>
-            <p className="text-sm text-zinc-400">Votre compte est sécurisé, vous pouvez récupérer votre mot de passe.</p>
+            <p className="text-sm text-doux">Votre compte est sécurisé, vous pouvez récupérer votre mot de passe.</p>
             <Link
               to="/dashboard"
               className="block rounded-lg bg-rose-500 px-3 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-rose-400"
@@ -62,7 +62,7 @@ export function VerifyEmail() {
           <>
             <p className="text-3xl">⚠️</p>
             <h1 className="text-lg font-bold text-white">Confirmation impossible</h1>
-            <p className="text-sm text-zinc-400">{error}</p>
+            <p className="text-sm text-doux">{error}</p>
             <Link
               to="/compte"
               className="block rounded-lg bg-rose-500 px-3 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-rose-400"

@@ -52,7 +52,7 @@ function AppShell() {
       <Suspense
         fallback={
           <div className="flex min-h-screen items-center justify-center">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-rose-500" />
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-bordure-forte border-t-rose-500" />
           </div>
         }
       >

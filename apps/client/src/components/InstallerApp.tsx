@@ -64,7 +64,7 @@ export function InstallerApp() {
         <FaMobileScreen className="mt-0.5 shrink-0 text-rose-400" size={16} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-white">Installez TriCoach sur votre écran d'accueil</p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+          <p className="mt-1 text-xs leading-relaxed text-doux">
             Votre programme s'ouvre d'un geste, et reste consultable même sans réseau — au bord du bassin ou au
             départ d'une sortie.
           </p>
@@ -89,7 +89,7 @@ export function InstallerApp() {
         <button
           onClick={refuser}
           aria-label="Ne plus proposer"
-          className="shrink-0 rounded-full p-1 text-zinc-600 transition-colors hover:text-zinc-300"
+          className="shrink-0 rounded-full p-1 text-tres-doux transition-colors hover:text-zinc-300"
         >
           <FaXmark size={14} />
         </button>

@@ -145,6 +145,8 @@ export interface Session {
   description: string;
   objectif: string | null;
   structure: SessionStructure | null;
+  /** Durée réellement effectuée, si l'athlète l'a corrigée. */
+  dureeReelleMin?: number | null;
   status: "planifiee" | "faite" | "manquee";
   ressenti: string | null;
   completedAt: string | null;

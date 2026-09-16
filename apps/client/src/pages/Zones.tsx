@@ -58,7 +58,7 @@ function ZoneTable({ ranges }: { ranges: ZoneRange[] }) {
       {ranges.map((z) => (
         <li key={z.zone} className="flex items-center gap-3 text-sm">
           <ZoneBadge zone={z.zone} />
-          <span className="flex-1 text-zinc-400">{z.label}</span>
+          <span className="flex-1 text-doux">{z.label}</span>
           <span className={`font-mono ${z.custom ? "text-amber-300" : "text-white"}`}>{z.value}</span>
           {z.custom && (
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-amber-500/70" title="Valeur que vous avez saisie">
@@ -102,14 +102,14 @@ function ZoneEditor({
         return (
           <li key={zone} className="flex items-center gap-2">
             <ZoneBadge zone={zone} />
-            <span className="hidden flex-1 text-xs text-zinc-500 sm:block">{auto?.label ?? ZONE_LABELS[zone]}</span>
+            <span className="hidden flex-1 text-xs text-doux sm:block">{auto?.label ?? ZONE_LABELS[zone]}</span>
             <input
               value={draft[zone] ?? ""}
               onChange={(e) => onChange(zone, e.target.value)}
               placeholder={auto?.value ?? "non calculée"}
               maxLength={40}
               aria-label={`Zone ${zone} ${sport}`}
-              className="w-36 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-right font-mono text-sm text-white outline-none transition-colors focus:border-rose-500 sm:w-40"
+              className="w-36 rounded-md border border-bordure bg-zinc-900 px-2 py-1 text-right font-mono text-sm text-white outline-none transition-colors focus:border-rose-500 sm:w-40"
             />
           </li>
         );
@@ -230,7 +230,7 @@ export function Zones() {
         {!editing && (
           <button
             onClick={startEditing}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-colors hover:border-rose-700 hover:text-white"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-bordure px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-colors hover:border-rose-700 hover:text-white"
           >
             <FaPen size={10} />
             Modifier
@@ -249,7 +249,7 @@ export function Zones() {
             <h2 className="text-sm font-bold uppercase tracking-wide text-white">{periodization.label}</h2>
           </div>
           <p className="mt-1.5 text-sm text-zinc-300">{PHASE_HINTS[periodization.phase]}</p>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-doux">
             {periodization.weeksToGoal > 0
               ? `Objectif dans ${periodization.weeksToGoal} semaine${periodization.weeksToGoal > 1 ? "s" : ""}.`
               : periodization.weeksToGoal === 0
@@ -273,7 +273,7 @@ export function Zones() {
       {SPORTS.map(({ key, label, Icon, color }) => {
         const ranges = zones[key];
         return (
-          <div key={key} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+          <div key={key} className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
             <div className="mb-3 flex items-center gap-2">
               <Icon className={color} size={15} />
               <h2 className="text-sm font-bold text-white">{label}</h2>
@@ -288,7 +288,7 @@ export function Zones() {
             ) : ranges ? (
               <ZoneTable ranges={ranges} />
             ) : (
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-doux">
                 {key === "velo"
                   ? "Sans FTP, aucune zone chiffrée : à effort égal, la vitesse varie trop selon la pente et le vent. Renseignez votre FTP dans « Mon objectif », ou saisissez vos zones à la main."
                   : `Renseignez un temps de référence en ${label.toLowerCase()}, ou saisissez vos zones à la main avec « Modifier ».`}
@@ -299,13 +299,13 @@ export function Zones() {
       })}
 
       {!editing && zones.frequenceCardiaque && (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+        <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
           <div className="mb-3 flex items-center gap-2">
             <FaHeartPulse className="text-red-400" size={15} />
             <h2 className="text-sm font-bold text-white">Fréquence cardiaque</h2>
           </div>
           <ZoneTable ranges={zones.frequenceCardiaque} />
-          <p className="mt-2 text-xs text-zinc-500">
+          <p className="mt-2 text-xs text-doux">
             Utile surtout à vélo, où la puissance n'est pas toujours disponible.
           </p>
         </div>
@@ -340,7 +340,7 @@ export function Zones() {
               setError(null);
             }}
             disabled={saving}
-            className="rounded-lg border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white disabled:opacity-50"
+            className="rounded-lg border border-bordure px-4 py-2.5 text-sm text-zinc-300 transition-colors hover:border-bordure-forte hover:text-white disabled:opacity-50"
           >
             Annuler
           </button>
@@ -348,11 +348,11 @@ export function Zones() {
       ) : (
         <>
           {zones.notes.length > 0 && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Méthode de calcul</p>
+            <div className="rounded-xl border border-bordure bg-zinc-900/40 p-3">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-doux">Méthode de calcul</p>
               <ul className="space-y-1">
                 {zones.notes.map((note) => (
-                  <li key={note} className="text-xs text-zinc-400">
+                  <li key={note} className="text-xs text-doux">
                     {note}
                   </li>
                 ))}
@@ -364,7 +364,7 @@ export function Zones() {
             <button
               onClick={resetAll}
               disabled={saving}
-              className="w-full rounded-lg border border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+              className="w-full rounded-lg border border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200 disabled:opacity-50"
             >
               Revenir aux zones calculées automatiquement
             </button>
@@ -372,7 +372,7 @@ export function Zones() {
 
           <Link
             to="/objectif"
-            className="block rounded-lg border border-zinc-800 px-3 py-2.5 text-center text-sm text-zinc-300 transition-colors hover:border-rose-800 hover:text-white"
+            className="block rounded-lg border border-bordure px-3 py-2.5 text-center text-sm text-zinc-300 transition-colors hover:border-rose-800 hover:text-white"
           >
             Mettre à jour mes temps de référence
           </Link>

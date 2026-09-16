@@ -34,11 +34,11 @@ export function Desabonnement() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 text-center">
+      <div className="w-full max-w-sm rounded-2xl border border-bordure bg-zinc-950/80 p-6 text-center">
         {etat === "en_cours" && (
           <>
-            <FaBellSlash className="mx-auto mb-3 text-zinc-500" size={22} />
-            <p className="text-sm text-zinc-400">Désabonnement en cours…</p>
+            <FaBellSlash className="mx-auto mb-3 text-doux" size={22} />
+            <p className="text-sm text-doux">Désabonnement en cours…</p>
           </>
         )}
 
@@ -46,11 +46,11 @@ export function Desabonnement() {
           <>
             <FaCircleCheck className="mx-auto mb-3 text-emerald-500" size={22} />
             <h1 className="text-base font-bold text-white">Rappels désactivés</h1>
-            <p className="mt-2 text-sm text-zinc-400">
+            <p className="mt-2 text-sm text-doux">
               Vous ne recevrez plus de rappels d'entraînement. Les messages liés à votre compte — confirmation
               d'adresse, mot de passe oublié — continuent de vous parvenir.
             </p>
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-2 text-xs text-doux">
               Vous pouvez les réactiver à tout moment depuis votre compte.
             </p>
           </>
@@ -60,8 +60,8 @@ export function Desabonnement() {
           <>
             <FaTriangleExclamation className="mx-auto mb-3 text-amber-500" size={22} />
             <h1 className="text-base font-bold text-white">Désabonnement impossible</h1>
-            <p className="mt-2 text-sm text-zinc-400">{message}</p>
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-2 text-sm text-doux">{message}</p>
+            <p className="mt-2 text-xs text-doux">
               Vous pouvez aussi couper les rappels depuis la page Compte, une fois connecté.
             </p>
           </>
@@ -69,7 +69,7 @@ export function Desabonnement() {
 
         <Link
           to="/"
-          className="mt-4 inline-block rounded-lg border border-zinc-800 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-rose-800 hover:text-white"
+          className="mt-4 inline-block rounded-lg border border-bordure px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-rose-800 hover:text-white"
         >
           Retour à l'application
         </Link>

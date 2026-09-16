@@ -89,7 +89,7 @@ export function Plans() {
               <h1 className="mt-2 text-2xl font-black italic tracking-wide text-white">
                 {user?.trialDays ?? 14} jours gratuits, <span className="text-rose-500">sans engagement</span>
               </h1>
-              <p className="mt-2 text-sm text-zinc-400">
+              <p className="mt-2 text-sm text-doux">
                 De quoi vivre un cycle complet : générez votre première semaine, réalisez vos séances, puis
                 enchaînez sur la suivante — c'est là que le coach ajuste votre charge. Voici ce qui vous attend
                 ensuite.
@@ -98,7 +98,7 @@ export function Plans() {
           ) : (
             <>
               <h1 className="text-2xl font-black italic tracking-wide text-white">Mon abonnement</h1>
-              <p className="mt-2 text-sm text-zinc-400">
+              <p className="mt-2 text-sm text-doux">
                 {user?.plan !== "free" ? (
                   <>Offre actuelle : <span className="text-rose-400">{user?.plan === "premium" ? "Premium" : "Standard"}</span></>
                 ) : user?.isTrialActive ? (
@@ -123,14 +123,14 @@ export function Plans() {
         )}
 
         <div className="space-y-4">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 shadow-2xl shadow-black/50 backdrop-blur-sm">
+          <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-5 shadow-2xl shadow-black/50 backdrop-blur-sm">
             <div className="mb-1 flex items-center gap-2">
               <FaBolt className="text-rose-500" size={16} />
               <h2 className="text-lg font-bold text-white">Standard</h2>
             </div>
             <p className="mb-4">
               <span className="text-3xl font-black text-white">19,99&nbsp;€</span>
-              <span className="text-sm text-zinc-500"> / mois</span>
+              <span className="text-sm text-doux"> / mois</span>
             </p>
             <ul className="mb-5 space-y-2">
               {STANDARD_FEATURES.map((f) => (
@@ -160,7 +160,7 @@ export function Plans() {
             </div>
             <p className="mb-4">
               <span className="text-3xl font-black text-white">34,90&nbsp;€</span>
-              <span className="text-sm text-zinc-500"> / mois</span>
+              <span className="text-sm text-doux"> / mois</span>
             </p>
             <ul className="mb-5 space-y-2">
               {PREMIUM_FEATURES.map((f) => (
@@ -170,9 +170,9 @@ export function Plans() {
                 </li>
               ))}
               {PREMIUM_SOON.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-zinc-500">
-                  <FaClock size={12} className="mt-1 shrink-0 text-zinc-600" />
-                  {f} <span className="text-xs text-zinc-600">(bientôt)</span>
+                <li key={f} className="flex items-start gap-2 text-sm text-doux">
+                  <FaClock size={12} className="mt-1 shrink-0 text-tres-doux" />
+                  {f} <span className="text-xs text-tres-doux">(bientôt)</span>
                 </li>
               ))}
             </ul>
@@ -188,7 +188,7 @@ export function Plans() {
         </div>
 
         <div className="mt-5 space-y-2 text-center">
-          <button onClick={continueWithFree} className="text-sm text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline">
+          <button onClick={continueWithFree} className="text-sm text-doux underline-offset-4 hover:text-zinc-300 hover:underline">
             {isIntro ? "Continuer avec la semaine gratuite" : "Retour"}
           </button>
           {!isIntro && user && user.plan !== "free" && (
@@ -196,7 +196,7 @@ export function Plans() {
               <button
                 onClick={cancelSubscription}
                 disabled={loadingPlan !== null}
-                className="text-sm text-zinc-600 underline-offset-4 hover:text-zinc-400 hover:underline disabled:opacity-50"
+                className="text-sm text-tres-doux underline-offset-4 hover:text-doux hover:underline disabled:opacity-50"
               >
                 Revenir à l'offre gratuite
               </button>

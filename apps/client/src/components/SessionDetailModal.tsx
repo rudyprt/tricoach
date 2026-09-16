@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { Session, SessionBlock } from "../lib/api";
 import { Dialog } from "../ui/Dialog";
 import { Bouton } from "../ui/Bouton";
+import { SeanceGuidee } from "./SeanceGuidee";
+import { FaPlay } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
   natation: "🏊",
@@ -30,10 +32,10 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
     <div className={`rounded-xl border p-3 ${color}`}>
       <div className="mb-1 flex items-center justify-between">
         <p className="text-sm font-semibold text-white">{label}</p>
-        <span className="text-xs text-zinc-400">{block.dureeMin} min</span>
+        <span className="text-xs text-doux">{block.dureeMin} min</span>
       </div>
       <p className="mb-1 text-xs font-medium text-zinc-300">{block.cible}</p>
-      <p className="text-sm text-zinc-400">{block.description}</p>
+      <p className="text-sm text-doux">{block.description}</p>
 
       {block.exercices && block.exercices.length > 0 && (
         <ul className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
@@ -42,7 +44,7 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
               <span className="mt-0.5 shrink-0 rounded bg-black/30 px-1.5 py-0.5 font-mono text-zinc-300">
                 {ex.repetitions}
               </span>
-              <span className="text-zinc-400">
+              <span className="text-doux">
                 {ex.allure}
                 {ex.recuperation ? ` · récup ${ex.recuperation}` : ""}
               </span>
@@ -57,21 +59,37 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
 interface Props {
   session: Session;
   onClose: () => void;
-  onUpdate: (id: string, status: Session["status"], ressenti?: string) => Promise<void>;
+  onUpdate: (
+    id: string,
+    status: Session["status"],
+    ressenti?: string,
+    dureeReelleMin?: number | null
+  ) => Promise<void>;
   allSessions?: Session[];
   onSwap?: (sessionIdA: string, sessionIdB: string) => Promise<void>;
 }
 
 export function SessionDetailModal({ session, onClose, onUpdate, allSessions, onSwap }: Props) {
   const [ressenti, setRessenti] = useState(session.ressenti ?? "");
+  const [dureeReelle, setDureeReelle] = useState(
+    session.dureeReelleMin != null ? String(session.dureeReelleMin) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [reorganizing, setReorganizing] = useState(false);
+  const [guidee, setGuidee] = useState(false);
   const isRestDay = session.sport === "repos";
+
+  /** Vide signifie « pas de correction » ; null efface une correction existante. */
+  function dureeCorrigee(): number | null | undefined {
+    if (dureeReelle.trim() === "") return session.dureeReelleMin != null ? null : undefined;
+    const valeur = Number(dureeReelle);
+    return Number.isFinite(valeur) && valeur > 0 ? Math.round(valeur) : undefined;
+  }
 
   async function updateStatus(status: Session["status"]) {
     setSaving(true);
     try {
-      await onUpdate(session.id, status, ressenti || undefined);
+      await onUpdate(session.id, status, ressenti || undefined, dureeCorrigee());
       onClose();
     } finally {
       setSaving(false);
@@ -81,7 +99,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   async function saveRessenti() {
     setSaving(true);
     try {
-      await onUpdate(session.id, session.status, ressenti || undefined);
+      await onUpdate(session.id, session.status, ressenti || undefined, dureeCorrigee());
       onClose();
     } finally {
       setSaving(false);
@@ -107,6 +125,10 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   });
 
   const otherDays = allSessions?.filter((s) => s.id !== session.id) ?? [];
+
+  if (guidee && session.structure) {
+    return <SeanceGuidee session={session} onFermer={() => setGuidee(false)} />;
+  }
 
   return (
     <Dialog
@@ -141,9 +163,21 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
           </div>
         )}
 
+        {session.structure && !isRestDay && (
+          <Bouton
+            variante="principal"
+            pleineLargeur
+            className="mb-4"
+            icone={<FaPlay size={12} />}
+            onClick={() => setGuidee(true)}
+          >
+            Démarrer la séance
+          </Bouton>
+        )}
+
         {session.structure ? (
           <div className="mb-4 space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Détail de la séance</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-doux">Détail de la séance</p>
             {BLOCKS.map(({ key, label, color }) => (
               <BlockCard key={key} label={label} block={session.structure![key]} color={color} />
             ))}
@@ -154,13 +188,43 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
 
         {!isRestDay && (
           <div className="mb-4 space-y-1">
-            <label className="text-sm text-zinc-400">Ressenti</label>
+            <label htmlFor="duree-reelle" className="text-sm text-doux">
+              Durée réellement effectuée
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="duree-reelle"
+                type="number"
+                min={1}
+                max={1440}
+                inputMode="numeric"
+                value={dureeReelle}
+                onChange={(e) => setDureeReelle(e.target.value)}
+                placeholder={String(session.dureeMin)}
+                className="w-24 rounded-lg border border-bordure bg-fond px-3 py-2 text-sm text-fort placeholder:text-tres-doux focus:border-accent"
+              />
+              <span className="text-sm text-doux">
+                min {dureeReelle && Number(dureeReelle) !== session.dureeMin ? `(prévu : ${session.dureeMin})` : ""}
+              </span>
+            </div>
+            <p className="text-xs text-tres-doux">
+              Laissez vide si vous avez suivi le prévu. Cette durée alimente votre charge et votre progression.
+            </p>
+          </div>
+        )}
+
+        {!isRestDay && (
+          <div className="mb-4 space-y-1">
+            <label htmlFor="ressenti-seance" className="text-sm text-doux">
+              Ressenti
+            </label>
             <textarea
+              id="ressenti-seance"
               value={ressenti}
               onChange={(e) => setRessenti(e.target.value)}
               rows={2}
               placeholder="Comment s'est passée la séance ?"
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
           </div>
         )}
@@ -187,38 +251,38 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
           ))}
 
         {onSwap && otherDays.length > 0 && (
-          <div className="mt-4 border-t border-zinc-800 pt-4">
+          <div className="mt-4 border-t border-bordure pt-4">
             {!reorganizing ? (
               <button
                 onClick={() => setReorganizing(true)}
-                className="w-full rounded-lg border border-zinc-800 px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900"
+                className="w-full rounded-lg border border-bordure px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900"
               >
                 🔄 Déplacer vers un autre jour
               </button>
             ) : (
               <div className="animate-fade-in space-y-2">
-                <p className="text-sm text-zinc-400">Échanger avec :</p>
+                <p className="text-sm text-doux">Échanger avec :</p>
                 <div className="grid grid-cols-2 gap-2">
                   {otherDays.map((d) => (
                     <button
                       key={d.id}
                       onClick={() => handleSwap(d.id)}
                       disabled={saving}
-                      className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-2 text-left text-xs text-zinc-200 transition-colors hover:border-rose-700 hover:bg-zinc-800 disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-lg border border-bordure bg-zinc-900 px-2.5 py-2 text-left text-xs text-zinc-200 transition-colors hover:border-rose-700 hover:bg-zinc-800 disabled:opacity-50"
                     >
                       <span className="text-base">{SPORT_ICON[d.sport]}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium capitalize">
                           {new Date(d.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })}
                         </span>
-                        <span className="block truncate text-zinc-500">{SPORT_LABELS[d.sport]}</span>
+                        <span className="block truncate text-doux">{SPORT_LABELS[d.sport]}</span>
                       </span>
                     </button>
                   ))}
                 </div>
                 <button
                   onClick={() => setReorganizing(false)}
-                  className="w-full rounded-lg px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300"
+                  className="w-full rounded-lg px-3 py-1.5 text-xs text-doux hover:text-zinc-300"
                 >
                   Annuler
                 </button>

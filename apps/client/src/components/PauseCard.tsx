@@ -119,9 +119,9 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
 
   if (formulaire) {
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+      <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
         <h2 className="text-sm font-bold text-white">Mettre mon entraînement en pause</h2>
-        <p className="mt-1 mb-3 text-xs text-zinc-500">
+        <p className="mt-1 mb-3 text-xs text-doux">
           Les séances encore à venir sont retirées. À la reprise, votre volume remontera par paliers au lieu de
           repartir d'où il s'était arrêté.
         </p>
@@ -134,7 +134,7 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
               className={`flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
                 raison === r.valeur
                   ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                  : "border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                  : "border-bordure text-doux hover:border-bordure-forte"
               }`}
             >
               {r.label}
@@ -147,7 +147,7 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
           onChange={(e) => setDetail(e.target.value)}
           maxLength={500}
           placeholder={raison === "blessure" ? "Où avez-vous mal ? (facultatif)" : "Précision (facultatif)"}
-          className="mb-2 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-amber-700"
+          className="mb-2 w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-amber-700"
         />
 
         {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
@@ -162,7 +162,7 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
           </button>
           <button
             onClick={() => setFormulaire(false)}
-            className="rounded-lg border border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+            className="rounded-lg border border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200"
           >
             Annuler
           </button>
@@ -174,7 +174,7 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
   return (
     <button
       onClick={() => setFormulaire(true)}
-      className="w-full rounded-2xl border border-dashed border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-amber-800/70 hover:text-zinc-200"
+      className="w-full rounded-2xl border border-dashed border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-amber-800/70 hover:text-zinc-200"
     >
       Blessé, malade ou indisponible — mettre en pause
     </button>

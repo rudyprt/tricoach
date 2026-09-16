@@ -9,7 +9,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center gap-2 text-zinc-500">
+      <div className="flex h-screen items-center justify-center gap-2 text-doux">
         <Spinner />
         Chargement...
       </div>

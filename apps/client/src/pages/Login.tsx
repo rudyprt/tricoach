@@ -31,7 +31,7 @@ export function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <form onSubmit={handleSubmit} className="animate-fade-in-up w-full max-w-sm space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 shadow-2xl shadow-black/50 backdrop-blur-sm">
+      <form onSubmit={handleSubmit} className="animate-fade-in-up w-full max-w-sm space-y-4 rounded-2xl border border-bordure bg-zinc-950/80 p-6 shadow-2xl shadow-black/50 backdrop-blur-sm">
         <h1 className="text-xl font-black italic tracking-wide text-white">
           TRI<span className="text-rose-500">COACH</span>
         </h1>
@@ -39,32 +39,32 @@ export function Login() {
         <div className="space-y-1">
           <label className="text-sm text-zinc-300">Email</label>
           <div className="relative">
-            <FaEnvelope className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+            <FaEnvelope className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" size={14} />
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              className="w-full rounded-lg border border-bordure bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
           </div>
         </div>
         <div className="space-y-1">
           <label className="text-sm text-zinc-300">Mot de passe</label>
           <div className="relative">
-            <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+            <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" size={14} />
             <input
               type={showPassword ? "text" : "password"}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2 pl-9 pr-9 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              className="w-full rounded-lg border border-bordure bg-zinc-900 py-2 pl-9 pr-9 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 transition-colors hover:text-zinc-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-doux transition-colors hover:text-zinc-300"
             >
               {showPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
             </button>
@@ -79,22 +79,22 @@ export function Login() {
           {loading ? "Connexion..." : "Se connecter"}
         </button>
         <p className="text-center text-sm">
-          <Link to="/mot-de-passe-oublie" className="text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline">
+          <Link to="/mot-de-passe-oublie" className="text-doux underline-offset-4 hover:text-zinc-300 hover:underline">
             Mot de passe oublié ?
           </Link>
         </p>
-        <p className="text-center text-sm text-zinc-500">
+        <p className="text-center text-sm text-doux">
           Pas de compte ?{" "}
           <Link to="/register" className="text-rose-400 hover:underline">
             Créer un compte
           </Link>
         </p>
-        <p className="text-center text-xs text-zinc-600">
-          <Link to="/mentions-legales" className="hover:text-zinc-400 hover:underline">
+        <p className="text-center text-xs text-tres-doux">
+          <Link to="/mentions-legales" className="hover:text-doux hover:underline">
             Mentions légales
           </Link>
           {" · "}
-          <Link to="/confidentialite" className="hover:text-zinc-400 hover:underline">
+          <Link to="/confidentialite" className="hover:text-doux hover:underline">
             Confidentialité
           </Link>
         </p>

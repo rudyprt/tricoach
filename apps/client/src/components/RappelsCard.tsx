@@ -74,12 +74,12 @@ export function RappelsCard() {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
       <div className="mb-2 flex items-center gap-2">
-        <FaBell className="text-zinc-400" size={13} />
+        <FaBell className="text-doux" size={13} />
         <h2 className="text-sm font-bold text-white">Rappels par e-mail</h2>
       </div>
-      <p className="mb-3 text-sm text-zinc-400">
+      <p className="mb-3 text-sm text-doux">
         Le dimanche soir quand votre semaine est à générer, et lorsque des séances passées attendent encore votre
         réponse. Jamais plus d'un message par soir.
       </p>
@@ -93,7 +93,7 @@ export function RappelsCard() {
         className={`flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition-colors disabled:opacity-50 ${
           actif
             ? "border-rose-900/50 bg-rose-950/20 text-rose-200 hover:border-rose-700"
-            : "border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+            : "border-bordure text-doux hover:border-bordure-forte hover:text-zinc-200"
         }`}
       >
         <span>{actif ? "Rappels activés" : "Rappels désactivés"}</span>
@@ -107,14 +107,14 @@ export function RappelsCard() {
       </button>
 
       {push && push !== "indisponible" && (
-        <div className="mt-3 border-t border-zinc-800 pt-3">
+        <div className="mt-3 border-t border-bordure pt-3">
           <p className="mb-1 text-sm font-semibold text-zinc-200">Notifications sur cet appareil</p>
-          <p className="mb-2 text-xs text-zinc-500">
+          <p className="mb-2 text-xs text-doux">
             Elles arrivent sur votre écran tout de suite, sans passer par votre boîte mail.
           </p>
 
           {push === "installation_requise" ? (
-            <p className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
+            <p className="rounded-lg border border-bordure bg-zinc-900/40 px-3 py-2 text-xs text-doux">
               Sur iPhone, ajoutez d'abord TriCoach à votre écran d'accueil : les notifications ne sont possibles
               qu'une fois l'application installée.
             </p>
@@ -126,7 +126,7 @@ export function RappelsCard() {
                 className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
                   push === "actif"
                     ? "border-rose-900/50 bg-rose-950/20 text-rose-200 hover:border-rose-700"
-                    : "border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                    : "border-bordure text-doux hover:border-bordure-forte hover:text-zinc-200"
                 }`}
               >
                 {push === "actif" ? "Notifications activées" : "Activer les notifications"}
@@ -135,7 +135,7 @@ export function RappelsCard() {
                 <button
                   onClick={() => void testerPush()}
                   disabled={pushBusy}
-                  className="rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+                  className="rounded-lg border border-bordure px-3 py-2 text-sm text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200 disabled:opacity-50"
                 >
                   Tester
                 </button>
@@ -143,7 +143,7 @@ export function RappelsCard() {
             </div>
           )}
 
-          {pushMessage && <p className="mt-2 text-xs text-zinc-400">{pushMessage}</p>}
+          {pushMessage && <p className="mt-2 text-xs text-doux">{pushMessage}</p>}
         </div>
       )}
     </div>

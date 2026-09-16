@@ -217,7 +217,7 @@ export async function bilanDeCharge(userId: string, maintenant: Date = new Date(
     }),
     prisma.session.findMany({
       where: { userId, status: "faite", date: { gte: debut }, sport: { not: "repos" } },
-      select: { id: true, date: true, sport: true, dureeMin: true },
+      select: { id: true, date: true, sport: true, dureeMin: true, dureeReelleMin: true },
       orderBy: { date: "asc" },
       take: 1000,
     }),
@@ -249,7 +249,10 @@ export async function bilanDeCharge(userId: string, maintenant: Date = new Date(
 
   for (const s of seances) {
     if (seancesCouvertes.has(s.id)) continue; // Déjà comptée via l'activité importée.
-    ajouter(s.date, chargeSeance({ date: s.date, sport: s.sport, dureeMin: s.dureeMin }, refs));
+    // La durée corrigée par l'athlète prime sur celle qui était prévue : une
+    // sortie écourtée ne doit pas peser comme si elle avait été tenue.
+    const duree = s.dureeReelleMin ?? s.dureeMin;
+    ajouter(s.date, chargeSeance({ date: s.date, sport: s.sport, dureeMin: duree }, refs));
     total += 1;
     estimees += 1;
   }

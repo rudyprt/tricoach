@@ -19,7 +19,7 @@ const LIBELLES: Record<ResultatFichier["statut"], string> = {
 const COULEURS: Record<ResultatFichier["statut"], string> = {
   importe: "text-emerald-300",
   importe_et_rattache: "text-emerald-300",
-  deja_importe: "text-zinc-500",
+  deja_importe: "text-doux",
   ignore: "text-amber-400",
   erreur: "text-red-400",
 };
@@ -56,12 +56,12 @@ export function ImportSeances({ onImport }: { onImport?: () => void }) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-sm">⌚</span>
         <h2 className="text-sm font-bold text-white">Importer mes séances</h2>
       </div>
-      <p className="mb-3 text-sm text-zinc-400">
+      <p className="mb-3 text-sm text-doux">
         Déposez le fichier exporté de votre montre. Votre coach travaille alors sur vos allures réelles, et vos
         séances se valident toutes seules.
       </p>
@@ -83,7 +83,7 @@ export function ImportSeances({ onImport }: { onImport?: () => void }) {
         {envoi ? "Analyse en cours…" : "Choisir un fichier"}
       </button>
 
-      <p className="mt-2 text-xs text-zinc-600">
+      <p className="mt-2 text-xs text-tres-doux">
         Formats acceptés : .fit, .gpx, .tcx — Garmin, Polar, Coros, Suunto, Wahoo, Apple Watch. Vous pouvez en
         déposer plusieurs à la fois.
       </p>
@@ -92,9 +92,9 @@ export function ImportSeances({ onImport }: { onImport?: () => void }) {
         <ul className="mt-3 space-y-1">
           {resultats.map((r, i) => (
             <li key={`${r.fichier}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-xs">
-              <span className="truncate text-zinc-400">{r.fichier}</span>
+              <span className="truncate text-doux">{r.fichier}</span>
               <span className={COULEURS[r.statut]}>{LIBELLES[r.statut]}</span>
-              {r.detail && <span className="text-zinc-600">{r.detail}</span>}
+              {r.detail && <span className="text-tres-doux">{r.detail}</span>}
             </li>
           ))}
         </ul>
