@@ -12,6 +12,8 @@ import {
 } from "../lib/api";
 import { Spinner } from "../components/Spinner";
 import { TestsCard } from "../components/TestsCard";
+import { useConfirmation } from "../ui/Confirmation";
+import { useToasts } from "../ui/Toasts";
 import { ProgressionSeuilsChart } from "../components/ProgressionSeuilsChart";
 
 const PHASE_HINTS: Record<TrainingPhase, string> = {
@@ -122,6 +124,8 @@ export function Zones() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { demander } = useConfirmation();
+  const { afficher } = useToasts();
 
   useEffect(() => {
     api
@@ -156,6 +160,7 @@ export function Zones() {
       );
       setData((prev) => (prev ? { ...prev, zones: saved.zones, overrides: saved.overrides } : prev));
       setEditing(false);
+      afficher("Vos zones sont enregistrées. Votre prochain programme les utilisera.", { ton: "succes" });
     } catch (err) {
       setError(apiErrorMessage(err, "Impossible d'enregistrer vos zones."));
     } finally {
@@ -164,7 +169,12 @@ export function Zones() {
   }
 
   async function resetAll() {
-    if (!window.confirm("Revenir aux zones calculées à partir de vos temps de référence ?")) return;
+    const { confirme } = await demander({
+      titre: "Revenir aux zones calculées ?",
+      description: "Vos corrections manuelles seront effacées et les zones repartiront de vos temps de référence.",
+      confirmer: "Revenir au calcul",
+    });
+    if (!confirme) return;
     setSaving(true);
     setError(null);
     try {

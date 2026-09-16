@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useConfirmation } from "../ui/Confirmation";
 import { api, apiErrorMessage, type StravaStatus } from "../lib/api";
 import { Spinner } from "./Spinner";
 
@@ -12,6 +13,7 @@ export function StravaCard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { demander } = useConfirmation();
 
   const charger = useCallback(async () => {
     try {
@@ -58,7 +60,13 @@ export function StravaCard() {
   }
 
   async function delier() {
-    if (!window.confirm("Délier votre compte Strava ? Les activités déjà importées sont conservées.")) return;
+    const { confirme } = await demander({
+      titre: "Délier votre compte Strava ?",
+      description: "Les activités déjà importées sont conservées. Vous pourrez relier le compte à tout moment.",
+      confirmer: "Délier",
+      variante: "danger",
+    });
+    if (!confirme) return;
     setBusy("unlink");
     try {
       await api.delete("/strava");

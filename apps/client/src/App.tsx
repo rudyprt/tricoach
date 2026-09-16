@@ -1,6 +1,8 @@
 import { Suspense, lazy, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { ToastProvider } from "./ui/Toasts";
+import { ConfirmationProvider } from "./ui/Confirmation";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import { AnimatedBackground } from "./components/AnimatedBackground";
@@ -115,7 +117,11 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppShell />
+        <ToastProvider>
+          <ConfirmationProvider>
+            <AppShell />
+          </ConfirmationProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

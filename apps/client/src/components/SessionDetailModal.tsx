@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { Session, SessionBlock } from "../lib/api";
+import { Dialog } from "../ui/Dialog";
+import { Bouton } from "../ui/Bouton";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
   natation: "🏊",
@@ -107,27 +109,27 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   const otherDays = allSessions?.filter((s) => s.id !== session.id) ?? [];
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center sm:items-center">
-      <div className="animate-fade-in absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="animate-fade-in-up relative max-h-[85vh] w-full max-w-[420px] overflow-y-auto rounded-t-3xl border border-zinc-800 bg-zinc-950 p-5 sm:rounded-3xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-2xl">
-              {SPORT_ICON[session.sport]}
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs capitalize uppercase tracking-wide text-zinc-500">{dateLabel}</p>
-              <p className="text-lg font-bold leading-tight text-white">{session.titre}</p>
-              <p className="text-sm text-zinc-500">{SPORT_LABELS[session.sport]}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Fermer"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-white"
+    <Dialog
+      ouvert
+      onClose={onClose}
+      titre={session.titre}
+      description={`${SPORT_LABELS[session.sport]} — ${dateLabel}`}
+      bloquant={saving}
+    >
+      <div>
+        <div className="mb-4 flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-haute text-2xl"
           >
-            ✕
-          </button>
+            {SPORT_ICON[session.sport]}
+          </span>
+          {!isRestDay && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-doux">
+              <span>{session.dureeMin} min</span>
+              {session.distanceKm != null && <span>{session.distanceKm} km</span>}
+            </div>
+          )}
         </div>
 
         {!isRestDay && session.objectif && (
@@ -136,13 +138,6 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
               🎯 Pourquoi cette séance ?
             </p>
             <p className="text-sm leading-relaxed text-zinc-200">{session.objectif}</p>
-          </div>
-        )}
-
-        {!isRestDay && (
-          <div className="mb-4 flex flex-wrap gap-4 text-sm text-zinc-300">
-            <span>⏱️ {session.dureeMin} min</span>
-            {session.distanceKm != null && <span>📍 {session.distanceKm} km</span>}
           </div>
         )}
 
@@ -173,37 +168,21 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
         {!isRestDay &&
           (session.status === "planifiee" ? (
             <div className="flex gap-2">
-              <button
-                onClick={() => updateStatus("faite")}
-                disabled={saving}
-                className="flex-1 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
-              >
-                ✓ Marquer faite
-              </button>
-              <button
-                onClick={() => updateStatus("manquee")}
-                disabled={saving}
-                className="flex-1 rounded-lg border border-zinc-800 px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-all duration-150 hover:bg-zinc-900 active:scale-[0.97] disabled:opacity-50"
-              >
+              <Bouton variante="succes" pleineLargeur enCours={saving} onClick={() => updateStatus("faite")}>
+                Marquer faite
+              </Bouton>
+              <Bouton variante="secondaire" pleineLargeur disabled={saving} onClick={() => updateStatus("manquee")}>
                 Manquée
-              </button>
+              </Bouton>
             </div>
           ) : (
             <div className="flex gap-2">
-              <button
-                onClick={saveRessenti}
-                disabled={saving}
-                className="flex-1 rounded-lg bg-rose-500 px-3 py-2.5 text-sm font-semibold text-black transition-all duration-150 hover:bg-rose-400 active:scale-[0.97] disabled:opacity-50"
-              >
+              <Bouton variante="principal" pleineLargeur enCours={saving} onClick={saveRessenti}>
                 Enregistrer
-              </button>
-              <button
-                onClick={() => updateStatus("planifiee")}
-                disabled={saving}
-                className="flex-1 rounded-lg border border-zinc-800 px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-all duration-150 hover:bg-zinc-900 active:scale-[0.97] disabled:opacity-50"
-              >
+              </Bouton>
+              <Bouton variante="secondaire" pleineLargeur disabled={saving} onClick={() => updateStatus("planifiee")}>
                 Réinitialiser
-              </button>
+              </Bouton>
             </div>
           ))}
 
@@ -248,6 +227,6 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
           </div>
         )}
       </div>
-    </div>
+    </Dialog>
   );
 }

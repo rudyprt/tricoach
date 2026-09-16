@@ -2,6 +2,10 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { InstallerApp } from "../components/InstallerApp";
 import { PauseCard } from "../components/PauseCard";
 import { PartagerSemaine } from "../components/PartagerSemaine";
+import { GenerationEnCours } from "../components/GenerationEnCours";
+import { Bouton } from "../ui/Bouton";
+import { useToasts } from "../ui/Toasts";
+import { useConfirmation } from "../ui/Confirmation";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
@@ -45,6 +49,8 @@ export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const didAutoGenerate = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { afficher } = useToasts();
+  const { demander } = useConfirmation();
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [overtraining, setOvertraining] = useState<OvertrainingInsight | null>(null);
   const [hasPastPlan, setHasPastPlan] = useState(false);
@@ -121,22 +127,31 @@ export function Dashboard() {
    * permet au coach de distinguer un imprévu d'agenda d'une douleur.
    */
   const adjustWeek = useCallback(async () => {
-    const motif = window.prompt(
-      "Réajuster les jours restants de votre semaine.\n\nQue s'est-il passé ? (facultatif, mais ça aide votre coach)",
-      ""
-    );
-    if (motif === null) return;
+    const { confirme, texte } = await demander({
+      titre: "Réajuster ma semaine",
+      description: "Seuls les jours restants sont reconstruits. Ce qui est déjà fait est conservé.",
+      confirmer: "Réajuster",
+      saisie: {
+        label: "Que s'est-il passé ?",
+        placeholder: "Fatigue, imprévu, douleur au genou…",
+        facultatif: true,
+        multiligne: true,
+        maxLength: 500,
+      },
+    });
+    if (!confirme) return;
+    const motif = texte;
 
     setGenerating(true);
     setError(null);
     try {
-      const { data } = await api.post<GenerationJob>("/plans/adjust", { motif: motif.trim() || undefined });
+      const { data } = await api.post<GenerationJob>("/plans/adjust", { motif: motif || undefined });
       await followJob(data);
     } catch (err) {
       setGenerating(false);
       setError(apiErrorMessage(err, "Impossible de réajuster votre semaine."));
     }
-  }, [followJob]);
+  }, [followJob, demander]);
 
   useEffect(() => {
     loadPlan();
@@ -167,10 +182,25 @@ export function Dashboard() {
   }, []);
 
   async function updateSession(id: string, status: Session["status"], ressenti?: string) {
+    const avant = plan?.sessions.find((s) => s.id === id)?.status ?? "planifiee";
     const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti });
     setPlan((prev) =>
       prev ? { ...prev, sessions: prev.sessions.map((s) => (s.id === id ? data : s)) } : prev
     );
+
+    // Une validation par erreur obligeait à rouvrir le détail de la séance
+    // pour la corriger. Le geste inverse doit être à portée immédiate.
+    if (status !== avant) {
+      afficher(status === "faite" ? "Séance validée." : "Séance marquée manquée.", {
+        ton: "succes",
+        onAnnuler: async () => {
+          const { data: restaure } = await api.patch<Session>(`/sessions/${id}`, { status: avant });
+          setPlan((prev) =>
+            prev ? { ...prev, sessions: prev.sessions.map((s) => (s.id === id ? restaure : s)) } : prev
+          );
+        },
+      });
+    }
   }
 
   async function swapSessions(sessionIdA: string, sessionIdB: string) {
@@ -206,15 +236,19 @@ export function Dashboard() {
     return { next: nextSession, rest };
   }, [plan]);
 
-  function confirmRegenerate() {
+  async function confirmRegenerate() {
     // Les séances déjà réalisées sont conservées côté serveur ; seules celles
     // encore planifiées sont remplacées. On le dit avant d'agir.
     const done = plan?.sessions.filter((s) => s.status !== "planifiee").length ?? 0;
-    const message =
-      done > 0
-        ? `Régénérer la semaine ? Vos ${done} séance(s) déjà validée(s) sont conservées, les séances encore planifiées seront remplacées.`
-        : "Régénérer la semaine ? Les séances encore planifiées seront remplacées.";
-    if (window.confirm(message)) generatePlan();
+    const { confirme } = await demander({
+      titre: "Régénérer la semaine ?",
+      description:
+        done > 0
+          ? `Vos ${done} séance${done > 1 ? "s" : ""} déjà validée${done > 1 ? "s" : ""} sont conservées. Les séances encore planifiées seront remplacées.`
+          : "Les séances encore planifiées seront remplacées.",
+      confirmer: "Régénérer",
+    });
+    if (confirme) generatePlan();
   }
 
   const trialDaysLeft =
@@ -366,25 +400,31 @@ export function Dashboard() {
       )}
 
       {generating ? (
-        <div className="animate-fade-in-up rounded-2xl border border-rose-900/40 bg-gradient-to-b from-rose-950/25 to-zinc-950/80 p-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
-            <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-rose-500/25 border-t-rose-500" />
-          </div>
-          <p className="text-sm font-semibold text-white">Votre coach prépare votre semaine…</p>
-          <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-zinc-400">
-            Cela prend généralement une à deux minutes. Vous pouvez fermer l'application : la génération continue et
-            vous retrouverez votre programme en revenant.
-          </p>
-        </div>
+        <GenerationEnCours titre={plan ? "Votre coach réajuste la semaine" : "Votre coach prépare la semaine"} />
       ) : loading ? (
-        <p className="flex items-center gap-2 text-zinc-500">
-          <Spinner /> Chargement...
+        <p className="flex items-center gap-2 text-doux">
+          <Spinner /> Chargement…
         </p>
       ) : !plan ? (
-        <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center text-zinc-500">
-          {hasPastPlan
-            ? 'Votre semaine précédente est terminée. Appuyez sur "Semaine terminée, nouvelle semaine" pour enchaîner avec une progression maîtrisée.'
-            : 'Aucun programme pour cette semaine. Appuyez sur "Générer" pour que votre coach IA en crée un.'}
+        <div className="rounded-2xl border border-dashed border-bordure p-8 text-center">
+          <span aria-hidden="true" className="mb-3 block text-4xl">
+            {hasPastPlan ? "🔁" : "📋"}
+          </span>
+          <p className="text-sm font-semibold text-fort">
+            {hasPastPlan ? "Votre semaine précédente est terminée" : "Pas encore de programme"}
+          </p>
+          <p className="mx-auto mt-1.5 max-w-xs text-sm leading-relaxed text-doux">
+            {hasPastPlan
+              ? "Votre coach construira la suivante à partir de ce que vous avez réellement fait : séances validées, manquées, et votre ressenti."
+              : "Votre coach va écrire vos sept prochains jours à partir de votre objectif, de vos créneaux et de vos zones."}
+          </p>
+          <Bouton
+            variante="principal"
+            className="mt-4"
+            onClick={hasPastPlan ? generateNextWeek : generatePlan}
+          >
+            {hasPastPlan ? "Générer la semaine suivante" : "Générer mon programme"}
+          </Bouton>
         </div>
       ) : (
         <div className="space-y-5">

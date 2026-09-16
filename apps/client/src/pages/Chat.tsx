@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage, isSubscriptionRequiredError, CHAT_DAILY_LIMIT, type ChatMessage, type ChatPage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { useConfirmation } from "../ui/Confirmation";
 
 export function Chat() {
   const { user } = useAuth();
+  const { demander } = useConfirmation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -54,7 +56,13 @@ export function Chat() {
   }
 
   async function handleClear() {
-    if (!window.confirm("Effacer toute la conversation avec votre coach ?")) return;
+    const { confirme } = await demander({
+      titre: "Effacer la conversation ?",
+      description: "Tout l'historique de vos échanges avec le coach sera supprimé. Cette action est définitive.",
+      confirmer: "Effacer",
+      variante: "danger",
+    });
+    if (!confirme) return;
     setClearing(true);
     setError(null);
     try {
