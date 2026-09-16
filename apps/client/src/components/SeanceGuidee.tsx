@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FaPlay, FaPause, FaForward, FaXmark } from "react-icons/fa6";
 import type { Session, SessionBlock } from "../lib/api";
 import { Bouton } from "../ui/Bouton";
@@ -76,8 +77,19 @@ export function SeanceGuidee({ session, onFermer }: { session: Session; onFermer
   const total = courant.bloc.dureeMin * 60;
   const part = total > 0 ? Math.min(100, Math.max(0, ((total - restant) / total) * 100)) : 0;
 
-  return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-fond" style={{ paddingTop: "var(--marge-haute)", paddingBottom: "var(--marge-basse)" }}>
+  /*
+   * Rendu dans un portail, et non à sa place dans l'arbre.
+   *
+   * Le conteneur de page porte `animate-fade-in-up`, donc une `transform` :
+   * tout ancêtre transformé devient le bloc de référence des éléments
+   * `position: fixed`, qui cessent alors de se caler sur la fenêtre. Le mode
+   * séance s'affichait donc au milieu du programme, chronomètre hors écran.
+   */
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[70] flex flex-col bg-fond"
+      style={{ paddingTop: "var(--marge-haute)", paddingBottom: "var(--marge-basse)" }}
+    >
       <div className="flex items-center justify-between px-4 py-3">
         <p className="text-sm text-doux">
           Bloc {index + 1} sur {blocs.length}
@@ -145,6 +157,7 @@ export function SeanceGuidee({ session, onFermer }: { session: Session; onFermer
           {index + 1 >= blocs.length ? "Terminer" : "Bloc suivant"}
         </Bouton>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

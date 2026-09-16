@@ -59,7 +59,9 @@ describe("dates", () => {
   it("ne recule pas d'un jour", () => {
     // Une date construite à minuit UTC bascule la veille dans les fuseaux
     // négatifs : l'athlète verrait la veille de sa séance.
-    expect(formatJourLong("2026-03-07")).toBe("samedi 7 mars");
+    // Une majuscule au premier mot seulement : « Samedi 19 Septembre »
+    // trahissait un `capitalize` CSS appliqué à chaque mot.
+    expect(formatJourLong("2026-03-07")).toBe("Samedi 7 mars");
     expect(formatJourCourt("2026-03-07")).toBe("7 mars 2026");
   });
 });

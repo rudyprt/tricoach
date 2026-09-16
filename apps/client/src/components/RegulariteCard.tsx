@@ -7,6 +7,12 @@ function moisCourt(date: string): string {
   return new Date(`${date}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
+/** Étiquette compacte sous chaque barre : sans elle, on ne sait pas quelle semaine on lit. */
+function jourEtMois(date: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+
 /**
  * Régularité, jalons et records.
  *
@@ -28,6 +34,7 @@ export function RegulariteCard() {
   if (!bilan || bilan.totalSeances === 0) return null;
 
   const avecDonnees = bilan.semaines.filter((s) => s.seancesPrevues > 0);
+  const maxVolume = Math.max(60, ...avecDonnees.map((s) => s.prevuMin));
 
   return (
     <div className="rounded-2xl border border-bordure bg-surface p-4">
@@ -66,18 +73,25 @@ export function RegulariteCard() {
           <ul className="flex items-end gap-1">
             {avecDonnees.map((semaine) => {
               const part = semaine.prevuMin > 0 ? semaine.realiseMin / semaine.prevuMin : 0;
+              // Les barres sont mises à l'échelle du volume, pas du taux : sinon
+              // toutes les semaines tenues sont pleines et se ressemblent, et
+              // l'on ne voit plus qu'une semaine légère diffère d'une grosse.
+              const hauteurPrevu = Math.round((semaine.prevuMin / maxVolume) * 100);
               return (
                 <li key={semaine.weekStart} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                  {/* La barre pleine est le réalisé, le contour le prévu :
-                      l'écart entre les deux est l'information. */}
-                  <span
-                    aria-hidden="true"
-                    className="flex h-12 w-full flex-col justify-end rounded-sm border border-bordure bg-fond"
-                  >
+                  <span aria-hidden="true" className="flex h-14 w-full items-end">
                     <span
-                      style={{ height: `${Math.min(100, part * 100)}%` }}
-                      className={`w-full rounded-sm ${semaine.tenue ? "bg-succes" : "bg-attention"}`}
-                    />
+                      style={{ height: `${Math.max(6, hauteurPrevu)}%` }}
+                      className="flex w-full flex-col justify-end rounded-sm border border-bordure-forte bg-fond"
+                    >
+                      <span
+                        style={{ height: `${Math.min(100, part * 100)}%` }}
+                        className={`w-full rounded-sm ${semaine.tenue ? "bg-succes" : "bg-attention"}`}
+                      />
+                    </span>
+                  </span>
+                  <span aria-hidden="true" className="text-[9px] text-tres-doux">
+                    {jourEtMois(semaine.weekStart)}
                   </span>
                   <span className="sr-only">
                     Semaine du {moisCourt(semaine.weekStart)} : {formatDuree(semaine.realiseMin)} réalisés sur{" "}
@@ -87,6 +101,20 @@ export function RegulariteCard() {
               );
             })}
           </ul>
+          <p className="mt-1.5 flex items-center gap-3 text-[11px] text-tres-doux">
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-succes" />
+              semaine tenue
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-attention" />
+              incomplète
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm border border-bordure-forte" />
+              prévu
+            </span>
+          </p>
         </div>
       )}
 

@@ -160,7 +160,7 @@ export function TestsCard() {
               <Icon className="mt-0.5 shrink-0 text-emerald-400" size={14} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-white">{test.titre}</p>
-                <p className="text-xs capitalize text-doux">{formatJourLong(test.date)}</p>
+                <p className="text-xs text-doux">{formatJourLong(test.date)}</p>
                 <p className="mt-1.5 text-xs leading-relaxed text-doux">{test.protocole}</p>
                 <p className="mt-1.5 text-xs text-emerald-300/80">À relever : {test.mesures}</p>
               </div>

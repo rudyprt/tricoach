@@ -150,8 +150,10 @@ async function jalonsAtteints(userId: string, totalSeances: number, totalHeures:
   if (dernierPalierSeances) {
     jalons.push({
       cle: `seances-${dernierPalierSeances}`,
-      titre: `${dernierPalierSeances} séances réalisées`,
-      detail: "Chacune compte, y compris les plus courtes.",
+      // « 25 séances réalisées » à côté d'un compteur affichant 38 laisse
+      // croire à une erreur : c'est un palier franchi, pas un total.
+      titre: `Palier des ${dernierPalierSeances} séances franchi`,
+      detail: `Vous en êtes à ${totalSeances}. Chacune compte, y compris les plus courtes.`,
       atteintLe: date,
     });
   }
@@ -160,8 +162,8 @@ async function jalonsAtteints(userId: string, totalSeances: number, totalHeures:
   if (dernierPalierHeures) {
     jalons.push({
       cle: `heures-${dernierPalierHeures}`,
-      titre: `${dernierPalierHeures} heures d'entraînement`,
-      detail: "Le volume accumulé est ce qui construit votre endurance.",
+      titre: `Palier des ${dernierPalierHeures} heures franchi`,
+      detail: `Vous cumulez ${totalHeures} heures. Ce volume est ce qui construit votre endurance.`,
       atteintLe: date,
     });
   }

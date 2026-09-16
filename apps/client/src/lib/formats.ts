@@ -49,15 +49,22 @@ export function parseChrono(valeur: string): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
 }
 
-/** « 2026-03-07 » → « samedi 7 mars ». */
+/** Première lettre en capitale, et elle seule. */
+function capitaliser(texte: string): string {
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
+
+/** « 2026-03-07 » → « Samedi 7 mars ». */
 export function formatJourLong(date: string): string {
   // Midi, et non minuit : une date à minuit UTC recule d'un jour dans les
   // fuseaux négatifs, et l'athlète verrait la veille de sa séance.
-  return new Date(`${date}T12:00:00`).toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  return capitaliser(
+    new Date(`${date}T12:00:00`).toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    })
+  );
 }
 
 export function formatJourCourt(date: string): string {

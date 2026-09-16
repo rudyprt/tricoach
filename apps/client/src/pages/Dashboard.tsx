@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { InstallerApp } from "../components/InstallerApp";
-import { PauseCard } from "../components/PauseCard";
-import { PartagerSemaine } from "../components/PartagerSemaine";
+import { ActionsSemaine } from "../components/ActionsSemaine";
 import { GenerationEnCours } from "../components/GenerationEnCours";
 import { Bouton } from "../ui/Bouton";
 import { VueSemaine } from "../components/VueSemaine";
@@ -296,44 +295,15 @@ export function Dashboard() {
         )}
       </div>
 
-      <div className="mb-4">
-        <InstallerApp />
-      </div>
-
-      <div className="mb-4">
-        <PauseCard onChange={loadPlan} />
-      </div>
-
-      {plan && (
-        <div className="mb-4">
-          <PartagerSemaine />
-        </div>
-      )}
-
-      {plan && !generating && (
-        <button
-          onClick={adjustWeek}
-          className="mb-4 w-full rounded-2xl border border-dashed border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-rose-800/70 hover:text-zinc-200"
-        >
-          Je n'ai pas pu m'entraîner — réajuster ma semaine
-        </button>
-      )}
-
       {plan?.periodization && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-4">
           <Link
             to="/zones"
-            className="rounded-full border border-rose-900/50 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-300 transition-colors hover:border-rose-700 hover:text-rose-200"
+            className="inline-block rounded-full border border-accent-sombre bg-accent-sombre/20 px-3 py-1 text-xs font-semibold text-accent-clair transition-colors hover:border-accent"
           >
             {plan.periodization.label}
             {plan.periodization.weeksToGoal > 0 && ` · J-${plan.periodization.weeksToGoal} sem.`}
           </Link>
-          <a
-            href="/api/calendar/sessions.ics"
-            className="rounded-full border border-bordure px-3 py-1 text-xs text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200"
-          >
-            Ajouter à mon agenda
-          </a>
         </div>
       )}
 
@@ -485,6 +455,15 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      <div className="mt-5 space-y-4">
+        <ActionsSemaine
+          aUnProgramme={Boolean(plan) && !generating}
+          onPauseChange={loadPlan}
+          onReajuster={adjustWeek}
+        />
+        <InstallerApp />
+      </div>
 
       {selectedId &&
         (() => {
