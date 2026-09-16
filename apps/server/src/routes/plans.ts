@@ -27,6 +27,7 @@ import {
 } from "../lib/pause.js";
 import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../lib/races.js";
 import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
+import { corrigerCibles } from "../lib/cibles.js";
 import {
   disponibilitesPromptLines,
   joursIndisponibles,
@@ -94,6 +95,7 @@ function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): strin
     "",
     "Pour toute séance sport != repos, remplis TOUJOURS \"structure\" avec 3 blocs : échauffement, corps de séance, retour au calme. La somme de leurs dureeMin doit être proche de dureeMin total.",
     "\"cible\" décrit l'intensité concrète du bloc : la zone (Z1 à Z5, nommée) ET l'allure ou la puissance chiffrée correspondante. Les zones de l'athlète sont fournies dans le message utilisateur : REPRENDS EXACTEMENT ces valeurs, ne les recalcule pas. N'invente jamais de FC en bpm absolus (FC max inconnue) : reste en zones relatives.",
+    "UNITÉS — chaque discipline a la sienne, ne les mélange jamais : NATATION en temps aux 100 m (ex: 1:44/100m), COURSE À PIED en allure au kilomètre (ex: 4:08/km), VÉLO en watts (ex: 225 W). Une allure au kilomètre sur une séance de natation, ou des watts sur une séance de course, est une erreur grave : l'athlète ne peut pas l'exécuter. Cette règle vaut aussi pour le champ \"allure\" de chaque exercice.",
     "\"corps.exercices\" (uniquement pour le bloc corps de séance, quand la séance comporte du fractionné/intervalles/répétitions) : liste concrète et chiffrée, MAXIMUM 4 lignes, ex: [{\"repetitions\":\"6 x 400m\",\"allure\":\"4:10/km (Z4 seuil)\",\"recuperation\":\"90s trot\"}]. Pour une sortie continue sans fractionné (endurance, sortie longue), laisse \"exercices\" vide ou omets-le et décris l'effort dans \"description\".",
     "Le volume hebdomadaire total doit respecter les heures disponibles indiquées par l'athlète ET la limite de volume donnée dans le message utilisateur.",
     "IMPORTANT — sois très concis partout, sans exception : chaque \"description\" (séance et blocs) fait 15 mots maximum, chaque \"objectif\" fait 20-30 mots maximum. La réponse complète doit rester compacte : pas de phrases superflues, va droit à l'essentiel. Ne jamais tronquer le JSON : si tu manques de place, raccourcis encore les textes plutôt que de laisser une réponse incomplète.",
@@ -498,6 +500,8 @@ interface PreparedGeneration {
   allowedDates: string[];
   /** Jours déclarés indisponibles : forcés en repos après génération. */
   datesRepos: string[];
+  /** Zones de l'athlète, pour rétablir les unités que le modèle aurait mélangées. */
+  zones: TrainingZones;
   /** Borne de remplacement : les séances antérieures sont conservées. */
   replaceFrom?: Date;
 }
@@ -557,6 +561,7 @@ async function prepareAdjustment(
     phase,
     allowedDates: joursRestants,
     datesRepos: datesRepos.filter((d) => joursRestants.includes(d)),
+    zones,
     replaceFrom: debutRestant,
     aiKind: "plan_generation",
     system: buildAdjustmentSystemPrompt(phase, joursRestants),
@@ -656,6 +661,7 @@ async function prepareGeneration(
       phase,
       allowedDates: weekDays(weekStart),
       datesRepos,
+      zones,
       aiKind: "plan_generation",
       system: buildSystemPrompt(false, phase),
       userPrompt: buildFirstWeekPrompt(
@@ -719,6 +725,7 @@ async function prepareGeneration(
     phase,
     allowedDates: weekDays(weekStart),
     datesRepos,
+    zones,
     aiKind: "plan_progression",
     system: buildSystemPrompt(true, phase),
     userPrompt: buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, {
@@ -755,11 +762,22 @@ async function processJob(jobId: string, userId: string, prepared: PreparedGener
       new Set(prepared.datesRepos)
     );
 
+    // Le modèle mélange parfois les unités d'une discipline à l'autre. Le
+    // serveur connaît la bonne valeur pour chaque zone : il la rétablit plutôt
+    // que de livrer à l'athlète une allure au kilomètre dans un bassin.
+    const { seances, corrections } = corrigerCibles(aiPlan.sessions, prepared.zones);
+    if (corrections.length > 0) {
+      console.warn(
+        `[cibles] ${corrections.length} unité(s) rétablie(s) pour ${userId} :`,
+        corrections.map((c) => `${c.sport} ${c.bloc} « ${c.avant} » → « ${c.apres} »`).join(" ; ")
+      );
+    }
+
     const plan = await persistPlan({
       userId,
       weekStart: prepared.weekStart,
       raw,
-      aiPlan,
+      aiPlan: { ...aiPlan, sessions: seances },
       phase: prepared.phase,
       replaceFrom: prepared.replaceFrom,
     });
