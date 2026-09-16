@@ -55,7 +55,9 @@ export function SessionCard({ session, onOpen, onQuickUpdate }: Props) {
         <div className="min-w-0 flex-1">
           <p className="text-[11px] uppercase tracking-wide text-doux">{dateLabel}</p>
           <p className="truncate font-semibold text-white">
-            {SPORT_LABELS[session.sport]} — {session.titre}
+            {/* « Repos — Repos » : sur un jour de repos, le sport et le titre
+                disent la même chose. */}
+            {isRestDay ? session.titre : `${SPORT_LABELS[session.sport]} — ${session.titre}`}
           </p>
           {!isRestDay && (
             <p className="text-sm text-doux">

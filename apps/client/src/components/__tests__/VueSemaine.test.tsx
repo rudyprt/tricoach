@@ -54,6 +54,15 @@ describe("VueSemaine", () => {
     expect(screen.getByRole("button", { name: /Footing/ })).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("accepte une date ISO complète, telle que l'API la renvoie", () => {
+    // `2026-03-02T00:00:00.000Z` concaténé à « T12:00:00 » donnait
+    // « Invalid Date » sous les barres.
+    const isoComplet = [seance({ id: "9", date: "2026-03-02T00:00:00.000Z", titre: "Footing" })];
+    render(<VueSemaine sessions={isoComplet} onSelect={vi.fn()} />);
+
+    expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+  });
+
   it("ne rend rien sans séance", () => {
     const { container } = render(<VueSemaine sessions={[]} onSelect={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();

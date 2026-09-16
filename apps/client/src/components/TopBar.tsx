@@ -91,7 +91,7 @@ export function TopBar() {
   }
 
   return (
-    <div data-impression="masquer" className="relative shrink-0 border-b border-bordure bg-black">
+    <div data-impression="masquer" className="relative shrink-0 border-b border-bordure bg-black lg:hidden">
       <div className="flex items-center justify-between px-4 py-3.5">
         <button
           onClick={() => setOpen((o) => !o)}

@@ -13,7 +13,7 @@ export function BottomNav() {
     <nav
       data-impression="masquer"
       aria-label="Navigation principale"
-      className="shrink-0 border-t border-bordure bg-black"
+      className="shrink-0 border-t border-bordure bg-black lg:hidden"
       /* Sans cette marge, la barre passe sous l'indicateur d'accueil de
          l'iPhone dès que l'application est installée. */
       style={{ paddingBottom: "var(--marge-basse)" }}

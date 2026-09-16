@@ -295,6 +295,13 @@ export function Dashboard() {
         )}
       </div>
 
+      {/*
+       * Deux colonnes à partir du grand écran : le programme à gauche, le
+       * contexte à droite. En colonne unique, tout ce contexte repoussait les
+       * séances hors de l'écran ; sur un écran large, il tient à côté.
+       */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6">
+        <div className="lg:order-2 lg:sticky lg:top-0">
       {plan?.periodization && (
         <div className="mb-4">
           <Link
@@ -380,6 +387,9 @@ export function Dashboard() {
         </div>
       )}
 
+        </div>
+
+        <div className="lg:order-1 lg:min-w-0">
       {generating ? (
         <GenerationEnCours titre={plan ? "Votre coach réajuste la semaine" : "Votre coach prépare la semaine"} />
       ) : loading ? (
@@ -456,7 +466,10 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="mt-5 space-y-4">
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-4 lg:max-w-2xl">
         <ActionsSemaine
           aUnProgramme={Boolean(plan) && !generating}
           onPauseChange={loadPlan}
