@@ -25,6 +25,13 @@ const VELOS = [
   { valeur: "aucun", label: "Pas de vélo" },
 ] as const;
 
+const LIBELLES_PISCINE: Record<Materiel["piscine"], string> = {
+  "25m": "un bassin de 25 m",
+  "50m": "un bassin de 50 m",
+  eau_libre: "l'eau libre",
+  aucune: "aucun bassin",
+};
+
 const EQUIPEMENTS: { cle: keyof Materiel; label: string }[] = [
   { cle: "homeTrainer", label: "Home-trainer" },
   { cle: "capteurPuissance", label: "Capteur de puissance" },
@@ -49,7 +56,8 @@ export function MaterielForm({ valeur, onChange }: { valeur: Materiel; onChange:
         <label className="text-sm font-semibold text-zinc-200">Mon matériel</label>
       </div>
       <p className="text-xs text-doux">
-        Votre coach n'écrira que des séances que vous pouvez réellement faire.
+        Votre coach n'écrira que des séances que vous pouvez réellement faire — et ces choix décident aussi de
+        l'unité de vos zones.
       </p>
 
       <div className="grid grid-cols-2 gap-2">
@@ -76,6 +84,23 @@ export function MaterielForm({ valeur, onChange }: { valeur: Materiel; onChange:
           ))}
         </select>
       </div>
+
+      {/* Deux conséquences que l'athlète ne devinerait pas depuis un menu
+          déroulant, et qui expliquent pourquoi ses allures changent. */}
+      <ul className="space-y-1 text-xs text-tres-doux">
+        {valeur.piscine !== "aucune" && (
+          <li>
+            Natation : vos allures sont calculées pour {LIBELLES_PISCINE[valeur.piscine]}. À effort égal, le temps
+            aux 100 m change avec le milieu.
+          </li>
+        )}
+        <li>
+          Vélo :{" "}
+          {valeur.capteurPuissance
+            ? "vos zones sont en watts."
+            : "sans capteur de puissance, vos zones passent par la fréquence cardiaque, ou par la vitesse si vous n'avez pas de cardio."}
+        </li>
+      </ul>
 
       <div className="flex flex-wrap gap-1.5">
         {EQUIPEMENTS.map(({ cle, label }) => {

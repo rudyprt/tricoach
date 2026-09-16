@@ -104,6 +104,13 @@ profileRouter.get(
       overrides: inputs.overrides ?? {},
       // Proposition de FTP tirée des séances importées, jamais appliquée seule.
       ftpSuggere: await suggestFtp(req.userId!),
+      // Le milieu de nage et le capteur de puissance décident de l'unité des
+      // zones : l'interface doit pouvoir le dire, et non le laisser deviner.
+      contexte: {
+        bassin: inputs.bassin ?? null,
+        aCapteurPuissance: Boolean(inputs.ftpWatts),
+        aCardio: Boolean(inputs.fcSeuil || inputs.fcMax),
+      },
       periodization: { phase: phase.phase, label: phase.label, weeksToGoal: phase.weeksToGoal },
     });
   })

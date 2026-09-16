@@ -112,6 +112,12 @@ export interface ZonesResponse {
   overrides: ZoneOverrides;
   /** Proposition de FTP tirée des séances importées, jamais appliquée seule. */
   ftpSuggere: { puissanceMoy: number; ftpSuggere: number } | null;
+  /** Ce qui décide de l'unité des zones : milieu de nage et capteurs. */
+  contexte: {
+    bassin: "25m" | "50m" | "eau_libre" | "aucune" | null;
+    aCapteurPuissance: boolean;
+    aCardio: boolean;
+  };
   periodization: Periodization;
 }
 

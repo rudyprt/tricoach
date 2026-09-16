@@ -32,6 +32,13 @@ const SPORTS = [
   { key: "course", label: "Course à pied", Icon: FaPersonRunning, color: "text-rose-400" },
 ] as const;
 
+/** Le milieu de nage décide de l'allure atteignable : on le nomme. */
+const MILIEUX: Record<string, string> = {
+  "25m": "bassin de 25 m",
+  "50m": "bassin de 50 m",
+  eau_libre: "eau libre",
+};
+
 const ZONE_COLORS: Record<string, string> = {
   Z1: "bg-sky-500/15 text-sky-300",
   Z2: "bg-emerald-500/15 text-emerald-300",
@@ -286,12 +293,36 @@ export function Zones() {
                 onChange={(zone, value) => updateDraft(key, zone, value)}
               />
             ) : ranges ? (
-              <ZoneTable ranges={ranges} />
+              <>
+                {key === "natation" && MILIEUX[data.contexte.bassin ?? ""] && (
+                  <p className="mb-2 text-xs text-doux">
+                    Valables en <strong className="text-fort">{MILIEUX[data.contexte.bassin ?? ""]}</strong>. À
+                    effort égal, le temps aux 100 m change avec le milieu : les équivalences figurent sous
+                    « Méthode de calcul ».
+                  </p>
+                )}
+                <ZoneTable ranges={ranges} />
+              </>
             ) : (
               <p className="text-sm text-doux">
-                {key === "velo"
-                  ? "Sans FTP, aucune zone chiffrée : à effort égal, la vitesse varie trop selon la pente et le vent. Renseignez votre FTP dans « Mon objectif », ou saisissez vos zones à la main."
-                  : `Renseignez un temps de référence en ${label.toLowerCase()}, ou saisissez vos zones à la main avec « Modifier ».`}
+                {key === "velo" ? (
+                  data.contexte.aCardio ? (
+                    <>
+                      Sans capteur de puissance, votre intensité à vélo se lit à la{" "}
+                      <strong className="text-fort">fréquence cardiaque</strong>, plus bas sur cette page. Une
+                      vitesse en km/h peut servir de repère, mais seulement sur terrain plat et sans vent.
+                    </>
+                  ) : (
+                    <>
+                      Sans capteur ni cardiofréquencemètre, votre intensité à vélo se donne en{" "}
+                      <strong className="text-fort">km/h et à la sensation</strong>. La vitesse ne vaut que sur
+                      terrain plat, sans vent, ou sur home-trainer : en côte ou face au vent, fiez-vous à votre
+                      respiration.
+                    </>
+                  )
+                ) : (
+                  `Renseignez un temps de référence en ${label.toLowerCase()}, ou saisissez vos zones à la main avec « Modifier ».`
+                )}
               </p>
             )}
           </div>

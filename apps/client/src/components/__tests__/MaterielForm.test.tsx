@@ -37,3 +37,30 @@ describe("MaterielForm", () => {
     expect(screen.getByRole("button", { name: "Tapis de course" })).toHaveAttribute("aria-pressed", "false");
   });
 });
+
+/**
+ * Le matériel ne décide pas que du contenu des séances : il décide de l'unité
+ * dans laquelle les zones sont exprimées. L'athlète doit le lire, sinon il ne
+ * comprendra pas pourquoi ses allures changent.
+ */
+describe("MaterielForm — conséquences annoncées", () => {
+  it("annonce des watts quand l'athlète a un capteur", () => {
+    render(<MaterielForm valeur={{ ...MATERIEL_PAR_DEFAUT, capteurPuissance: true }} onChange={vi.fn()} />);
+    expect(screen.getByText(/vos zones sont en watts/)).toBeInTheDocument();
+  });
+
+  it("renvoie vers la fréquence cardiaque sans capteur", () => {
+    render(<MaterielForm valeur={{ ...MATERIEL_PAR_DEFAUT, capteurPuissance: false }} onChange={vi.fn()} />);
+    expect(screen.getByText(/fréquence cardiaque/)).toBeInTheDocument();
+  });
+
+  it("nomme le milieu de nage retenu", () => {
+    render(<MaterielForm valeur={{ ...MATERIEL_PAR_DEFAUT, piscine: "eau_libre" }} onChange={vi.fn()} />);
+    expect(screen.getByText(/l'eau libre/)).toBeInTheDocument();
+  });
+
+  it("ne parle pas de natation quand l'athlète n'a pas de bassin", () => {
+    render(<MaterielForm valeur={{ ...MATERIEL_PAR_DEFAUT, piscine: "aucune" }} onChange={vi.fn()} />);
+    expect(screen.queryByText(/vos allures sont calculées/)).not.toBeInTheDocument();
+  });
+});
