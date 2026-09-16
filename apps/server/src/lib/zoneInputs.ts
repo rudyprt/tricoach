@@ -1,6 +1,7 @@
 import { prisma } from "./prisma.js";
 import type { ZoneInputs } from "./training.js";
 import { parseZoneOverrides } from "./zoneOverrides.js";
+import { parseMateriel } from "./disponibilites.js";
 
 /** Profil, tel que stocké, avec les champs utiles au calcul des zones. */
 export interface ProfileZoneFields {
@@ -13,6 +14,8 @@ export interface ProfileZoneFields {
   fcSeuil: number | null;
   fcMax: number | null;
   customZones: unknown;
+  /** Matériel et accès déclarés, dont le bassin où l'athlète nage. */
+  materiel?: unknown;
 }
 
 /**
@@ -50,6 +53,9 @@ export async function buildZoneInputs(userId: string, profile: ProfileZoneFields
     cssSecPer100m: profile.cssSecPer100m,
     fcSeuil: profile.fcSeuil,
     fcMax,
+    // Le milieu où l'athlète nage change le temps aux 100 m à effort égal :
+    // une allure calculée en bassin est inatteignable en eau libre.
+    bassin: parseMateriel(profile.materiel)?.piscine ?? null,
     overrides: parseZoneOverrides(profile.customZones),
   };
 }

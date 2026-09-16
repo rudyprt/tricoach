@@ -142,9 +142,14 @@ export function materielPromptLines(materiel: Materiel | null): string[] {
       "- Aucun accès à un bassin : NE PROGRAMME AUCUNE SÉANCE DE NATATION. Remplace-les par du renforcement du haut du corps (élastiques, gainage) et reporte le volume sur le vélo et la course."
     );
   } else if (materiel.piscine === "eau_libre") {
-    lignes.push("- Nage en eau libre : privilégie les efforts continus, les repères de nage en ligne droite et la respiration bilatérale plutôt que les séries chronométrées au mur.");
+    lignes.push(
+      "- Nage en eau libre : privilégie les efforts continus, les repères de nage en ligne droite et la respiration bilatérale plutôt que les séries chronométrées au mur. Les allures des zones valent déjà pour l'eau libre — ne les rends pas plus lentes une seconde fois."
+    );
   } else {
-    lignes.push(`- Bassin de ${materiel.piscine} : exprime les séries en longueurs de ce bassin.`);
+    lignes.push(
+      `- Bassin de ${materiel.piscine} : exprime les séries en longueurs de ce bassin (${materiel.piscine === "50m" ? "100 m = 2 longueurs" : "100 m = 4 longueurs"}), et les allures des zones valent pour ce bassin.`,
+      "Si la course de l'athlète se nage en eau libre, rappelle-lui dans l'objectif d'une séance spécifique que son allure y sera plus lente d'environ 6 % : sans mur ni ligne d'eau, et avec les relevés de tête pour se diriger."
+    );
   }
 
   if (materiel.velo === "aucun") {

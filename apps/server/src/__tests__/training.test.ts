@@ -9,6 +9,7 @@ import {
   periodization,
   riegelEquivalent,
   weeksToGoal,
+  equivalencesNatation,
 } from "../lib/training.js";
 
 describe("parsePerformance", () => {
@@ -314,5 +315,51 @@ describe("periodization", () => {
     expect(periodization(weekStart, goalIn(0)).volumeFactor).toBeLessThan(
       periodization(weekStart, goalIn(2)).volumeFactor
     );
+  });
+});
+
+describe("milieu de nage", () => {
+  /** Valeur d'une zone donnée, ou undefined si la discipline n'en a pas. */
+  const valeurZone = (ranges: ZoneRange[] | null, zone: string) =>
+    ranges?.find((r) => r.zone === zone)?.value;
+
+  it("annonce le milieu dans lequel les zones sont valables", () => {
+    const { notes } = computeTrainingZones({ cssSecPer100m: 104, bassin: "50m" });
+    expect(notes.join(" ")).toContain("bassin de 50 m");
+  });
+
+  it("ne décale pas la valeur mesurée", () => {
+    // Une CSS chronométrée en 50 m est déjà une valeur 50 m : la corriger une
+    // seconde fois ferait viser une allure que l'athlète a pourtant tenue.
+    const en25 = computeTrainingZones({ cssSecPer100m: 104, bassin: "25m" });
+    const en50 = computeTrainingZones({ cssSecPer100m: 104, bassin: "50m" });
+
+    expect(valeurZone(en50.natation, "Z4")).toBe(valeurZone(en25.natation, "Z4"));
+  });
+
+  it("donne l'équivalence dans les autres milieux", () => {
+    const { notes } = computeTrainingZones({ cssSecPer100m: 104, bassin: "25m" });
+    const texte = notes.join(" ");
+
+    expect(texte).toContain("Équivalences");
+    expect(texte).toContain("eau libre");
+    expect(texte).toContain("bassin de 50 m");
+  });
+
+  it("allonge le temps en eau libre et le raccourcit en 25 m", () => {
+    // 1:44 aux 100 m en bassin de 25 m.
+    const depuis25 = equivalencesNatation(104, "25m")!;
+    expect(depuis25).toMatch(/1:4[5-7]\/100m en bassin de 50 m/);
+    expect(depuis25).toMatch(/1:5[0-2]\/100m en eau libre/);
+
+    // Et la conversion inverse ramène bien vers des temps plus rapides.
+    const depuisEauLibre = equivalencesNatation(111, "eau_libre")!;
+    expect(depuisEauLibre).toMatch(/1:4[3-5]\/100m en bassin de 25 m/);
+  });
+
+  it("ne dit rien quand le milieu n'est pas renseigné", () => {
+    const { notes } = computeTrainingZones({ cssSecPer100m: 104 });
+    expect(notes.join(" ")).not.toContain("Équivalences");
+    expect(equivalencesNatation(104, "")).toBeNull();
   });
 });

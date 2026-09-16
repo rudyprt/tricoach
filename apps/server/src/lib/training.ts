@@ -209,6 +209,12 @@ export interface ZoneInputs {
   seuilCourseSecParKm?: number | null;
   /** Vitesse critique en natation, en secondes aux 100 m, si elle est connue. */
   cssSecPer100m?: number | null;
+  /**
+   * Où l'athlète nage : "25m", "50m" ou "eau_libre". À effort égal, le temps
+   * aux 100 m dépend du bassin, et une allure cible calculée pour l'un est
+   * inatteignable dans l'autre.
+   */
+  bassin?: string | null;
   /** Fréquence cardiaque au seuil. */
   fcSeuil?: number | null;
   /** Fréquence cardiaque maximale observée ou testée. */
@@ -250,6 +256,53 @@ function applyOverrides(
  * Priorité des sources : une valeur de seuil saisie par l'athlète l'emporte sur
  * une estimation tirée d'un temps de référence, qui l'emporte sur rien.
  */
+/**
+ * Écart de temps aux 100 m selon le milieu, à effort égal.
+ *
+ * Un virage tous les 25 m offre une poussée au mur et quelques mètres en
+ * coulée : on y nage environ une seconde et demie plus vite aux 100 m qu'en
+ * 50 m. En eau libre il n'y a ni mur ni ligne d'eau, il faut relever la tête
+ * pour se diriger et la vague freine — l'écart atteint couramment 6 %.
+ *
+ * Ces coefficients ne corrigent PAS la valeur mesurée : une CSS chronométrée
+ * dans un bassin de 50 m est déjà une valeur 50 m, la décaler une seconde fois
+ * la fausserait. Ils servent à convertir d'un milieu vers un autre, ce dont un
+ * triathlète a besoin — il s'entraîne en bassin et court en eau libre.
+ *
+ * Ordres de grandeur, pas constantes physiques : l'écart réel dépend de la
+ * qualité des virages, de la combinaison et de l'état de l'eau.
+ */
+const VITESSE_RELATIVE: Record<string, number> = {
+  "25m": 1,
+  "50m": 0.985,
+  eau_libre: 0.94,
+};
+
+const LIBELLES_MILIEU: Record<string, string> = {
+  "25m": "bassin de 25 m",
+  "50m": "bassin de 50 m",
+  eau_libre: "eau libre",
+};
+
+/**
+ * Équivalences du temps au seuil dans les autres milieux. C'est ce qu'un coach
+ * annonce : « ta CSS est de 1:44 ; vise 1:46 en 50 m, 1:51 en eau libre ».
+ */
+export function equivalencesNatation(secPer100m: number, milieu: string): string | null {
+  const base = VITESSE_RELATIVE[milieu];
+  if (!base) return null;
+
+  const autres = Object.keys(VITESSE_RELATIVE)
+    .filter((m) => m !== milieu)
+    .map((m) => {
+      // Un milieu plus lent allonge le temps dans le rapport inverse des vitesses.
+      const temps = secPer100m * (base / VITESSE_RELATIVE[m]);
+      return `${formatPacePer100m(temps)} en ${LIBELLES_MILIEU[m]}`;
+    });
+
+  return `Équivalences à effort égal : ${autres.join(", ")}.`;
+}
+
 export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   const notes: string[] = [];
 
@@ -298,6 +351,16 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   }
 
   if (vitesseCss) {
+    // Les zones valent pour le milieu où l'athlète nage, puisque c'est là qu'il
+    // a mesuré son niveau. Les autres milieux sont donnés en équivalence, sans
+    // quoi il croirait régresser le jour où il nage en eau libre.
+    const milieu = inputs.bassin ?? "";
+    if (LIBELLES_MILIEU[milieu]) {
+      notes.push(`Natation : zones valables en ${LIBELLES_MILIEU[milieu]}, où vous vous entraînez.`);
+      const equivalences = equivalencesNatation(100 / vitesseCss, milieu);
+      if (equivalences) notes.push(`Natation. ${equivalences}`);
+    }
+
     natation = SWIM_BANDS.map((b) => ({
       zone: b.zone,
       label: b.label,
