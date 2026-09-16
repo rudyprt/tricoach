@@ -17,9 +17,18 @@ const ZONES: TrainingZones = {
     { zone: "Z2", label: "endurance", value: "150-186 W" },
     { zone: "Z4", label: "seuil", value: "226-260 W" },
   ],
-  frequenceCardiaque: null,
+  frequenceCardiaque: [
+    { zone: "Z2", label: "endurance", value: "136-149 bpm" },
+    { zone: "Z4", label: "seuil", value: "158-166 bpm" },
+  ],
   notes: [],
 };
+
+/** Athlète sans capteur de puissance, mais avec un cardiofréquencemètre. */
+const SANS_CAPTEUR: TrainingZones = { ...ZONES, velo: null };
+
+/** Athlète sans capteur ni cardio : il ne lit qu'une vitesse. */
+const SANS_RIEN: TrainingZones = { ...ZONES, velo: null, frequenceCardiaque: null };
 
 const seance = (sport: string, cible: string, allure?: string) => ({
   sport,
@@ -36,28 +45,47 @@ const seance = (sport: string, cible: string, allure?: string) => ({
 
 describe("détection d'unité", () => {
   it("repère une allure au kilomètre sur une séance de natation", () => {
-    expect(uniteIncoherente("natation", "Z4 seuil — 4:08/km")).toBe(true);
-    expect(uniteIncoherente("natation", "Z4 seuil — 1:44/100m")).toBe(false);
+    expect(uniteIncoherente("natation", "Z4 seuil — 4:08/km", ZONES)).toBe(true);
+    expect(uniteIncoherente("natation", "Z4 seuil — 1:44/100m", ZONES)).toBe(false);
   });
 
   it("repère des watts sur une séance de course", () => {
-    expect(uniteIncoherente("course", "Z4 seuil — 240 W")).toBe(true);
-    expect(uniteIncoherente("course", "Z4 seuil — 4:08/km")).toBe(false);
+    expect(uniteIncoherente("course", "Z4 seuil — 240 W", ZONES)).toBe(true);
+    expect(uniteIncoherente("course", "Z4 seuil — 4:08/km", ZONES)).toBe(false);
   });
 
   it("repère une allure à pied sur le vélo", () => {
-    expect(uniteIncoherente("velo", "Z4 seuil — 4:08/km")).toBe(true);
-    expect(uniteIncoherente("velo", "Z4 seuil — 226-260 W")).toBe(false);
+    expect(uniteIncoherente("velo", "Z4 seuil — 4:08/km", ZONES)).toBe(true);
+    expect(uniteIncoherente("velo", "Z4 seuil — 226-260 W", ZONES)).toBe(false);
   });
 
   it("accepte une cible qui porte la bonne unité, même si elle en cite une autre", () => {
     // Un repère complémentaire ne doit pas déclencher de correction.
-    expect(uniteIncoherente("natation", "Z4 seuil — 1:44/100m (soit 17:20 au 1000 m)")).toBe(false);
+    expect(uniteIncoherente("natation", "Z4 seuil — 1:44/100m (soit 17:20 au 1000 m)", ZONES)).toBe(false);
   });
 
   it("ne juge pas les disciplines sans unité chiffrée", () => {
-    expect(uniteIncoherente("renfo", "Z2 — gainage")).toBe(false);
-    expect(uniteIncoherente("repos", "")).toBe(false);
+    expect(uniteIncoherente("renfo", "Z2 — gainage", ZONES)).toBe(false);
+    expect(uniteIncoherente("repos", "", ZONES)).toBe(false);
+  });
+
+  it("accepte la fréquence cardiaque au vélo quand la FTP manque", () => {
+    // Sans capteur, c'est ce que l'athlète lit sur sa montre.
+    expect(uniteIncoherente("velo", "Z4 seuil — 158-166 bpm", SANS_CAPTEUR)).toBe(false);
+  });
+
+  it("accepte une vitesse au vélo quand rien d'autre n'est mesurable", () => {
+    expect(uniteIncoherente("velo", "Z2 endurance — 28 km/h sur le plat", SANS_RIEN)).toBe(false);
+  });
+
+  it("écarte des watts inventés quand l'athlète n'a pas de capteur", () => {
+    // Il ne pourrait pas les vérifier : la consigne serait inapplicable.
+    expect(uniteIncoherente("velo", "Z4 seuil — 240 W", SANS_CAPTEUR)).toBe(true);
+    expect(uniteIncoherente("velo", "Z4 seuil — 240 W", SANS_RIEN)).toBe(true);
+  });
+
+  it("écarte une vitesse en natation, où elle ne veut rien dire", () => {
+    expect(uniteIncoherente("natation", "Z2 endurance — 4 km/h", ZONES)).toBe(true);
   });
 
   it("retrouve la zone citée, quelle que soit son écriture", () => {
@@ -99,11 +127,20 @@ describe("correction des cibles", () => {
     expect(seances[0].structure!.corps!.cible).toBe("allure vive — 4:08/km");
   });
 
-  it("laisse la cible en place si la discipline n'a pas de zones", () => {
-    const sansVelo = { ...ZONES, velo: null };
-    const { corrections } = corrigerCibles([seance("velo", "Z4 seuil — 4:08/km")], sansVelo);
+  it("bascule le vélo sur la fréquence cardiaque quand la FTP manque", () => {
+    const { seances, corrections } = corrigerCibles([seance("velo", "Z4 seuil — 240 W")], SANS_CAPTEUR);
+
+    expect(corrections).toHaveLength(1);
+    expect(seances[0].structure!.corps!.cible).toBe("Z4 seuil — 158-166 bpm");
+  });
+
+  it("laisse la cible en place quand aucune valeur de remplacement n'existe", () => {
+    // Ni puissance ni fréquence cardiaque : inventer une vitesse serait pire
+    // que de laisser passer la cible d'origine.
+    const { seances, corrections } = corrigerCibles([seance("velo", "Z4 seuil — 240 W")], SANS_RIEN);
 
     expect(corrections).toHaveLength(0);
+    expect(seances[0].structure!.corps!.cible).toBe("Z4 seuil — 240 W");
   });
 
   it("ne modifie pas une séance sans structure", () => {

@@ -316,11 +316,17 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     }));
     notes.push(`Vélo : zones de puissance calculées sur une FTP de ${inputs.ftpWatts} W.`);
   } else {
-    // Volontairement aucune zone en km/h : à effort égal, la vitesse varie du
-    // simple au triple selon la pente, le vent et l'abri. Donner « Z2 = 26 km/h »
-    // serait une fausse précision, pas une aide.
+    // Aucune zone de puissance n'est inventée : sans capteur, l'athlète ne
+    // pourrait pas les lire. L'intensité passe par la fréquence cardiaque quand
+    // elle est connue, sinon par la vitesse — utile, mais à relativiser, car à
+    // effort égal elle varie du simple au double selon la pente et le vent.
     notes.push(
-      "Vélo : sans FTP, aucune zone chiffrée n'est proposée — la vitesse dépend trop de la pente et du vent pour refléter l'effort. Renseignez votre FTP, ou faites un test de 20 minutes (FTP ≈ 95 % de la puissance moyenne)."
+      inputs.fcSeuil || inputs.fcMax
+        ? "Vélo : sans FTP, l'intensité est donnée par la fréquence cardiaque. Une vitesse en km/h peut servir de repère, mais seulement sur terrain plat et sans vent."
+        : "Vélo : sans FTP ni fréquence cardiaque, l'intensité est donnée par la vitesse et la sensation. La vitesse ne vaut que sur terrain plat et sans vent — en côte ou face au vent, fiez-vous à votre respiration."
+    );
+    notes.push(
+      "Renseignez votre FTP, ou faites un test de 20 minutes (FTP ≈ 95 % de la puissance moyenne), pour des zones vélo exactes."
     );
   }
 
@@ -389,7 +395,9 @@ export function formatZonesForPrompt(zones: TrainingZones): string {
 
   if (!zones.velo) {
     lines.push(
-      "Vélo : aucune zone de puissance disponible. Prescris l'intensité vélo par la fréquence cardiaque si elle est donnée, sinon par la sensation (échelle de perception), jamais par une vitesse en km/h."
+      zones.frequenceCardiaque
+        ? "Vélo : aucune zone de puissance (FTP non renseignée). Prescris l'intensité vélo par la FRÉQUENCE CARDIAQUE, en reprenant les zones ci-dessus. Tu peux ajouter une vitesse indicative en km/h, mais préviens alors que ce repère ne vaut que sur terrain plat et sans vent : à même vitesse, une côte ou un vent de face changent complètement l'effort."
+        : "Vélo : ni puissance ni fréquence cardiaque disponibles. Prescris l'intensité vélo par une VITESSE en km/h accompagnée de la sensation (capacité à parler), en précisant que la vitesse ne vaut que sur terrain plat et sans vent, ou sur home-trainer. N'invente jamais de watts : l'athlète n'a pas de capteur pour les lire."
     );
   }
 

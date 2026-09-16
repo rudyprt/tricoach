@@ -153,18 +153,30 @@ describe("computeTrainingZones", () => {
       expect(zoneDe(velo, "Z2")).toBe("140–188 W");
     });
 
-    it("refuse d'inventer des zones en km/h sans FTP", () => {
-      // À effort égal, la vitesse varie du simple au triple selon la pente et
-      // le vent : une zone en km/h serait une fausse précision.
-      const { velo, notes } = computeTrainingZones({ tempsVelo: "40km en 1h15" });
+    it("n'invente aucune zone de puissance sans FTP", () => {
+      // Des watts que l'athlète ne peut pas lire seraient inexécutables.
+      const { velo } = computeTrainingZones({ tempsVelo: "40km en 1h15" });
       expect(velo).toBeNull();
-      expect(notes.join(" ")).toContain("aucune zone chiffrée");
-      expect(notes.join(" ")).not.toMatch(/km\/h/);
     });
 
-    it("dit au coach de ne jamais prescrire le vélo en km/h", () => {
-      const prompt = formatZonesForPrompt(computeTrainingZones({ tempsCourse: "10km en 45min" }));
-      expect(prompt).toContain("jamais par une vitesse en km/h");
+    it("bascule sur la fréquence cardiaque quand la FTP manque", () => {
+      const prompt = formatZonesForPrompt(computeTrainingZones({ tempsCourse: "10km en 45min", fcSeuil: 168 }));
+      expect(prompt).toContain("FRÉQUENCE CARDIAQUE");
+      // La vitesse reste proposée en repère, mais jamais sans sa réserve.
+      expect(prompt).toContain("terrain plat et sans vent");
+    });
+
+    it("se rabat sur la vitesse quand ni puissance ni cardio ne sont connus", () => {
+      const prompt = formatZonesForPrompt(computeTrainingZones({ tempsVelo: "40km en 1h15" }));
+      expect(prompt).toContain("VITESSE en km/h");
+      expect(prompt).toContain("N'invente jamais de watts");
+    });
+
+    it("assortit toujours la vitesse de sa réserve", () => {
+      // À effort égal, la vitesse varie du simple au double selon la pente et
+      // le vent : la donner sans le dire serait une fausse précision.
+      const { notes } = computeTrainingZones({ tempsVelo: "40km en 1h15" });
+      expect(notes.join(" ")).toContain("terrain plat et sans vent");
     });
   });
 

@@ -13,27 +13,51 @@ import type { TrainingZones, ZoneRange } from "./training.js";
  * remplace donc ce qui ne colle pas plutôt que de le laisser passer.
  */
 
-/** Unité attendue selon la discipline. */
-const UNITES: Record<string, { attendue: RegExp; interdites: RegExp[]; nom: string }> = {
-  natation: {
-    attendue: /\/\s?100\s?m\b/i,
-    // Une allure au kilomètre ou une puissance n'ont aucun sens dans un bassin.
-    interdites: [/\d\s?:\s?\d{2}\s?\/\s?km\b/i, /\b\d{2,4}\s?W\b/i, /\bkm\/h\b/i],
-    nom: "temps aux 100 m",
-  },
-  course: {
-    attendue: /\/\s?km\b/i,
-    interdites: [/\d\s?:\s?\d{2}\s?\/\s?100\s?m\b/i, /\b\d{2,4}\s?W\b/i],
-    nom: "allure au kilomètre",
-  },
-  velo: {
-    attendue: /\b\d{2,4}\s?W\b/i,
-    // Une allure à pied sur le vélo, et la vitesse en km/h qui ne veut rien
-    // dire dès qu'il y a du vent ou du dénivelé.
-    interdites: [/\d\s?:\s?\d{2}\s?\/\s?km\b/i, /\d\s?:\s?\d{2}\s?\/\s?100\s?m\b/i],
-    nom: "puissance en watts",
-  },
-};
+interface ReglesUnite {
+  /** Une cible qui la porte est acceptée telle quelle. */
+  attendue: RegExp;
+  /** Une cible qui en porte une, sans porter l'attendue, est corrigée. */
+  interdites: RegExp[];
+}
+
+const ALLURE_KM = /\d\s?:\s?\d{2}\s?\/\s?km\b/i;
+const ALLURE_100M = /\d\s?:\s?\d{2}\s?\/\s?100\s?m\b/i;
+const WATTS = /\b\d{2,4}\s?W\b/i;
+const VITESSE = /\b\d{1,2}([.,]\d)?\s?km\s?\/\s?h\b/i;
+
+/**
+ * L'unité attendue au vélo dépend de ce que l'athlète peut réellement lire.
+ *
+ * Avec un capteur, la puissance ; sans capteur mais avec un cardio, la
+ * fréquence cardiaque ; sans rien, la vitesse — imparfaite, puisqu'à effort
+ * égal elle varie du simple au double selon la pente et le vent, mais c'est le
+ * seul repère chiffré dont dispose alors l'athlète. Dans les deux derniers cas,
+ * des watts seraient une valeur qu'il ne peut pas vérifier.
+ */
+function reglesVelo(zones: TrainingZones): ReglesUnite {
+  if (zones.velo) {
+    return { attendue: WATTS, interdites: [ALLURE_KM, ALLURE_100M] };
+  }
+  if (zones.frequenceCardiaque) {
+    // La FC ou la vitesse conviennent ; seules les allures à pied et les watts
+    // inventés sont écartés.
+    return { attendue: /\bbpm\b|\bFC\b/i, interdites: [ALLURE_KM, ALLURE_100M, WATTS] };
+  }
+  return { attendue: VITESSE, interdites: [ALLURE_KM, ALLURE_100M, WATTS] };
+}
+
+function regles(sport: string, zones: TrainingZones): ReglesUnite | null {
+  if (sport === "natation") {
+    // Une allure au kilomètre, une puissance ou une vitesse n'ont aucun sens
+    // dans un bassin.
+    return { attendue: /\/\s?100\s?m\b/i, interdites: [ALLURE_KM, WATTS, VITESSE] };
+  }
+  if (sport === "course") {
+    return { attendue: /\/\s?km\b/i, interdites: [ALLURE_100M, WATTS] };
+  }
+  if (sport === "velo") return reglesVelo(zones);
+  return null;
+}
 
 /** Retrouve la zone citée dans un texte : « Z4 », « Zone 4 ». */
 export function zoneCitee(texte: string): string | null {
@@ -63,14 +87,14 @@ function corriger(cible: string, ranges: ZoneRange[]): string | null {
   return `${attendue.zone} ${attendue.label} — ${attendue.value}`;
 }
 
-/** Une cible est-elle exprimée dans une unité impossible pour cette discipline ? */
-export function uniteIncoherente(sport: string, cible: string): boolean {
-  const regles = UNITES[sport];
-  if (!regles || !cible) return false;
+/** Une cible est-elle exprimée dans une unité que l'athlète ne peut pas lire ? */
+export function uniteIncoherente(sport: string, cible: string, zones: TrainingZones): boolean {
+  const r = regles(sport, zones);
+  if (!r || !cible) return false;
   // Une cible qui porte déjà la bonne unité est acceptée, même si elle en
   // mentionne une autre à titre de repère.
-  if (regles.attendue.test(cible)) return false;
-  return regles.interdites.some((interdite) => interdite.test(cible));
+  if (r.attendue.test(cible)) return false;
+  return r.interdites.some((interdite) => interdite.test(cible));
 }
 
 interface BlocCible {
@@ -89,10 +113,15 @@ interface SeanceCorrigeable {
 
 const BLOCS = ["echauffement", "corps", "retourCalme"] as const;
 
+/**
+ * Valeurs de remplacement pour une discipline. Au vélo sans capteur, ce sont
+ * les zones de fréquence cardiaque qui font foi : c'est ce que l'athlète lit
+ * sur sa montre.
+ */
 function rangesPour(sport: string, zones: TrainingZones): ZoneRange[] | null {
   if (sport === "natation") return zones.natation;
   if (sport === "course") return zones.course;
-  if (sport === "velo") return zones.velo;
+  if (sport === "velo") return zones.velo ?? zones.frequenceCardiaque;
   return null;
 }
 
@@ -120,7 +149,7 @@ export function corrigerCibles<T extends SeanceCorrigeable>(
 
       let nouveauBloc = bloc;
 
-      if (bloc.cible && uniteIncoherente(seance.sport, bloc.cible)) {
+      if (bloc.cible && uniteIncoherente(seance.sport, bloc.cible, zones)) {
         const remplacement = corriger(bloc.cible, ranges);
         if (remplacement) {
           corrections.push({ sport: seance.sport, bloc: nom, avant: bloc.cible, apres: remplacement });
@@ -132,7 +161,7 @@ export function corrigerCibles<T extends SeanceCorrigeable>(
       // Les allures des exercices dérivent de la même façon que les cibles.
       if (bloc.exercices?.length) {
         const exercices = bloc.exercices.map((exercice) => {
-          if (!exercice.allure || !uniteIncoherente(seance.sport, exercice.allure)) return exercice;
+          if (!exercice.allure || !uniteIncoherente(seance.sport, exercice.allure, zones)) return exercice;
           const remplacement = corriger(exercice.allure, ranges);
           if (!remplacement) return exercice;
           corrections.push({
