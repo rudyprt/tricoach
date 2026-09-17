@@ -62,9 +62,9 @@ export function Register() {
       <div className="mx-auto flex h-full max-w-sm flex-col items-center justify-between py-[1.5vh] sm:py-[2vh]">
         <h1 className="pt-1 text-2xl font-black italic tracking-widest sm:text-3xl">
           <span className="text-red-500">SWIM</span>
-          <span className="mx-1.5 text-zinc-600">/</span>
+          <span className="mx-1.5 text-tres-doux">/</span>
           <span className="text-white">BIKE</span>
-          <span className="mx-1.5 text-zinc-600">/</span>
+          <span className="mx-1.5 text-tres-doux">/</span>
           <span className="text-blue-500">RUN</span>
         </h1>
 
@@ -79,14 +79,14 @@ export function Register() {
             <h2 className="text-base font-black italic tracking-wide text-white">
               TRI<span className="text-rose-500">COACH</span>
             </h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
+            <p className="mt-0.5 text-xs text-doux">
               Créez votre compte pour recevoir un programme personnalisé par IA.
             </p>
           </div>
 
           <form
             onSubmit={handleSubmit}
-            className="animate-fade-in-up space-y-2.5 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 shadow-2xl shadow-black/50 backdrop-blur-sm sm:p-5"
+            className="animate-fade-in-up space-y-2.5 rounded-2xl border border-bordure bg-zinc-950/80 p-4 shadow-2xl shadow-black/50 backdrop-blur-sm sm:p-5"
           >
             {error && (
               <p className="rounded-md border border-red-900 bg-red-950/50 px-3 py-1.5 text-xs text-red-400">{error}</p>
@@ -95,13 +95,13 @@ export function Register() {
             <div className="space-y-1">
               <label className="text-xs text-zinc-300">Nom d'utilisateur</label>
               <div className="relative">
-                <FaUser className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={13} />
+                <FaUser className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" size={13} />
                 <input
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Choisissez un nom d'utilisateur"
-                  className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500"
+                  className="w-full rounded-lg border border-bordure bg-zinc-900 py-1.5 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500"
                 />
               </div>
             </div>
@@ -109,7 +109,7 @@ export function Register() {
             <div className="space-y-1">
               <label className="text-xs text-zinc-300">Email</label>
               <div className="relative">
-                <FaEnvelope className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={13} />
+                <FaEnvelope className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" size={13} />
                 <input
                   type="email"
                   required
@@ -118,7 +118,7 @@ export function Register() {
                   onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                   placeholder="vous@exemple.com"
                   className={`w-full rounded-lg border bg-zinc-900 py-1.5 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500 ${
-                    touched.email && !emailValid ? "border-red-800" : "border-zinc-800"
+                    touched.email && !emailValid ? "border-red-800" : "border-bordure"
                   }`}
                 />
               </div>
@@ -128,7 +128,7 @@ export function Register() {
             <div className="space-y-1">
               <label className="text-xs text-zinc-300">Mot de passe</label>
               <div className="relative">
-                <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={13} />
+                <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" size={13} />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
@@ -137,13 +137,13 @@ export function Register() {
                   onChange={(e) => setPassword(e.target.value)}
                   onBlur={() => setTouched((t) => ({ ...t, password: true }))}
                   placeholder="8 caractères minimum"
-                  className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-9 pr-9 text-sm text-white outline-none transition-colors focus:border-rose-500"
+                  className="w-full rounded-lg border border-bordure bg-zinc-900 py-1.5 pl-9 pr-9 text-sm text-white outline-none transition-colors focus:border-rose-500"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 transition-colors hover:text-zinc-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-doux transition-colors hover:text-zinc-300"
                 >
                   {showPassword ? <FaEyeSlash size={13} /> : <FaEye size={13} />}
                 </button>
@@ -170,13 +170,13 @@ export function Register() {
                   {password.length >= 8 ? (
                     <FaCheck size={11} className="shrink-0 text-emerald-500" />
                   ) : (
-                    <span className="shrink-0 text-xs text-zinc-500">{password.length}/8</span>
+                    <span className="shrink-0 text-xs text-doux">{password.length}/8</span>
                   )}
                 </div>
               )}
             </div>
 
-            <label className="flex cursor-pointer items-start gap-2 pt-0.5 text-xs leading-relaxed text-zinc-400">
+            <label className="flex cursor-pointer items-start gap-2 pt-0.5 text-xs leading-relaxed text-doux">
               <input
                 type="checkbox"
                 checked={acceptConditions}
@@ -206,7 +206,7 @@ export function Register() {
               {loading ? "Création..." : "Créer mon compte"}
             </button>
 
-            <p className="text-center text-xs text-zinc-500">
+            <p className="text-center text-xs text-doux">
               Déjà un compte ?{" "}
               <Link to="/login" className="text-rose-400 hover:underline">
                 Se connecter

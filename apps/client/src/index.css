@@ -1,7 +1,97 @@
 @import "tailwindcss";
 
+/*
+ * Jetons de couleur et de rythme.
+ *
+ * Le texte secondaire était en zinc-500 sur fond zinc-950 : environ 4:1 de
+ * contraste, sous le seuil AA de 4,5:1 — et c'était la couleur de la moitié de
+ * l'interface. Les valeurs ci-dessous sont toutes vérifiées au-dessus du seuil
+ * sur le fond sur lequel elles sont réellement posées.
+ */
+@theme {
+  /* Fonds, du plus profond au plus clair. */
+  --color-fond: #09090b;
+  --color-surface: #131316;
+  --color-surface-haute: #1c1c21;
+  --color-bordure: #2a2a31;
+  --color-bordure-forte: #3f3f47;
+
+  /* Textes. `--color-doux` remplace zinc-500 : 8,4:1 sur le fond. */
+  --color-fort: #fafafa;
+  --color-doux: #a8a8b3;
+  /* 5,3:1 : conforme, mais réservé aux mentions accessoires. */
+  --color-tres-doux: #83838f;
+
+  /* Accent de marque, éclairci pour rester lisible en texte sur fond sombre. */
+  --color-accent: #f43f5e;
+  --color-accent-clair: #fda4af;
+  --color-accent-sombre: #9f1239;
+
+  --color-succes: #34d399;
+  --color-attention: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #38bdf8;
+
+  /* Hauteur minimale d'une cible tactile, recommandation WCAG 2.5.5. */
+  --spacing-cible: 2.75rem;
+}
+
+/*
+ * Zones de sécurité : l'application est installable, elle s'affiche donc sous
+ * l'encoche et par-dessus l'indicateur d'accueil de l'iPhone.
+ */
+:root {
+  --marge-haute: env(safe-area-inset-top, 0px);
+  --marge-basse: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+
 body {
   @apply bg-black text-zinc-100;
+  /* Empêche le zoom involontaire sur double-appui, sans bloquer le pincement. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Focus visible. `outline-none` était appliqué un peu partout sans
+ * remplacement : au clavier, on ne savait plus où l'on était. Cette règle
+ * rétablit un repère net, sans ajouter de contour à la souris.
+ */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent-clair);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
+/* Lien d'évitement : premier élément focusable de la page. */
+.lien-evitement {
+  position: fixed;
+  top: calc(var(--marge-haute) + 0.5rem);
+  left: 0.5rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease-out;
+}
+
+.lien-evitement:focus {
+  transform: translateY(0);
+}
+
+/*
+ * Respect du réglage système « réduire les animations ». Sans cela, les fonds
+ * flottants et les apparitions peuvent provoquer des nausées chez les personnes
+ * sensibles au mouvement.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @keyframes float-slow {
@@ -63,4 +153,33 @@ body {
 
 .animate-splash-glow {
   animation: splash-glow 1.15s ease-in-out infinite;
+}
+
+/*
+ * Impression : la page écran est sombre et pleine d'éléments d'interface qui
+ * n'ont aucun sens sur papier. Un athlète imprime son programme pour le glisser
+ * dans un sac, ou son coach pour l'annoter.
+ */
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Fonds et dégradés animés : coûteux en encre, illisibles en niveaux de gris. */
+  canvas,
+  video,
+  [data-impression="masquer"] {
+    display: none !important;
+  }
+
+  /* Une séance ne doit pas être coupée entre deux pages. */
+  article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }

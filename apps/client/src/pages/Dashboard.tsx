@@ -1,4 +1,12 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { InstallerApp } from "../components/InstallerApp";
+import { ActionsSemaine } from "../components/ActionsSemaine";
+import { GenerationEnCours } from "../components/GenerationEnCours";
+import { Bouton } from "../ui/Bouton";
+import { VueSemaine } from "../components/VueSemaine";
+import { useReconnexion } from "../lib/useReconnexion";
+import { useToasts } from "../ui/Toasts";
+import { useConfirmation } from "../ui/Confirmation";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
@@ -42,6 +50,8 @@ export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const didAutoGenerate = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { afficher } = useToasts();
+  const { demander } = useConfirmation();
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [overtraining, setOvertraining] = useState<OvertrainingInsight | null>(null);
   const [hasPastPlan, setHasPastPlan] = useState(false);
@@ -118,22 +128,35 @@ export function Dashboard() {
    * permet au coach de distinguer un imprévu d'agenda d'une douleur.
    */
   const adjustWeek = useCallback(async () => {
-    const motif = window.prompt(
-      "Réajuster les jours restants de votre semaine.\n\nQue s'est-il passé ? (facultatif, mais ça aide votre coach)",
-      ""
-    );
-    if (motif === null) return;
+    const { confirme, texte } = await demander({
+      titre: "Réajuster ma semaine",
+      description: "Seuls les jours restants sont reconstruits. Ce qui est déjà fait est conservé.",
+      confirmer: "Réajuster",
+      saisie: {
+        label: "Que s'est-il passé ?",
+        placeholder: "Fatigue, imprévu, douleur au genou…",
+        facultatif: true,
+        multiligne: true,
+        maxLength: 500,
+      },
+    });
+    if (!confirme) return;
+    const motif = texte;
 
     setGenerating(true);
     setError(null);
     try {
-      const { data } = await api.post<GenerationJob>("/plans/adjust", { motif: motif.trim() || undefined });
+      const { data } = await api.post<GenerationJob>("/plans/adjust", { motif: motif || undefined });
       await followJob(data);
     } catch (err) {
       setGenerating(false);
       setError(apiErrorMessage(err, "Impossible de réajuster votre semaine."));
     }
-  }, [followJob]);
+  }, [followJob, demander]);
+
+  // Au retour du réseau, la semaine affichée vient du cache : elle doit être
+  // rechargée, sans quoi l'athlète lit une copie en croyant qu'elle est à jour.
+  useReconnexion(loadPlan);
 
   useEffect(() => {
     loadPlan();
@@ -163,11 +186,31 @@ export function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function updateSession(id: string, status: Session["status"], ressenti?: string) {
-    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti });
+  async function updateSession(
+    id: string,
+    status: Session["status"],
+    ressenti?: string,
+    dureeReelleMin?: number | null
+  ) {
+    const avant = plan?.sessions.find((s) => s.id === id)?.status ?? "planifiee";
+    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti, dureeReelleMin });
     setPlan((prev) =>
       prev ? { ...prev, sessions: prev.sessions.map((s) => (s.id === id ? data : s)) } : prev
     );
+
+    // Une validation par erreur obligeait à rouvrir le détail de la séance
+    // pour la corriger. Le geste inverse doit être à portée immédiate.
+    if (status !== avant) {
+      afficher(status === "faite" ? "Séance validée." : "Séance marquée manquée.", {
+        ton: "succes",
+        onAnnuler: async () => {
+          const { data: restaure } = await api.patch<Session>(`/sessions/${id}`, { status: avant });
+          setPlan((prev) =>
+            prev ? { ...prev, sessions: prev.sessions.map((s) => (s.id === id ? restaure : s)) } : prev
+          );
+        },
+      });
+    }
   }
 
   async function swapSessions(sessionIdA: string, sessionIdB: string) {
@@ -203,15 +246,19 @@ export function Dashboard() {
     return { next: nextSession, rest };
   }, [plan]);
 
-  function confirmRegenerate() {
+  async function confirmRegenerate() {
     // Les séances déjà réalisées sont conservées côté serveur ; seules celles
     // encore planifiées sont remplacées. On le dit avant d'agir.
     const done = plan?.sessions.filter((s) => s.status !== "planifiee").length ?? 0;
-    const message =
-      done > 0
-        ? `Régénérer la semaine ? Vos ${done} séance(s) déjà validée(s) sont conservées, les séances encore planifiées seront remplacées.`
-        : "Régénérer la semaine ? Les séances encore planifiées seront remplacées.";
-    if (window.confirm(message)) generatePlan();
+    const { confirme } = await demander({
+      titre: "Régénérer la semaine ?",
+      description:
+        done > 0
+          ? `Vos ${done} séance${done > 1 ? "s" : ""} déjà validée${done > 1 ? "s" : ""} sont conservées. Les séances encore planifiées seront remplacées.`
+          : "Les séances encore planifiées seront remplacées.",
+      confirmer: "Régénérer",
+    });
+    if (confirme) generatePlan();
   }
 
   const trialDaysLeft =
@@ -248,30 +295,22 @@ export function Dashboard() {
         )}
       </div>
 
-      {plan && !generating && (
-        <button
-          onClick={adjustWeek}
-          className="mb-4 w-full rounded-2xl border border-dashed border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-rose-800/70 hover:text-zinc-200"
-        >
-          Je n'ai pas pu m'entraîner — réajuster ma semaine
-        </button>
-      )}
-
+      {/*
+       * Deux colonnes à partir du grand écran : le programme à gauche, le
+       * contexte à droite. En colonne unique, tout ce contexte repoussait les
+       * séances hors de l'écran ; sur un écran large, il tient à côté.
+       */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6">
+        <div className="lg:order-2 lg:sticky lg:top-0">
       {plan?.periodization && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-4">
           <Link
             to="/zones"
-            className="rounded-full border border-rose-900/50 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-300 transition-colors hover:border-rose-700 hover:text-rose-200"
+            className="inline-block rounded-full border border-accent-sombre bg-accent-sombre/20 px-3 py-1 text-xs font-semibold text-accent-clair transition-colors hover:border-accent"
           >
             {plan.periodization.label}
             {plan.periodization.weeksToGoal > 0 && ` · J-${plan.periodization.weeksToGoal} sem.`}
           </Link>
-          <a
-            href="/api/calendar/sessions.ics"
-            className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
-          >
-            Ajouter à mon agenda
-          </a>
         </div>
       )}
 
@@ -282,7 +321,7 @@ export function Dashboard() {
             <button
               onClick={() => setDebriefDismissed(true)}
               aria-label="Fermer"
-              className="shrink-0 text-zinc-500 transition-colors hover:text-white"
+              className="shrink-0 text-doux transition-colors hover:text-white"
             >
               ✕
             </button>
@@ -292,8 +331,8 @@ export function Dashboard() {
       )}
 
       {trialDaysLeft !== null && (
-        <div className="animate-fade-in-up mb-4 flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-3.5 py-2.5">
-          <p className="text-xs text-zinc-400">
+        <div className="animate-fade-in-up mb-4 flex items-center justify-between gap-3 rounded-2xl border border-bordure bg-zinc-950/80 px-3.5 py-2.5">
+          <p className="text-xs text-doux">
             🎁 Essai gratuit : encore {trialDaysLeft} jour{trialDaysLeft > 1 ? "s" : ""}
           </p>
           <Link to="/abonnement" className="text-xs font-semibold text-rose-400 hover:underline">
@@ -311,7 +350,7 @@ export function Dashboard() {
           <p className={`text-sm font-semibold ${overtraining.risk === "high" ? "text-red-300" : "text-amber-300"}`}>
             ⚠️ Risque de surentraînement {overtraining.risk === "high" ? "élevé" : "modéré"}
           </p>
-          <ul className="mt-1 space-y-0.5 text-xs text-zinc-400">
+          <ul className="mt-1 space-y-0.5 text-xs text-doux">
             {overtraining.reasons.map((r) => (
               <li key={r}>• {r}</li>
             ))}
@@ -326,7 +365,7 @@ export function Dashboard() {
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">{profile.objectif}</p>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-doux">
               {daysRemaining > 0
                 ? `${daysRemaining} jour${daysRemaining > 1 ? "s" : ""} avant l'épreuve`
                 : daysRemaining === 0
@@ -348,29 +387,42 @@ export function Dashboard() {
         </div>
       )}
 
-      {generating ? (
-        <div className="animate-fade-in-up rounded-2xl border border-rose-900/40 bg-gradient-to-b from-rose-950/25 to-zinc-950/80 p-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
-            <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-rose-500/25 border-t-rose-500" />
-          </div>
-          <p className="text-sm font-semibold text-white">Votre coach prépare votre semaine…</p>
-          <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-zinc-400">
-            Cela prend généralement une à deux minutes. Vous pouvez fermer l'application : la génération continue et
-            vous retrouverez votre programme en revenant.
-          </p>
         </div>
+
+        <div className="lg:order-1 lg:min-w-0">
+      {generating ? (
+        <GenerationEnCours titre={plan ? "Votre coach réajuste la semaine" : "Votre coach prépare la semaine"} />
       ) : loading ? (
-        <p className="flex items-center gap-2 text-zinc-500">
-          <Spinner /> Chargement...
+        <p className="flex items-center gap-2 text-doux">
+          <Spinner /> Chargement…
         </p>
       ) : !plan ? (
-        <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center text-zinc-500">
-          {hasPastPlan
-            ? 'Votre semaine précédente est terminée. Appuyez sur "Semaine terminée, nouvelle semaine" pour enchaîner avec une progression maîtrisée.'
-            : 'Aucun programme pour cette semaine. Appuyez sur "Générer" pour que votre coach IA en crée un.'}
+        <div className="rounded-2xl border border-dashed border-bordure p-8 text-center">
+          <span aria-hidden="true" className="mb-3 block text-4xl">
+            {hasPastPlan ? "🔁" : "📋"}
+          </span>
+          <p className="text-sm font-semibold text-fort">
+            {hasPastPlan ? "Votre semaine précédente est terminée" : "Pas encore de programme"}
+          </p>
+          <p className="mx-auto mt-1.5 max-w-xs text-sm leading-relaxed text-doux">
+            {hasPastPlan
+              ? "Votre coach construira la suivante à partir de ce que vous avez réellement fait : séances validées, manquées, et votre ressenti."
+              : "Votre coach va écrire vos sept prochains jours à partir de votre objectif, de vos créneaux et de vos zones."}
+          </p>
+          <Bouton
+            variante="principal"
+            className="mt-4"
+            onClick={hasPastPlan ? generateNextWeek : generatePlan}
+          >
+            {hasPastPlan ? "Générer la semaine suivante" : "Générer mon programme"}
+          </Bouton>
         </div>
       ) : (
         <div className="space-y-5">
+          {/* La forme de la semaine avant son détail : où sont les jours durs,
+              où sont les jours de repos. */}
+          <VueSemaine sessions={plan.sessions} selectionId={selectedId} onSelect={setSelectedId} />
+
           {next && (
             <div
               role="button"
@@ -379,19 +431,19 @@ export function Dashboard() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") setSelectedId(next.id);
               }}
-              className="animate-fade-in-up relative cursor-pointer overflow-hidden rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-black p-5 transition-colors duration-200 hover:border-zinc-700"
+              className="animate-fade-in-up relative cursor-pointer overflow-hidden rounded-3xl border border-bordure bg-gradient-to-br from-zinc-900 to-black p-5 transition-colors duration-200 hover:border-bordure-forte"
             >
               <span className="absolute right-4 top-4 rounded-full bg-rose-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                 À venir
               </span>
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
+              <p className="text-xs uppercase tracking-wide text-doux">
                 {new Date(next.date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" })}
               </p>
               <div className="mt-3 flex items-center gap-3">
                 <span className="text-4xl">{SPORT_ICON[next.sport]}</span>
                 <div>
                   <p className="text-lg font-bold leading-tight text-white">{next.titre}</p>
-                  <p className="text-sm text-zinc-400">
+                  <p className="text-sm text-doux">
                     {next.dureeMin} min{next.distanceKm ? ` · ${next.distanceKm} km` : ""}
                   </p>
                 </div>
@@ -413,6 +465,18 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-4 lg:max-w-2xl">
+        <ActionsSemaine
+          aUnProgramme={Boolean(plan) && !generating}
+          onPauseChange={loadPlan}
+          onReajuster={adjustWeek}
+        />
+        <InstallerApp />
+      </div>
 
       {selectedId &&
         (() => {

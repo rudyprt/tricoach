@@ -32,14 +32,14 @@ export function ResetPassword() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="animate-fade-in-up w-full max-w-sm space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 shadow-2xl shadow-black/50 backdrop-blur-sm">
+      <div className="animate-fade-in-up w-full max-w-sm space-y-4 rounded-2xl border border-bordure bg-zinc-950/80 p-6 shadow-2xl shadow-black/50 backdrop-blur-sm">
         <h1 className="text-xl font-black italic tracking-wide text-white">
           Nouveau <span className="text-rose-500">mot de passe</span>
         </h1>
 
         {!token ? (
           <>
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-doux">
               Ce lien de réinitialisation est incomplet. Demandez-en un nouveau depuis la page de connexion.
             </p>
             <Link
@@ -57,7 +57,7 @@ export function ResetPassword() {
             <div className="space-y-1">
               <label className="text-sm text-zinc-300">Nouveau mot de passe</label>
               <div className="relative">
-                <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+                <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" size={14} />
                 <input
                   type="password"
                   required
@@ -65,21 +65,21 @@ export function ResetPassword() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="8 caractères minimum"
-                  className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500"
+                  className="w-full rounded-lg border border-bordure bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500"
                 />
               </div>
             </div>
             <div className="space-y-1">
               <label className="text-sm text-zinc-300">Confirmation</label>
               <div className="relative">
-                <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+                <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-doux" size={14} />
                 <input
                   type="password"
                   required
                   value={confirmation}
                   onChange={(e) => setConfirmation(e.target.value)}
                   className={`w-full rounded-lg border bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors focus:border-rose-500 ${
-                    mismatch ? "border-red-800" : "border-zinc-800"
+                    mismatch ? "border-red-800" : "border-bordure"
                   }`}
                 />
               </div>

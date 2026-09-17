@@ -17,7 +17,7 @@ const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtur
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 
 describeIfDb("import de fichiers", () => {
   beforeAll(async () => {
@@ -35,7 +35,7 @@ describeIfDb("import de fichiers", () => {
   });
 
   beforeEach(async () => {
-    resetAllRateLimits();
+    await resetAllRateLimits();
     await prisma.activity.deleteMany();
     await prisma.session.deleteMany();
     await prisma.trainingPlan.deleteMany();
@@ -187,7 +187,7 @@ describeIfDb("import de fichiers", () => {
     const { agent: alice, user: aliceUser } = await athlete("alice-fic@example.com");
     await alice.post("/api/activities/import").attach("fichiers", path.join(fixtures, "velo.gpx"));
 
-    resetAllRateLimits();
+    await resetAllRateLimits();
     const { agent: bob } = await athlete("bob-fic@example.com");
 
     expect((await bob.get("/api/activities")).body.activities).toEqual([]);

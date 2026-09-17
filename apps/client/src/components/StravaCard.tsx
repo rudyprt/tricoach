@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useConfirmation } from "../ui/Confirmation";
 import { api, apiErrorMessage, type StravaStatus } from "../lib/api";
 import { Spinner } from "./Spinner";
 
@@ -12,6 +13,7 @@ export function StravaCard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { demander } = useConfirmation();
 
   const charger = useCallback(async () => {
     try {
@@ -58,7 +60,13 @@ export function StravaCard() {
   }
 
   async function delier() {
-    if (!window.confirm("Délier votre compte Strava ? Les activités déjà importées sont conservées.")) return;
+    const { confirme } = await demander({
+      titre: "Délier votre compte Strava ?",
+      description: "Les activités déjà importées sont conservées. Vous pourrez relier le compte à tout moment.",
+      confirmer: "Délier",
+      variante: "danger",
+    });
+    if (!confirme) return;
     setBusy("unlink");
     try {
       await api.delete("/strava");
@@ -73,7 +81,7 @@ export function StravaCard() {
   if (!status?.disponible) return null;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-sm">🔗</span>
         <h2 className="text-sm font-bold text-white">Strava</h2>
@@ -81,7 +89,7 @@ export function StravaCard() {
 
       {!status.relie ? (
         <>
-          <p className="mb-3 text-sm text-zinc-400">
+          <p className="mb-3 text-sm text-doux">
             Reliez votre montre pour que votre coach travaille sur vos allures réelles, et non sur ce que vous
             déclarez. Vos séances se valident alors toutes seules.
           </p>
@@ -99,7 +107,7 @@ export function StravaCard() {
           <p className="text-sm text-zinc-300">
             Relié{status.athleteName ? ` au compte ${status.athleteName}` : ""}.
           </p>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="mt-0.5 text-xs text-doux">
             {status.activitesImportees} activité(s) importée(s)
             {status.lastSyncAt && ` · dernier import le ${new Date(status.lastSyncAt).toLocaleDateString("fr-FR")}`}
           </p>
@@ -115,7 +123,7 @@ export function StravaCard() {
             <button
               onClick={delier}
               disabled={busy !== null}
-              className="rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+              className="rounded-lg border border-bordure px-3 py-2 text-sm text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200 disabled:opacity-50"
             >
               Délier
             </button>

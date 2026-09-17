@@ -1,5 +1,9 @@
 import { useState } from "react";
 import type { Session, SessionBlock } from "../lib/api";
+import { Dialog } from "../ui/Dialog";
+import { Bouton } from "../ui/Bouton";
+import { SeanceGuidee } from "./SeanceGuidee";
+import { FaPlay } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
   natation: "🏊",
@@ -28,10 +32,10 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
     <div className={`rounded-xl border p-3 ${color}`}>
       <div className="mb-1 flex items-center justify-between">
         <p className="text-sm font-semibold text-white">{label}</p>
-        <span className="text-xs text-zinc-400">{block.dureeMin} min</span>
+        <span className="text-xs text-doux">{block.dureeMin} min</span>
       </div>
       <p className="mb-1 text-xs font-medium text-zinc-300">{block.cible}</p>
-      <p className="text-sm text-zinc-400">{block.description}</p>
+      <p className="text-sm text-doux">{block.description}</p>
 
       {block.exercices && block.exercices.length > 0 && (
         <ul className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
@@ -40,7 +44,7 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
               <span className="mt-0.5 shrink-0 rounded bg-black/30 px-1.5 py-0.5 font-mono text-zinc-300">
                 {ex.repetitions}
               </span>
-              <span className="text-zinc-400">
+              <span className="text-doux">
                 {ex.allure}
                 {ex.recuperation ? ` · récup ${ex.recuperation}` : ""}
               </span>
@@ -55,21 +59,37 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
 interface Props {
   session: Session;
   onClose: () => void;
-  onUpdate: (id: string, status: Session["status"], ressenti?: string) => Promise<void>;
+  onUpdate: (
+    id: string,
+    status: Session["status"],
+    ressenti?: string,
+    dureeReelleMin?: number | null
+  ) => Promise<void>;
   allSessions?: Session[];
   onSwap?: (sessionIdA: string, sessionIdB: string) => Promise<void>;
 }
 
 export function SessionDetailModal({ session, onClose, onUpdate, allSessions, onSwap }: Props) {
   const [ressenti, setRessenti] = useState(session.ressenti ?? "");
+  const [dureeReelle, setDureeReelle] = useState(
+    session.dureeReelleMin != null ? String(session.dureeReelleMin) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [reorganizing, setReorganizing] = useState(false);
+  const [guidee, setGuidee] = useState(false);
   const isRestDay = session.sport === "repos";
+
+  /** Vide signifie « pas de correction » ; null efface une correction existante. */
+  function dureeCorrigee(): number | null | undefined {
+    if (dureeReelle.trim() === "") return session.dureeReelleMin != null ? null : undefined;
+    const valeur = Number(dureeReelle);
+    return Number.isFinite(valeur) && valeur > 0 ? Math.round(valeur) : undefined;
+  }
 
   async function updateStatus(status: Session["status"]) {
     setSaving(true);
     try {
-      await onUpdate(session.id, status, ressenti || undefined);
+      await onUpdate(session.id, status, ressenti || undefined, dureeCorrigee());
       onClose();
     } finally {
       setSaving(false);
@@ -79,7 +99,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   async function saveRessenti() {
     setSaving(true);
     try {
-      await onUpdate(session.id, session.status, ressenti || undefined);
+      await onUpdate(session.id, session.status, ressenti || undefined, dureeCorrigee());
       onClose();
     } finally {
       setSaving(false);
@@ -106,28 +126,32 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
 
   const otherDays = allSessions?.filter((s) => s.id !== session.id) ?? [];
 
+  if (guidee && session.structure) {
+    return <SeanceGuidee session={session} onFermer={() => setGuidee(false)} />;
+  }
+
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center sm:items-center">
-      <div className="animate-fade-in absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="animate-fade-in-up relative max-h-[85vh] w-full max-w-[420px] overflow-y-auto rounded-t-3xl border border-zinc-800 bg-zinc-950 p-5 sm:rounded-3xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-2xl">
-              {SPORT_ICON[session.sport]}
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs capitalize uppercase tracking-wide text-zinc-500">{dateLabel}</p>
-              <p className="text-lg font-bold leading-tight text-white">{session.titre}</p>
-              <p className="text-sm text-zinc-500">{SPORT_LABELS[session.sport]}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Fermer"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-white"
+    <Dialog
+      ouvert
+      onClose={onClose}
+      titre={session.titre}
+      description={`${SPORT_LABELS[session.sport]} — ${dateLabel}`}
+      bloquant={saving}
+    >
+      <div>
+        <div className="mb-4 flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-haute text-2xl"
           >
-            ✕
-          </button>
+            {SPORT_ICON[session.sport]}
+          </span>
+          {!isRestDay && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-doux">
+              <span>{session.dureeMin} min</span>
+              {session.distanceKm != null && <span>{session.distanceKm} km</span>}
+            </div>
+          )}
         </div>
 
         {!isRestDay && session.objectif && (
@@ -139,16 +163,21 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
           </div>
         )}
 
-        {!isRestDay && (
-          <div className="mb-4 flex flex-wrap gap-4 text-sm text-zinc-300">
-            <span>⏱️ {session.dureeMin} min</span>
-            {session.distanceKm != null && <span>📍 {session.distanceKm} km</span>}
-          </div>
+        {session.structure && !isRestDay && (
+          <Bouton
+            variante="principal"
+            pleineLargeur
+            className="mb-4"
+            icone={<FaPlay size={12} />}
+            onClick={() => setGuidee(true)}
+          >
+            Démarrer la séance
+          </Bouton>
         )}
 
         {session.structure ? (
           <div className="mb-4 space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Détail de la séance</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-doux">Détail de la séance</p>
             {BLOCKS.map(({ key, label, color }) => (
               <BlockCard key={key} label={label} block={session.structure![key]} color={color} />
             ))}
@@ -159,13 +188,43 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
 
         {!isRestDay && (
           <div className="mb-4 space-y-1">
-            <label className="text-sm text-zinc-400">Ressenti</label>
+            <label htmlFor="duree-reelle" className="text-sm text-doux">
+              Durée réellement effectuée
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="duree-reelle"
+                type="number"
+                min={1}
+                max={1440}
+                inputMode="numeric"
+                value={dureeReelle}
+                onChange={(e) => setDureeReelle(e.target.value)}
+                placeholder={String(session.dureeMin)}
+                className="w-24 rounded-lg border border-bordure bg-fond px-3 py-2 text-sm text-fort placeholder:text-tres-doux focus:border-accent"
+              />
+              <span className="text-sm text-doux">
+                min {dureeReelle && Number(dureeReelle) !== session.dureeMin ? `(prévu : ${session.dureeMin})` : ""}
+              </span>
+            </div>
+            <p className="text-xs text-tres-doux">
+              Laissez vide si vous avez suivi le prévu. Cette durée alimente votre charge et votre progression.
+            </p>
+          </div>
+        )}
+
+        {!isRestDay && (
+          <div className="mb-4 space-y-1">
+            <label htmlFor="ressenti-seance" className="text-sm text-doux">
+              Ressenti
+            </label>
             <textarea
+              id="ressenti-seance"
               value={ressenti}
               onChange={(e) => setRessenti(e.target.value)}
               rows={2}
               placeholder="Comment s'est passée la séance ?"
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
           </div>
         )}
@@ -173,73 +232,57 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
         {!isRestDay &&
           (session.status === "planifiee" ? (
             <div className="flex gap-2">
-              <button
-                onClick={() => updateStatus("faite")}
-                disabled={saving}
-                className="flex-1 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-emerald-500 active:scale-[0.97] disabled:opacity-50"
-              >
-                ✓ Marquer faite
-              </button>
-              <button
-                onClick={() => updateStatus("manquee")}
-                disabled={saving}
-                className="flex-1 rounded-lg border border-zinc-800 px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-all duration-150 hover:bg-zinc-900 active:scale-[0.97] disabled:opacity-50"
-              >
+              <Bouton variante="succes" pleineLargeur enCours={saving} onClick={() => updateStatus("faite")}>
+                Marquer faite
+              </Bouton>
+              <Bouton variante="secondaire" pleineLargeur disabled={saving} onClick={() => updateStatus("manquee")}>
                 Manquée
-              </button>
+              </Bouton>
             </div>
           ) : (
             <div className="flex gap-2">
-              <button
-                onClick={saveRessenti}
-                disabled={saving}
-                className="flex-1 rounded-lg bg-rose-500 px-3 py-2.5 text-sm font-semibold text-black transition-all duration-150 hover:bg-rose-400 active:scale-[0.97] disabled:opacity-50"
-              >
+              <Bouton variante="principal" pleineLargeur enCours={saving} onClick={saveRessenti}>
                 Enregistrer
-              </button>
-              <button
-                onClick={() => updateStatus("planifiee")}
-                disabled={saving}
-                className="flex-1 rounded-lg border border-zinc-800 px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-all duration-150 hover:bg-zinc-900 active:scale-[0.97] disabled:opacity-50"
-              >
+              </Bouton>
+              <Bouton variante="secondaire" pleineLargeur disabled={saving} onClick={() => updateStatus("planifiee")}>
                 Réinitialiser
-              </button>
+              </Bouton>
             </div>
           ))}
 
         {onSwap && otherDays.length > 0 && (
-          <div className="mt-4 border-t border-zinc-800 pt-4">
+          <div className="mt-4 border-t border-bordure pt-4">
             {!reorganizing ? (
               <button
                 onClick={() => setReorganizing(true)}
-                className="w-full rounded-lg border border-zinc-800 px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900"
+                className="w-full rounded-lg border border-bordure px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900"
               >
                 🔄 Déplacer vers un autre jour
               </button>
             ) : (
               <div className="animate-fade-in space-y-2">
-                <p className="text-sm text-zinc-400">Échanger avec :</p>
+                <p className="text-sm text-doux">Échanger avec :</p>
                 <div className="grid grid-cols-2 gap-2">
                   {otherDays.map((d) => (
                     <button
                       key={d.id}
                       onClick={() => handleSwap(d.id)}
                       disabled={saving}
-                      className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-2 text-left text-xs text-zinc-200 transition-colors hover:border-rose-700 hover:bg-zinc-800 disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-lg border border-bordure bg-zinc-900 px-2.5 py-2 text-left text-xs text-zinc-200 transition-colors hover:border-rose-700 hover:bg-zinc-800 disabled:opacity-50"
                     >
                       <span className="text-base">{SPORT_ICON[d.sport]}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium capitalize">
                           {new Date(d.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })}
                         </span>
-                        <span className="block truncate text-zinc-500">{SPORT_LABELS[d.sport]}</span>
+                        <span className="block truncate text-doux">{SPORT_LABELS[d.sport]}</span>
                       </span>
                     </button>
                   ))}
                 </div>
                 <button
                   onClick={() => setReorganizing(false)}
-                  className="w-full rounded-lg px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300"
+                  className="w-full rounded-lg px-3 py-1.5 text-xs text-doux hover:text-zinc-300"
                 >
                   Annuler
                 </button>
@@ -248,6 +291,6 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
           </div>
         )}
       </div>
-    </div>
+    </Dialog>
   );
 }

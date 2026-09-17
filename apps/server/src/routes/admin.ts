@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { runReminders } from "../lib/reminders.js";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
@@ -494,5 +495,18 @@ adminRouter.get(
       },
     });
     res.json({ actions });
+  })
+);
+
+/**
+ * Déclenche un passage de rappels à la demande. Le passage automatique tourne
+ * en continu dans le serveur ; ce bouton sert à vérifier la configuration
+ * d'envoi, et à rattraper une période où le service était arrêté.
+ */
+adminRouter.post(
+  "/rappels/run",
+  ah(async (_req: AuthedRequest, res) => {
+    const bilan = await runReminders();
+    res.json(bilan);
   })
 );

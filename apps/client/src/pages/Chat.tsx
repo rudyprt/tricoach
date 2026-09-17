@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage, isSubscriptionRequiredError, CHAT_DAILY_LIMIT, type ChatMessage, type ChatPage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { useConfirmation } from "../ui/Confirmation";
 
 export function Chat() {
   const { user } = useAuth();
+  const { demander } = useConfirmation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -54,7 +56,13 @@ export function Chat() {
   }
 
   async function handleClear() {
-    if (!window.confirm("Effacer toute la conversation avec votre coach ?")) return;
+    const { confirme } = await demander({
+      titre: "Effacer la conversation ?",
+      description: "Tout l'historique de vos échanges avec le coach sera supprimé. Cette action est définitive.",
+      confirmer: "Effacer",
+      variante: "danger",
+    });
+    if (!confirme) return;
     setClearing(true);
     setError(null);
     try {
@@ -79,7 +87,7 @@ export function Chat() {
         <h1 className="text-xl font-bold text-white">Discuter avec le coach</h1>
         <div className="flex items-center gap-3">
           {user && !user.isPremium && (
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-doux">
               {Math.max(0, CHAT_DAILY_LIMIT - messagesToday)}/{CHAT_DAILY_LIMIT} messages restants
             </span>
           )}
@@ -87,7 +95,7 @@ export function Chat() {
             <button
               onClick={handleClear}
               disabled={clearing || sending}
-              className="text-xs text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline disabled:opacity-50"
+              className="text-xs text-doux underline-offset-4 hover:text-zinc-300 hover:underline disabled:opacity-50"
             >
               {clearing ? "Effacement..." : "Effacer"}
             </button>
@@ -95,9 +103,9 @@ export function Chat() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+      <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-bordure bg-zinc-950 p-4">
         {messages.length === 0 && (
-          <p className="text-zinc-500">Posez une question à votre coach IA : ajustement de séance, conseils, motivation...</p>
+          <p className="text-doux">Posez une question à votre coach IA : ajustement de séance, conseils, motivation...</p>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`animate-fade-in-up flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -139,7 +147,7 @@ export function Chat() {
           onChange={(e) => setInput(e.target.value)}
           disabled={quotaReached}
           placeholder={quotaReached ? "Quota quotidien atteint" : "Écrivez votre message..."}
-          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500 disabled:opacity-50"
+          className="flex-1 rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500 disabled:opacity-50"
         />
         <button
           type="submit"

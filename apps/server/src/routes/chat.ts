@@ -7,9 +7,18 @@ import { recordAiCall } from "../lib/aiUsage.js";
 import { CHAT_DAILY_LIMIT, isPremium } from "../lib/subscription.js";
 import { ah, HttpError } from "../lib/http.js";
 import { chatRateLimit } from "../lib/rateLimit.js";
-import { startOfLocalDay } from "../lib/week.js";
+import { startOfLocalDay, startOfWeek } from "../lib/week.js";
+import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
+import { coursesDeLAthlete, coursesPromptLines } from "../lib/races.js";
+import { pauseEnCours } from "../lib/pause.js";
+import {
+  disponibilitesPromptLines,
+  materielPromptLines,
+  parseDisponibilites,
+  parseMateriel,
+} from "../lib/disponibilites.js";
 import { computeTrainingZones, formatZonesForPrompt, periodization } from "../lib/training.js";
-import { parseZoneOverrides } from "../lib/zoneOverrides.js";
+import { buildZoneInputs } from "../lib/zoneInputs.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const chatRouter = Router();
@@ -127,16 +136,24 @@ chatRouter.post(
 
     const history = [...recentMessages].reverse();
 
-    const zones = profile
-      ? computeTrainingZones({
-          tempsCourse: profile.tempsCourse,
-          tempsNatation: profile.tempsNatation,
-          tempsVelo: profile.tempsVelo,
-          ftpWatts: profile.ftpWatts,
-          overrides: parseZoneOverrides(profile.customZones),
-        })
-      : null;
+    const zones = profile ? computeTrainingZones(await buildZoneInputs(req.userId!, profile)) : null;
     const phase = profile ? periodization(new Date(), profile.objectifDate) : null;
+
+    // Le coach du chat voyait moins de choses que celui qui construit la
+    // semaine : il pouvait répondre « repose-toi si tu le sens » à un athlète
+    // dont la surcharge est déjà mesurée, ou proposer une séance un jour où
+    // l'athlète a déclaré être indisponible.
+    const semaine = startOfWeek(new Date(), user.timezone);
+    const [charge, courses, interruption, testsEnCours] = await Promise.all([
+      bilanDeCharge(req.userId!),
+      coursesDeLAthlete(req.userId!, semaine),
+      pauseEnCours(req.userId!),
+      prisma.fitnessTest.findMany({
+        where: { userId: req.userId!, status: "planifie" },
+        orderBy: { scheduledFor: "asc" },
+        take: 3,
+      }),
+    ]);
 
     const system = [
       "Tu es le coach personnel de triathlon de cet athlète, dans un chat continu.",
@@ -156,6 +173,18 @@ chatRouter.post(
             .map((s) => `${s.date.toISOString().slice(0, 10)} ${s.sport} ${s.dureeMin}min (${s.status})`)
             .join("; ")}`
         : "Aucune séance enregistrée pour le moment.",
+      ...chargePromptLines(charge),
+      ...coursesPromptLines(courses, semaine),
+      ...disponibilitesPromptLines(parseDisponibilites(profile?.disponibilites), semaine),
+      ...materielPromptLines(parseMateriel(profile?.materiel)),
+      interruption
+        ? `ATTENTION : l'athlète a déclaré une interruption d'entraînement (${interruption.raison}${interruption.detail ? ` — « ${interruption.detail} »` : ""}) depuis le ${interruption.debut.toISOString().slice(0, 10)}. Ne lui propose aucune séance d'entraînement tant qu'il n'a pas repris ; parle récupération, et invite-le à consulter s'il s'agit d'une blessure qui dure.`
+        : "",
+      testsEnCours.length
+        ? `Test de terrain programmé : ${testsEnCours
+            .map((t) => `${t.kind} le ${t.scheduledFor.toISOString().slice(0, 10)}`)
+            .join(", ")}. S'il t'interroge dessus, explique le protocole et rappelle qu'il sert à recaler ses zones.`
+        : "",
     ]
       .filter(Boolean)
       .join("\n");

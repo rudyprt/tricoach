@@ -3,10 +3,13 @@ import {
   computeTrainingZones,
   formatZonesForPrompt,
   formatPacePerKm,
+  thresholdSpeed,
+  type ZoneRange,
   parsePerformance,
   periodization,
   riegelEquivalent,
   weeksToGoal,
+  equivalencesNatation,
 } from "../lib/training.js";
 
 describe("parsePerformance", () => {
@@ -37,29 +40,169 @@ describe("riegelEquivalent", () => {
 });
 
 describe("computeTrainingZones", () => {
-  it("déduit 5 zones de course des temps de référence", () => {
-    const zones = computeTrainingZones({ tempsCourse: "10km en 45min" });
-    expect(zones.course).toHaveLength(5);
-    expect(zones.course?.map((z) => z.zone)).toEqual(["Z1", "Z2", "Z3", "Z4", "Z5"]);
-    // 10 km en 45min = 4:30/km ; seuil = +15s, endurance = +75s
-    expect(zones.course?.find((z) => z.zone === "Z4")?.value).toBe("4:45/km");
-    expect(zones.course?.find((z) => z.zone === "Z2")?.value).toBe("5:45/km");
+  /** Secondes par km depuis "4:30" (les plages sont "rapide–lent/km"). */
+  const sec = (mmss: string) => {
+    const [m, s] = mmss.split(":").map(Number);
+    return m * 60 + s;
+  };
+  const bornes = (plage: string, unite: "/km" | "/100m") => {
+    const [rapide, lent] = plage.replace(unite, "").split("–");
+    return { rapide: sec(rapide), lent: sec(lent) };
+  };
+  const zoneDe = (zones: ZoneRange[] | null, nom: string) => zones?.find((z) => z.zone === nom)?.value ?? "";
+
+  describe("course à pied", () => {
+    it("produit cinq zones sous forme de plages, pas de valeurs uniques", () => {
+      const { course } = computeTrainingZones({ tempsCourse: "10km en 45min" });
+      expect(course).toHaveLength(5);
+      expect(course?.map((z) => z.zone)).toEqual(["Z1", "Z2", "Z3", "Z4", "Z5"]);
+      for (const z of course!) expect(z.value).toMatch(/^\d+:\d{2}–\d+:\d{2}\/km$/);
+    });
+
+    it("ordonne chaque plage du plus rapide au plus lent", () => {
+      const { course } = computeTrainingZones({ tempsCourse: "10km en 45min" });
+      for (const z of course!) {
+        const { rapide, lent } = bornes(z.value, "/km");
+        expect(rapide).toBeLessThan(lent);
+      }
+    });
+
+    it("ordonne les zones de la plus lente à la plus rapide", () => {
+      const { course } = computeTrainingZones({ tempsCourse: "10km en 45min" });
+      const allures = course!.map((z) => bornes(z.value, "/km").rapide);
+      for (let i = 1; i < allures.length; i++) {
+        expect(allures[i]).toBeLessThan(allures[i - 1]);
+      }
+    });
+
+    it("place le seuil autour de l'allure 10 km, jamais très au-delà", () => {
+      // Physiologiquement, le seuil d'un amateur est proche de son allure 10 km.
+      const { course } = computeTrainingZones({ tempsCourse: "10km en 50min" });
+      const { rapide, lent } = bornes(zoneDe(course, "Z4"), "/km");
+      expect(rapide).toBeLessThan(300); // plus rapide que 5:00/km
+      expect(lent).toBeLessThan(330); // et pas au-delà de 5:30/km
+    });
+
+    it("garde un écart proportionnel au niveau, du débutant à l'élite", () => {
+      // C'est le défaut du modèle précédent : avec des écarts fixes en
+      // secondes, la Z2 valait 119 % de l'allure 10 km pour un débutant contre
+      // 140 % pour un élite. La Z2 du débutant était donc bien trop rapide.
+      const rapport = (temps: string, allure10k: number) => {
+        const { course } = computeTrainingZones({ tempsCourse: temps });
+        return bornes(zoneDe(course, "Z2"), "/km").rapide / allure10k;
+      };
+
+      const debutant = rapport("10km en 65min", 390);
+      const elite = rapport("10km en 31min", 186);
+
+      expect(Math.abs(debutant - elite)).toBeLessThan(0.08);
+      for (const r of [debutant, elite]) {
+        expect(r).toBeGreaterThan(1.08);
+        expect(r).toBeLessThan(1.35);
+      }
+    });
+
+    it("donne au débutant une endurance réellement facile", () => {
+      // Un coureur à 6:30/km au 10 km ne doit pas voir 7:45/km en endurance.
+      const { course } = computeTrainingZones({ tempsCourse: "10km en 65min" });
+      expect(bornes(zoneDe(course, "Z2"), "/km").rapide).toBeGreaterThan(420); // > 7:00/km
+    });
+
+    it("préfère une allure au seuil saisie à une estimation", () => {
+      const { course, notes } = computeTrainingZones({
+        tempsCourse: "10km en 60min",
+        seuilCourseSecParKm: 250, // 4:10/km
+      });
+      // La valeur saisie l'emporte : les zones ne reflètent plus le 10 km.
+      expect(bornes(zoneDe(course, "Z4"), "/km").lent).toBeLessThan(270);
+      expect(notes.join(" ")).toContain("renseignée");
+    });
   });
 
-  it("utilise la FTP pour les zones de puissance quand elle est renseignée", () => {
-    const zones = computeTrainingZones({ tempsVelo: "40km en 1h10", ftpWatts: 250 });
-    expect(zones.velo?.find((z) => z.zone === "Z4")?.value).toBe("228-263 W");
+  describe("natation", () => {
+    it("resserre les zones autour de la CSS", () => {
+      const { natation } = computeTrainingZones({ tempsNatation: "1500m en 30min" });
+      // CSS = 2:00/100m ; le seuil doit l'encadrer de près.
+      const seuil = bornes(zoneDe(natation, "Z4"), "/100m");
+      expect(seuil.rapide).toBeGreaterThan(110);
+      expect(seuil.lent).toBeLessThan(130);
+    });
+
+    it("garde un écart entre zones plus faible qu'en course", () => {
+      // L'eau oppose une résistance qui croît avec le carré de la vitesse :
+      // quelques secondes aux 100 m changent radicalement l'effort.
+      const { natation } = computeTrainingZones({ tempsNatation: "1500m en 30min" });
+      const z2 = bornes(zoneDe(natation, "Z2"), "/100m");
+      const z4 = bornes(zoneDe(natation, "Z4"), "/100m");
+      expect(z2.lent - z4.rapide).toBeLessThan(40);
+    });
+
+    it("préfère une CSS saisie à une estimation", () => {
+      const { natation, notes } = computeTrainingZones({
+        tempsNatation: "1500m en 30min",
+        cssSecPer100m: 90,
+      });
+      expect(bornes(zoneDe(natation, "Z4"), "/100m").rapide).toBeLessThan(95);
+      expect(notes.join(" ")).toContain("CSS renseignée");
+    });
   });
 
-  it("retombe sur une estimation par la vitesse sans FTP", () => {
-    const zones = computeTrainingZones({ tempsVelo: "40km en 1h20" });
-    expect(zones.velo?.find((z) => z.zone === "Z4")?.value).toBe("~30.0 km/h");
+  describe("vélo", () => {
+    it("calcule des zones de puissance sur la FTP", () => {
+      const { velo } = computeTrainingZones({ ftpWatts: 250 });
+      expect(zoneDe(velo, "Z4")).toBe("228–263 W");
+      expect(zoneDe(velo, "Z2")).toBe("140–188 W");
+    });
+
+    it("n'invente aucune zone de puissance sans FTP", () => {
+      // Des watts que l'athlète ne peut pas lire seraient inexécutables.
+      const { velo } = computeTrainingZones({ tempsVelo: "40km en 1h15" });
+      expect(velo).toBeNull();
+    });
+
+    it("bascule sur la fréquence cardiaque quand la FTP manque", () => {
+      const prompt = formatZonesForPrompt(computeTrainingZones({ tempsCourse: "10km en 45min", fcSeuil: 168 }));
+      expect(prompt).toContain("FRÉQUENCE CARDIAQUE");
+      // La vitesse reste proposée en repère, mais jamais sans sa réserve.
+      expect(prompt).toContain("terrain plat et sans vent");
+    });
+
+    it("se rabat sur la vitesse quand ni puissance ni cardio ne sont connus", () => {
+      const prompt = formatZonesForPrompt(computeTrainingZones({ tempsVelo: "40km en 1h15" }));
+      expect(prompt).toContain("VITESSE en km/h");
+      expect(prompt).toContain("N'invente jamais de watts");
+    });
+
+    it("assortit toujours la vitesse de sa réserve", () => {
+      // À effort égal, la vitesse varie du simple au double selon la pente et
+      // le vent : la donner sans le dire serait une fausse précision.
+      const { notes } = computeTrainingZones({ tempsVelo: "40km en 1h15" });
+      expect(notes.join(" ")).toContain("terrain plat et sans vent");
+    });
   });
 
-  it("calcule la CSS en natation", () => {
-    const zones = computeTrainingZones({ tempsNatation: "1500m en 30min" });
-    // 30 min sur 1500 m = 2:00/100 m
-    expect(zones.natation?.find((z) => z.zone === "Z4")?.value).toBe("2:00/100m");
+  describe("fréquence cardiaque", () => {
+    it("calcule les zones sur la FC au seuil quand elle est connue", () => {
+      const { frequenceCardiaque } = computeTrainingZones({ fcSeuil: 170 });
+      expect(zoneDe(frequenceCardiaque, "Z4")).toBe("160–168 bpm");
+      expect(zoneDe(frequenceCardiaque, "Z2")).toBe("138–151 bpm");
+    });
+
+    it("estime le seuil depuis la FC max, en le signalant", () => {
+      const { frequenceCardiaque, notes } = computeTrainingZones({ fcMax: 185 });
+      expect(frequenceCardiaque).toHaveLength(5);
+      expect(notes.join(" ")).toContain("estimée");
+      expect(notes.join(" ")).toContain("test de 30 minutes");
+    });
+
+    it("préfère un seuil mesuré à une estimation depuis la FC max", () => {
+      const avec = computeTrainingZones({ fcSeuil: 160, fcMax: 200 });
+      expect(zoneDe(avec.frequenceCardiaque, "Z4")).toBe("150–158 bpm");
+    });
+
+    it("ne propose rien sans donnée cardiaque", () => {
+      expect(computeTrainingZones({ tempsCourse: "10km en 45min" }).frequenceCardiaque).toBeNull();
+    });
   });
 
   it("laisse une correction manuelle remplacer la valeur calculée", () => {
@@ -70,11 +213,7 @@ describe("computeTrainingZones", () => {
     const z2 = zones.course?.find((z) => z.zone === "Z2");
     expect(z2?.value).toBe("5:30/km");
     expect(z2?.custom).toBe(true);
-
-    // Les autres zones restent calculées.
-    const z4 = zones.course?.find((z) => z.zone === "Z4");
-    expect(z4?.value).toBe("4:45/km");
-    expect(z4?.custom).toBeUndefined();
+    expect(zones.course?.find((z) => z.zone === "Z4")?.custom).toBeUndefined();
   });
 
   it("accepte des zones saisies pour un sport sans temps de référence", () => {
@@ -86,13 +225,18 @@ describe("computeTrainingZones", () => {
     expect(zones.course).toBeNull();
   });
 
+  it("permet de saisir des zones vélo à la main malgré l'absence de FTP", () => {
+    const zones = computeTrainingZones({ overrides: { velo: { Z4: "230-260 W" } } });
+    expect(zones.velo).toHaveLength(1);
+    expect(zones.velo?.[0].custom).toBe(true);
+  });
+
   it("signale dans les notes les sports corrigés à la main", () => {
     const zones = computeTrainingZones({
       tempsCourse: "10km en 45min",
       overrides: { course: { Z3: "5:00/km" } },
     });
     expect(zones.notes.join(" ")).toContain("corrigées à la main");
-    expect(zones.notes.join(" ")).toContain("course");
   });
 
   it("ignore une correction vide plutôt que d'effacer la zone", () => {
@@ -100,7 +244,6 @@ describe("computeTrainingZones", () => {
       tempsCourse: "10km en 45min",
       overrides: { course: { Z2: "   " } },
     });
-    expect(zones.course?.find((z) => z.zone === "Z2")?.value).toBe("5:45/km");
     expect(zones.course?.find((z) => z.zone === "Z2")?.custom).toBeUndefined();
   });
 
@@ -109,17 +252,34 @@ describe("computeTrainingZones", () => {
       tempsCourse: "10km en 45min",
       overrides: { course: { Z4: "4:38/km" } },
     });
-    const prompt = formatZonesForPrompt(zones);
-    expect(prompt).toContain("4:38/km (valeur fixée par l'athlète)");
-    expect(prompt).not.toContain("4:45/km");
+    expect(formatZonesForPrompt(zones)).toContain("4:38/km (valeur fixée par l'athlète)");
   });
 
   it("signale l'absence de données plutôt que d'inventer des zones", () => {
     const zones = computeTrainingZones({});
     expect(zones.course).toBeNull();
-    expect(zones.velo).toBeNull();
     expect(zones.natation).toBeNull();
-    expect(zones.notes[0]).toContain("Aucun temps de référence");
+    expect(zones.velo).toBeNull();
+    expect(zones.frequenceCardiaque).toBeNull();
+    expect(zones.notes.join(" ")).toContain("Aucune donnée exploitable");
+  });
+});
+
+describe("vitesse au seuil", () => {
+  it("place le seuil légèrement en deçà de l'allure 10 km", () => {
+    // Le seuil est l'effort tenable une heure : plus lent qu'un 10 km couru
+    // en 50 minutes, mais de peu.
+    const perf = { distanceM: 10000, durationS: 3000 };
+    const allureSeuil = 1000 / thresholdSpeed(perf, 3600, 1.06);
+    expect(allureSeuil).toBeGreaterThan(300); // plus lent que 5:00/km
+    expect(allureSeuil).toBeLessThan(315);
+  });
+
+  it("place le seuil au-delà de l'allure sur une distance déjà longue", () => {
+    // Un semi couru en 1h35 se tient plus d'une heure : le seuil est plus rapide.
+    const semi = { distanceM: 21100, durationS: 5700 };
+    const allureSeuil = 1000 / thresholdSpeed(semi, 3600, 1.06);
+    expect(allureSeuil).toBeLessThan(5700 / 21.1);
   });
 });
 
@@ -155,5 +315,51 @@ describe("periodization", () => {
     expect(periodization(weekStart, goalIn(0)).volumeFactor).toBeLessThan(
       periodization(weekStart, goalIn(2)).volumeFactor
     );
+  });
+});
+
+describe("milieu de nage", () => {
+  /** Valeur d'une zone donnée, ou undefined si la discipline n'en a pas. */
+  const valeurZone = (ranges: ZoneRange[] | null, zone: string) =>
+    ranges?.find((r) => r.zone === zone)?.value;
+
+  it("annonce le milieu dans lequel les zones sont valables", () => {
+    const { notes } = computeTrainingZones({ cssSecPer100m: 104, bassin: "50m" });
+    expect(notes.join(" ")).toContain("bassin de 50 m");
+  });
+
+  it("ne décale pas la valeur mesurée", () => {
+    // Une CSS chronométrée en 50 m est déjà une valeur 50 m : la corriger une
+    // seconde fois ferait viser une allure que l'athlète a pourtant tenue.
+    const en25 = computeTrainingZones({ cssSecPer100m: 104, bassin: "25m" });
+    const en50 = computeTrainingZones({ cssSecPer100m: 104, bassin: "50m" });
+
+    expect(valeurZone(en50.natation, "Z4")).toBe(valeurZone(en25.natation, "Z4"));
+  });
+
+  it("donne l'équivalence dans les autres milieux", () => {
+    const { notes } = computeTrainingZones({ cssSecPer100m: 104, bassin: "25m" });
+    const texte = notes.join(" ");
+
+    expect(texte).toContain("Équivalences");
+    expect(texte).toContain("eau libre");
+    expect(texte).toContain("bassin de 50 m");
+  });
+
+  it("allonge le temps en eau libre et le raccourcit en 25 m", () => {
+    // 1:44 aux 100 m en bassin de 25 m.
+    const depuis25 = equivalencesNatation(104, "25m")!;
+    expect(depuis25).toMatch(/1:4[5-7]\/100m en bassin de 50 m/);
+    expect(depuis25).toMatch(/1:5[0-2]\/100m en eau libre/);
+
+    // Et la conversion inverse ramène bien vers des temps plus rapides.
+    const depuisEauLibre = equivalencesNatation(111, "eau_libre")!;
+    expect(depuisEauLibre).toMatch(/1:4[3-5]\/100m en bassin de 25 m/);
+  });
+
+  it("ne dit rien quand le milieu n'est pas renseigné", () => {
+    const { notes } = computeTrainingZones({ cssSecPer100m: 104 });
+    expect(notes.join(" ")).not.toContain("Équivalences");
+    expect(equivalencesNatation(104, "")).toBeNull();
   });
 });

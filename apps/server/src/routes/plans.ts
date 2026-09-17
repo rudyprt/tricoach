@@ -15,8 +15,27 @@ import {
   formatZonesForPrompt,
   periodization,
   type Periodization,
+  type TrainingZones,
 } from "../lib/training.js";
-import { parseZoneOverrides } from "../lib/zoneOverrides.js";
+import { buildZoneInputs } from "../lib/zoneInputs.js";
+import { planWeeklyTest, testPromptLines } from "../lib/testScheduling.js";
+import {
+  dernierePauseTerminee,
+  etatDeReprise,
+  pauseEnCours,
+  reprisePromptLines,
+} from "../lib/pause.js";
+import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../lib/races.js";
+import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
+import { corrigerCibles } from "../lib/cibles.js";
+import {
+  disponibilitesPromptLines,
+  joursIndisponibles,
+  materielPromptLines,
+  parseDisponibilites,
+  parseMateriel,
+  volumeAtteignableMin,
+} from "../lib/disponibilites.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -51,7 +70,13 @@ interface ProfileForPrompt {
   heuresSemaine: number;
   contraintes: string;
   ftpWatts: number | null;
+  seuilCourseSecParKm: number | null;
+  cssSecPer100m: number | null;
+  fcSeuil: number | null;
+  fcMax: number | null;
   customZones: unknown;
+  disponibilites: unknown;
+  materiel: unknown;
 }
 
 function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): string {
@@ -69,7 +94,8 @@ function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): strin
     "Champ \"objectif\" (obligatoire pour toute séance sport != repos) : explique en 1-2 phrases COURTES (20-30 mots maximum, jamais plus) POURQUOI cette séance précise est programmée maintenant — quelle qualité elle développe et en quoi elle sert l'objectif de l'athlète. Écris directement à l'athlète (\"tu\"), clair et motivant. Respecte STRICTEMENT cette limite de mots, y compris pour un objectif à long terme (ne développe pas plus longuement sous prétexte que l'échéance est lointaine).",
     "",
     "Pour toute séance sport != repos, remplis TOUJOURS \"structure\" avec 3 blocs : échauffement, corps de séance, retour au calme. La somme de leurs dureeMin doit être proche de dureeMin total.",
-    "\"cible\" décrit l'intensité concrète du bloc : la zone (Z1 à Z5, nommée) ET l'allure ou la puissance chiffrée correspondante. Les zones de l'athlète sont fournies dans le message utilisateur : REPRENDS EXACTEMENT ces valeurs, ne les recalcule pas. N'invente jamais de FC en bpm absolus (FC max inconnue) : reste en zones relatives.",
+    "\"cible\" décrit l'intensité concrète du bloc : la zone (Z1 à Z5, nommée) ET la valeur chiffrée correspondante. Les zones de l'athlète sont fournies dans le message utilisateur : REPRENDS EXACTEMENT ces valeurs, ne les recalcule pas et n'en invente aucune qui n'y figure pas.",
+    "UNITÉS — chaque discipline a la sienne, ne les mélange jamais. NATATION : temps aux 100 m (ex: 1:44/100m). COURSE À PIED : allure au kilomètre (ex: 4:08/km). VÉLO : la valeur donnée dans les zones ci-dessus — watts si une FTP est connue, sinon fréquence cardiaque, sinon vitesse en km/h assortie de la sensation. Une allure au kilomètre dans un bassin, ou des watts pour quelqu'un qui n'a pas de capteur, sont inexécutables. Cette règle vaut aussi pour le champ \"allure\" de chaque exercice.",
     "\"corps.exercices\" (uniquement pour le bloc corps de séance, quand la séance comporte du fractionné/intervalles/répétitions) : liste concrète et chiffrée, MAXIMUM 4 lignes, ex: [{\"repetitions\":\"6 x 400m\",\"allure\":\"4:10/km (Z4 seuil)\",\"recuperation\":\"90s trot\"}]. Pour une sortie continue sans fractionné (endurance, sortie longue), laisse \"exercices\" vide ou omets-le et décris l'effort dans \"description\".",
     "Le volume hebdomadaire total doit respecter les heures disponibles indiquées par l'athlète ET la limite de volume donnée dans le message utilisateur.",
     "IMPORTANT — sois très concis partout, sans exception : chaque \"description\" (séance et blocs) fait 15 mots maximum, chaque \"objectif\" fait 20-30 mots maximum. La réponse complète doit rester compacte : pas de phrases superflues, va droit à l'essentiel. Ne jamais tronquer le JSON : si tu manques de place, raccourcis encore les textes plutôt que de laisser une réponse incomplète.",
@@ -111,14 +137,12 @@ async function measuredActivityLines(userId: string, since: Date): Promise<strin
   ];
 }
 
-function profileLines(profile: ProfileForPrompt, phase: Periodization, maxVolumeMin: number): string[] {
-  const zones = computeTrainingZones({
-    tempsCourse: profile.tempsCourse,
-    tempsNatation: profile.tempsNatation,
-    tempsVelo: profile.tempsVelo,
-    ftpWatts: profile.ftpWatts,
-    overrides: parseZoneOverrides(profile.customZones),
-  });
+function profileLines(
+  profile: ProfileForPrompt,
+  phase: Periodization,
+  maxVolumeMin: number,
+  zones: TrainingZones
+): string[] {
 
   return [
     `Objectif de l'athlète : ${profile.objectif}`,
@@ -142,7 +166,9 @@ function buildFirstWeekPrompt(
   phase: Periodization,
   maxVolumeMin: number,
   recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
-  mesurees: string[]
+  mesurees: string[],
+  zones: TrainingZones,
+  testLines: string[]
 ): string {
   const historyLines = recentSessions.length
     ? recentSessions
@@ -154,8 +180,9 @@ function buildFirstWeekPrompt(
     : "aucun historique disponible";
 
   return [
-    ...profileLines(profile, phase, maxVolumeMin),
+    ...profileLines(profile, phase, maxVolumeMin, zones),
     ...mesurees,
+    ...testLines,
     "",
     `Séances récentes (pour adapter la charge et les zones) : ${historyLines}`,
     `Génère le programme pour les 7 jours suivants (dans cet ordre) : ${weekDays(weekStart).join(", ")}`,
@@ -168,7 +195,9 @@ function buildProgressionPrompt(
   phase: Periodization,
   pastSessions: { date: Date; sport: string; titre: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
   stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number },
-  mesurees: string[]
+  mesurees: string[],
+  zones: TrainingZones,
+  testLines: string[]
 ): string {
   const pastLines = pastSessions.length
     ? pastSessions
@@ -180,8 +209,9 @@ function buildProgressionPrompt(
     : "aucune séance la semaine passée";
 
   return [
-    ...profileLines(profile, phase, stats.maxVolumeMin),
+    ...profileLines(profile, phase, stats.maxVolumeMin, zones),
     ...mesurees,
+    ...testLines,
     "",
     `Détail de LA SEMAINE QUI VIENT DE SE TERMINER : ${pastLines}`,
     `Bilan chiffré de cette semaine passée : ${stats.completedCount}/${stats.totalCount} séances complétées, ${stats.missedCount} manquée(s), volume réalisé ≈ ${Math.round(stats.realizedVolumeMin)} min (volume prévu était ${Math.round(stats.plannedVolumeMin)} min).`,
@@ -209,7 +239,9 @@ function buildAdjustmentUserPrompt(
   dejaVecu: { date: Date; sport: string; titre: string; dureeMin: number; status: string; ressenti: string | null }[],
   maxVolumeMin: number,
   motif: string | null,
-  mesurees: string[]
+  mesurees: string[],
+  zones: TrainingZones,
+  testLines: string[]
 ): string {
   const bilan = dejaVecu.length
     ? dejaVecu
@@ -224,8 +256,9 @@ function buildAdjustmentUserPrompt(
   const manquees = dejaVecu.filter((s) => s.status === "manquee");
 
   return [
-    ...profileLines(profile, phase, maxVolumeMin),
+    ...profileLines(profile, phase, maxVolumeMin, zones),
     ...mesurees,
+    ...testLines,
     "",
     `Début de semaine déjà vécu : ${bilan}`,
     `Bilan : ${faites.length} séance(s) réalisée(s) pour ${faites.reduce((sum, s) => sum + s.dureeMin, 0)} min, ${manquees.length} manquée(s).`,
@@ -242,7 +275,11 @@ function buildAdjustmentUserPrompt(
  * une date absente ou mal formée produit un `Invalid Date` qui fait échouer
  * l'insertion Prisma bien plus loin, avec un message incompréhensible.
  */
-export function parseAiPlan(raw: string, allowedDates: string[]): AiPlanResponse {
+export function parseAiPlan(
+  raw: string,
+  allowedDates: string[],
+  datesRepos: ReadonlySet<string> = new Set()
+): AiPlanResponse {
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error("Réponse IA invalide (pas de JSON trouvé).");
@@ -261,7 +298,25 @@ export function parseAiPlan(raw: string, allowedDates: string[]): AiPlanResponse
   }
 
   const allowed = new Set(allowedDates);
-  const sessions = parsed.data.sessions.filter((s) => allowed.has(s.date));
+  const sessions = parsed.data.sessions
+    .filter((s) => allowed.has(s.date))
+    // Un jour déclaré indisponible reste un jour de repos, quoi qu'ait produit
+    // le modèle : la consigne du prompt ne suffit pas à le garantir, et une
+    // séance ce jour-là ne sera de toute façon pas faite.
+    .map((s) =>
+      datesRepos.has(s.date) && s.sport !== "repos"
+        ? {
+            ...s,
+            sport: "repos" as const,
+            titre: "Repos",
+            dureeMin: 0,
+            distanceKm: null,
+            description: "Jour indisponible déclaré dans vos créneaux.",
+            objectif: null,
+            structure: null,
+          }
+        : s
+    );
   if (sessions.length === 0) {
     throw new Error("Réponse IA invalide (aucune séance sur la semaine demandée).");
   }
@@ -274,7 +329,8 @@ async function runGeneration(
   kind: AiCallKind,
   system: string,
   userPrompt: string,
-  allowedDates: string[]
+  allowedDates: string[],
+  datesRepos: ReadonlySet<string> = new Set()
 ): Promise<{ aiPlan: AiPlanResponse; raw: string }> {
   const attempts = 2;
   let lastError: unknown = null;
@@ -288,7 +344,7 @@ async function runGeneration(
         maxTokens: 8192,
       });
       raw = response.text;
-      const aiPlan = parseAiPlan(raw, allowedDates);
+      const aiPlan = parseAiPlan(raw, allowedDates, datesRepos);
       // Une tentative facturée compte, qu'elle aboutisse ou non : c'est ce qui
       // rend le coût affiché dans l'admin fidèle à la facture Anthropic.
       await recordAiCall({ userId, kind, response, succeeded: true });
@@ -442,6 +498,10 @@ interface PreparedGeneration {
   aiKind: AiCallKind;
   /** Jours que la génération est autorisée à produire. */
   allowedDates: string[];
+  /** Jours déclarés indisponibles : forcés en repos après génération. */
+  datesRepos: string[];
+  /** Zones de l'athlète, pour rétablir les unités que le modèle aurait mélangées. */
+  zones: TrainingZones;
   /** Borne de remplacement : les séances antérieures sont conservées. */
   replaceFrom?: Date;
 }
@@ -457,7 +517,12 @@ async function prepareAdjustment(
   profile: ProfileForPrompt,
   weekStart: Date,
   phase: Periodization,
-  motif: string | null
+  motif: string | null,
+  zones: TrainingZones,
+  facteurContexte: number,
+  lignesContexte: string[],
+  datesRepos: string[],
+  plafondCreneaux: number | null
 ): Promise<PreparedGeneration> {
   const aujourdHui = localCalendarDate(new Date(), timezone);
   const joursRestants = weekDays(weekStart).filter((jour) => jour >= aujourdHui);
@@ -481,17 +546,22 @@ async function prepareAdjustment(
   const dejaVecu = sessions.filter((s) => s.date < debutRestant && s.sport !== "repos");
   const volumeRealise = dejaVecu
     .filter((s) => s.status === "faite")
-    .reduce((sum, s) => sum + s.dureeMin, 0);
+    .reduce((sum, s) => sum + (s.dureeReelleMin ?? s.dureeMin), 0);
 
   // Le volume restant est celui de la semaine moins ce qui a déjà été fait :
   // réajuster ne doit pas devenir un prétexte à s'entraîner davantage.
-  const volumeSemaine = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
+  const volumeBrut = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte);
+  const volumeSemaine = plafondCreneaux ? Math.min(volumeBrut, plafondCreneaux) : volumeBrut;
   const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
+
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants);
 
   return {
     weekStart,
     phase,
     allowedDates: joursRestants,
+    datesRepos: datesRepos.filter((d) => joursRestants.includes(d)),
+    zones,
     replaceFrom: debutRestant,
     aiKind: "plan_generation",
     system: buildAdjustmentSystemPrompt(phase, joursRestants),
@@ -502,7 +572,9 @@ async function prepareAdjustment(
       dejaVecu,
       maxVolumeMin,
       motif,
-      await measuredActivityLines(userId, weekStart)
+      await measuredActivityLines(userId, weekStart),
+      zones,
+      [...(test ? testPromptLines(test) : []), ...lignesContexte]
     ),
   };
 }
@@ -520,11 +592,61 @@ async function prepareGeneration(
   const user = await requireGenerationAccess(userId);
   const profile = await requireProfile(userId);
 
+  // Produire une semaine d'entraînement à quelqu'un qui s'est déclaré blessé
+  // serait pire qu'inutile : c'est exactement ce qu'un coach ne ferait pas.
+  const interruption = await pauseEnCours(userId);
+  if (interruption) {
+    throw new HttpError(
+      400,
+      "Votre entraînement est en pause. Indiquez que vous reprenez pour recevoir une nouvelle semaine, adaptée à votre retour.",
+      "TRAINING_PAUSED"
+    );
+  }
+
   const weekStart = startOfWeek(new Date(), user.timezone);
   const phase = periodization(weekStart, profile.objectifDate);
+  // Les zones sont calculées une seule fois, à partir du profil et de ce que
+  // les séances importées révèlent (fréquence cardiaque maximale observée).
+  const zones = computeTrainingZones(await buildZoneInputs(userId, profile));
+
+  // Après un arrêt, le volume ne repart pas d'où il s'était arrêté : il remonte
+  // par paliers sur quelques semaines.
+  const dernierePause = await dernierePauseTerminee(userId, weekStart);
+  const reprise = dernierePause ? etatDeReprise(dernierePause, weekStart) : null;
+  const facteurReprise = reprise?.facteurVolume ?? 1;
+  const lignesReprise = reprise ? reprisePromptLines(reprise, dernierePause?.detail ?? "") : [];
+
+  // Le calendrier ne remplace pas la périodisation, il s'y insère : la phase
+  // reste pilotée par la prochaine course A, et les courses B et C de la
+  // semaine ajoutent leurs propres consignes.
+  const courses = await coursesDeLAthlete(userId, weekStart);
+  const lignesCourses = coursesPromptLines(courses, weekStart);
+  const facteurCourses = facteurVolumeCourses(courses, weekStart) ?? 1;
+  // La charge accumulée dit ce que le volume des sept derniers jours ne dit
+  // pas : avec quelle fatigue l'athlète aborde la semaine.
+  const charge = await bilanDeCharge(userId);
+
+  // Les créneaux déclarés ne sont pas une préférence, ce sont des bornes : le
+  // volume ne peut pas dépasser ce qui tient dedans.
+  const disponibilites = parseDisponibilites(profile.disponibilites);
+  const materiel = parseMateriel(profile.materiel);
+  const datesRepos = joursIndisponibles(disponibilites, weekStart);
+  const plafondCreneaux = volumeAtteignableMin(disponibilites);
+
+  const facteurContexte = facteurReprise * facteurCourses;
+  const lignesContexte = [
+    ...lignesReprise,
+    ...lignesCourses,
+    ...chargePromptLines(charge),
+    ...disponibilitesPromptLines(disponibilites, weekStart),
+    ...materielPromptLines(materiel),
+  ];
+
+  /** Applique le plafond des créneaux au volume calculé par la périodisation. */
+  const borner = (volume: number) => (plafondCreneaux ? Math.min(volume, plafondCreneaux) : volume);
 
   if (kind === "premiere_semaine") {
-    const maxVolumeMin = Math.round(profile.heuresSemaine * 60 * phase.volumeFactor);
+    const maxVolumeMin = borner(Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte));
     const recentSessions = await prisma.session.findMany({
       where: { userId, status: { in: ["faite", "manquee"] } },
       orderBy: { date: "desc" },
@@ -532,10 +654,14 @@ async function prepareGeneration(
       select: { date: true, sport: true, dureeMin: true, distanceKm: true, status: true, ressenti: true },
     });
 
+    const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
+
     return {
       weekStart,
       phase,
       allowedDates: weekDays(weekStart),
+      datesRepos,
+      zones,
       aiKind: "plan_generation",
       system: buildSystemPrompt(false, phase),
       userPrompt: buildFirstWeekPrompt(
@@ -544,13 +670,27 @@ async function prepareGeneration(
         phase,
         maxVolumeMin,
         recentSessions,
-        await measuredActivityLines(userId, addDays(weekStart, -21))
+        await measuredActivityLines(userId, addDays(weekStart, -21)),
+        zones,
+        [...(test ? testPromptLines(test) : []), ...lignesContexte]
       ),
     };
   }
 
   if (kind === "ajustement_semaine") {
-    return prepareAdjustment(userId, user.timezone, profile, weekStart, phase, motif);
+    return prepareAdjustment(
+      userId,
+      user.timezone,
+      profile,
+      weekStart,
+      phase,
+      motif,
+      zones,
+      facteurContexte,
+      lignesContexte,
+      datesRepos,
+      plafondCreneaux
+    );
   }
 
   const previousPlan = await prisma.trainingPlan.findFirst({
@@ -566,7 +706,9 @@ async function prepareGeneration(
   const plannedVolumeMin = nonRestSessions.reduce((sum, s) => sum + s.dureeMin, 0);
   const realizedVolumeMin = nonRestSessions
     .filter((s) => s.status === "faite")
-    .reduce((sum, s) => sum + s.dureeMin, 0);
+    // La durée corrigée prime : faire repartir la progression du volume prévu
+    // alors que l'athlète a écourté ses sorties le pousserait trop haut.
+    .reduce((sum, s) => sum + (s.dureeReelleMin ?? s.dureeMin), 0);
   const completedCount = nonRestSessions.filter((s) => s.status === "faite").length;
   const missedCount = nonRestSessions.filter((s) => s.status === "manquee").length;
 
@@ -574,12 +716,16 @@ async function prepareGeneration(
     realizedVolumeMin > 0 ? realizedVolumeMin : plannedVolumeMin > 0 ? plannedVolumeMin : profile.heuresSemaine * 60;
   // La progression de charge est plafonnée à +10%, puis la phase de
   // périodisation peut encore la réduire (affûtage, semaine de course).
-  const maxVolumeMin = Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor);
+  const maxVolumeMin = borner(Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurContexte));
+
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
 
   return {
     weekStart,
     phase,
     allowedDates: weekDays(weekStart),
+    datesRepos,
+    zones,
     aiKind: "plan_progression",
     system: buildSystemPrompt(true, phase),
     userPrompt: buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, {
@@ -589,7 +735,10 @@ async function prepareGeneration(
       missedCount,
       totalCount: nonRestSessions.length,
       maxVolumeMin,
-    }, await measuredActivityLines(userId, addDays(weekStart, -14))),
+    }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones, [
+    ...(test ? testPromptLines(test) : []),
+    ...lignesContexte,
+  ]),
   };
 }
 
@@ -609,14 +758,26 @@ async function processJob(jobId: string, userId: string, prepared: PreparedGener
       prepared.aiKind,
       prepared.system,
       prepared.userPrompt,
-      prepared.allowedDates
+      prepared.allowedDates,
+      new Set(prepared.datesRepos)
     );
+
+    // Le modèle mélange parfois les unités d'une discipline à l'autre. Le
+    // serveur connaît la bonne valeur pour chaque zone : il la rétablit plutôt
+    // que de livrer à l'athlète une allure au kilomètre dans un bassin.
+    const { seances, corrections } = corrigerCibles(aiPlan.sessions, prepared.zones);
+    if (corrections.length > 0) {
+      console.warn(
+        `[cibles] ${corrections.length} unité(s) rétablie(s) pour ${userId} :`,
+        corrections.map((c) => `${c.sport} ${c.bloc} « ${c.avant} » → « ${c.apres} »`).join(" ; ")
+      );
+    }
 
     const plan = await persistPlan({
       userId,
       weekStart: prepared.weekStart,
       raw,
-      aiPlan,
+      aiPlan: { ...aiPlan, sessions: seances },
       phase: prepared.phase,
       replaceFrom: prepared.replaceFrom,
     });

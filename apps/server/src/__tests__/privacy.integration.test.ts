@@ -12,7 +12,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 
 describeIfDb("données personnelles", () => {
   beforeAll(async () => {
@@ -30,7 +30,7 @@ describeIfDb("données personnelles", () => {
   });
 
   beforeEach(async () => {
-    resetAllRateLimits();
+    await resetAllRateLimits();
     await prisma.adminAction.deleteMany();
     await prisma.generationJob.deleteMany();
     await prisma.aiCall.deleteMany();

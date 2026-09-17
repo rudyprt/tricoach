@@ -56,6 +56,16 @@ const envSchema = z.object({
   ERROR_WEBHOOK_URL: z.string().default(""),
 
   /**
+   * Notifications poussées. Sans paire de clés VAPID, la fonctionnalité est
+   * absente de l'interface et les rappels passent uniquement par e-mail.
+   * Générer une paire : npx web-push generate-vapid-keys
+   */
+  VAPID_PUBLIC_KEY: z.string().default(""),
+  VAPID_PRIVATE_KEY: z.string().default(""),
+  /** Contact exigé par la spécification : "mailto:vous@exemple.fr". */
+  VAPID_SUBJECT: z.string().default(""),
+
+  /**
    * Connexion Strava. Sans identifiants d'application, la fonctionnalité est
    * simplement absente de l'interface : rien ne casse, elle ne s'affiche pas.
    * Créez une application sur https://www.strava.com/settings/api

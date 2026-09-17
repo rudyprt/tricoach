@@ -42,14 +42,14 @@ export function ProgressChart({ sessions }: { sessions: Session[] }) {
 
   if (data.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center text-zinc-500">
+      <div className="rounded-2xl border border-dashed border-bordure p-8 text-center text-doux">
         Pas encore assez de séances validées pour afficher une courbe de progression.
       </div>
     );
   }
 
   return (
-    <div className="h-64 rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
+    <div className="h-64 rounded-2xl border border-bordure bg-zinc-950 p-3">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ left: -20, right: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />

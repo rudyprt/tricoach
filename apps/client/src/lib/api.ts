@@ -38,6 +38,35 @@ export interface AthleteProfile {
   heuresSemaine: number;
   contraintes: string;
   ftpWatts: number | null;
+  seuilCourseSecParKm: number | null;
+  cssSecPer100m: number | null;
+  fcSeuil: number | null;
+  fcMax: number | null;
+  disponibilites: Disponibilites | null;
+  materiel: Materiel | null;
+}
+
+/** Créneaux d'entraînement, jour par jour. */
+export const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"] as const;
+export type Jour = (typeof JOURS)[number];
+export type Moment = "matin" | "midi" | "soir" | "libre";
+
+export interface JourDisponible {
+  disponible: boolean;
+  dureeMaxMin?: number | null;
+  moment?: Moment;
+}
+
+export type Disponibilites = Partial<Record<Jour, JourDisponible>>;
+
+export interface Materiel {
+  homeTrainer: boolean;
+  capteurPuissance: boolean;
+  montreGps: boolean;
+  cardiofrequencemetre: boolean;
+  tapisCourse: boolean;
+  piscine: "aucune" | "25m" | "50m" | "eau_libre";
+  velo: "route" | "contre_la_montre" | "vtt" | "aucun";
 }
 
 export type TrainingPhase =
@@ -71,6 +100,8 @@ export interface TrainingZones {
   course: ZoneRange[] | null;
   natation: ZoneRange[] | null;
   velo: ZoneRange[] | null;
+  /** Zones de fréquence cardiaque, communes aux trois disciplines. */
+  frequenceCardiaque: ZoneRange[] | null;
   notes: string[];
 }
 
@@ -79,6 +110,14 @@ export interface ZonesResponse {
   /** Zones telles que calculées, sans les corrections : sert à y revenir. */
   computedZones: TrainingZones;
   overrides: ZoneOverrides;
+  /** Proposition de FTP tirée des séances importées, jamais appliquée seule. */
+  ftpSuggere: { puissanceMoy: number; ftpSuggere: number } | null;
+  /** Ce qui décide de l'unité des zones : milieu de nage et capteurs. */
+  contexte: {
+    bassin: "25m" | "50m" | "eau_libre" | "aucune" | null;
+    aCapteurPuissance: boolean;
+    aCardio: boolean;
+  };
   periodization: Periodization;
 }
 
@@ -112,6 +151,8 @@ export interface Session {
   description: string;
   objectif: string | null;
   structure: SessionStructure | null;
+  /** Durée réellement effectuée, si l'athlète l'a corrigée. */
+  dureeReelleMin?: number | null;
   status: "planifiee" | "faite" | "manquee";
   ressenti: string | null;
   completedAt: string | null;
@@ -176,6 +217,8 @@ export interface CurrentUser {
   emailVerified: boolean;
   /** true quand les conditions ont changé depuis la dernière acceptation. */
   needsConsent: boolean;
+  /** Rappels par e-mail : semaine à générer, séances oubliées, fin d'essai. */
+  rappelsEmail: boolean;
   profile: AthleteProfile | null;
 }
 
@@ -343,4 +386,165 @@ export function formatUsd(microUsd: number): string {
   const dollars = microUsd / 1_000_000;
   if (dollars > 0 && dollars < 0.01) return "< 0,01 $";
   return `${dollars.toFixed(2).replace(".", ",")} $`;
+}
+
+/**
+ * Test de terrain programmé par le coach. Son résultat sert à recaler les
+ * valeurs de seuil, donc toutes les zones, sur le niveau réel du moment.
+ */
+export interface FitnessTest {
+  id: string;
+  sport: "course" | "velo" | "natation";
+  kind: string;
+  date: string;
+  status: "planifie" | "realise" | "abandonne";
+  titre: string;
+  protocole: string;
+  mesures: string;
+  resultat: {
+    distanceM: number | null;
+    puissanceMoy: number | null;
+    temps400S: number | null;
+    temps200S: number | null;
+    fcMoyenne: number | null;
+  };
+  resume: string | null;
+}
+
+export interface FitnessTestsResponse {
+  enCours: FitnessTest[];
+  historique: FitnessTest[];
+}
+
+/** Interruption d'entraînement : blessure, maladie, indisponibilité. */
+export type RaisonPause = "blessure" | "maladie" | "indisponibilite";
+
+export interface PauseEnCours {
+  id: string;
+  raison: RaisonPause;
+  libelle: string;
+  detail: string;
+  debut: string;
+  finPrevue: string | null;
+  joursEcoules: number;
+}
+
+export interface Reprise {
+  semaine: number;
+  total: number;
+  facteurVolume: number;
+  joursArret: number;
+  raison: string;
+}
+
+export interface EtatEntrainement {
+  etat: "normal" | "en_pause" | "en_reprise";
+  pause: PauseEnCours | null;
+  reprise: Reprise | null;
+}
+
+/** Une course inscrite au calendrier. La priorité décide de l'affûtage. */
+export type PrioriteCourse = "A" | "B" | "C";
+export type FormatCourse = "sprint" | "olympique" | "half" | "ironman" | "autre";
+
+export interface Course {
+  id: string;
+  nom: string;
+  date: string;
+  format: FormatCourse;
+  priorite: PrioriteCourse;
+  lieu: string;
+  objectifTemps: string;
+  formatLabel: string;
+  prioriteLabel: string;
+}
+
+/** Charge d'entraînement : condition acquise, fatigue récente et fraîcheur. */
+export interface PointDeCharge {
+  date: string;
+  charge: number;
+  forme: number;
+  fatigue: number;
+  fraicheur: number;
+}
+
+export interface BilanDeCharge {
+  points: PointDeCharge[];
+  forme: number;
+  fatigue: number;
+  fraicheur: number;
+  lecture: {
+    etat: "frais" | "equilibre" | "charge" | "surcharge";
+    titre: string;
+    message: string;
+  };
+  seancesEstimees: number;
+  seancesTotal: number;
+}
+
+/** Plan de course : allures, nutrition, hydratation, transitions. */
+export interface BlocCourse {
+  titre: string;
+  allure: string;
+  nutrition: string;
+  hydratation: string;
+  erreurs: string;
+}
+
+export interface PlanCourse {
+  resume: string;
+  veille: string;
+  matin: string;
+  natation: BlocCourse;
+  transition1: string;
+  velo: BlocCourse;
+  transition2: string;
+  course: BlocCourse;
+  reperes: string[];
+}
+
+/** Progression des valeurs de seuil, test après test. */
+export interface PointProgression {
+  date: string;
+  valeur: number;
+  libelle: string;
+}
+
+export interface ProgressionSeuils {
+  sens: Record<"course" | "velo" | "natation", "plus_bas_mieux" | "plus_haut_mieux">;
+  series: Record<"course" | "velo" | "natation", PointProgression[]>;
+}
+
+/** Régularité, jalons et records personnels. */
+export interface SemaineTenue {
+  weekStart: string;
+  prevuMin: number;
+  realiseMin: number;
+  seancesPrevues: number;
+  seancesFaites: number;
+  tenue: boolean;
+}
+
+export interface Jalon {
+  cle: string;
+  titre: string;
+  detail: string;
+  atteintLe: string;
+}
+
+export interface RecordPersonnel {
+  sport: string;
+  libelle: string;
+  valeur: string;
+  date: string;
+}
+
+export interface BilanRegularite {
+  serie: number;
+  meilleureSerie: number;
+  semaines: SemaineTenue[];
+  totalSeances: number;
+  totalHeures: number;
+  jalons: Jalon[];
+  records: RecordPersonnel[];
 }

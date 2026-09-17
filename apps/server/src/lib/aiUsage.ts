@@ -2,7 +2,7 @@ import { prisma } from "./prisma.js";
 import { costMicroUsd } from "./pricing.js";
 import type { ClaudeResponse } from "./anthropic.js";
 
-export type AiCallKind = "plan_generation" | "plan_progression" | "chat";
+export type AiCallKind = "plan_generation" | "plan_progression" | "chat" | "plan_course";
 
 /**
  * Enregistre la consommation d'un appel au modèle. L'écriture ne doit jamais

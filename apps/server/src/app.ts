@@ -14,6 +14,11 @@ import { adminRouter } from "./routes/admin.js";
 import { privacyRouter } from "./routes/privacy.js";
 import { stravaRouter } from "./routes/strava.js";
 import { activitiesRouter } from "./routes/activities.js";
+import { testsRouter } from "./routes/tests.js";
+import { pausesRouter } from "./routes/pauses.js";
+import { racesRouter } from "./routes/races.js";
+import { pushRouter } from "./routes/push.js";
+import { partageRouter } from "./routes/partage.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
 import { env } from "./lib/env.js";
 
@@ -45,6 +50,11 @@ export function createApp() {
   app.use("/api/privacy", privacyRouter);
   app.use("/api/strava", stravaRouter);
   app.use("/api/activities", activitiesRouter);
+  app.use("/api/tests", testsRouter);
+  app.use("/api/pauses", pausesRouter);
+  app.use("/api/races", racesRouter);
+  app.use("/api/push", pushRouter);
+  app.use("/api/partage", partageRouter);
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
@@ -53,7 +63,24 @@ export function createApp() {
   // En production, ce même serveur sert aussi le frontend compilé (même origine :
   // pas de souci CORS ni de cookies cross-domain).
   const clientDist = path.join(__dirname, "../../client/dist");
-  app.use(express.static(clientDist));
+  app.use(
+    express.static(clientDist, {
+      setHeaders(res, filePath) {
+        // Les fichiers de /assets portent un hachage : leur contenu ne change
+        // jamais, ils peuvent être gardés un an.
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          return;
+        }
+        // Le service worker, lui, doit être revalidé à chaque visite : un
+        // exemplaire figé en cache empêcherait toute mise à jour de
+        // l'application installée.
+        if (filePath.endsWith("sw.js") || filePath.endsWith("manifest.webmanifest")) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    })
+  );
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) {
       next();

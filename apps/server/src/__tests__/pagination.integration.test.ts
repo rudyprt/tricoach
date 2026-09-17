@@ -11,7 +11,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 
 describeIfDb("pagination", () => {
   beforeAll(async () => {
@@ -29,7 +29,7 @@ describeIfDb("pagination", () => {
   });
 
   beforeEach(async () => {
-    resetAllRateLimits();
+    await resetAllRateLimits();
     await prisma.chatMessage.deleteMany();
     await prisma.session.deleteMany();
     await prisma.trainingPlan.deleteMany();

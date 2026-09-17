@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { api, type Session, type SessionPage, type Activity, formatAllure } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { ProgressChart } from "../components/ProgressChart";
+import { ChargeChart } from "../components/ChargeChart";
+import { RegulariteCard } from "../components/RegulariteCard";
 import { Spinner } from "../components/Spinner";
 import { SessionDetailModal } from "../components/SessionDetailModal";
 
@@ -48,6 +50,7 @@ export function Historique() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recherche, setRecherche] = useState("");
   const [sportFilter, setSportFilter] = useState<string>("tous");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hrZones, setHrZones] = useState<HrZones | null>(null);
@@ -80,8 +83,13 @@ export function Historique() {
     }
   }, [user?.isPremium]);
 
-  async function updateSession(id: string, status: Session["status"], ressenti?: string) {
-    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti });
+  async function updateSession(
+    id: string,
+    status: Session["status"],
+    ressenti?: string,
+    dureeReelleMin?: number | null
+  ) {
+    const { data } = await api.patch<Session>(`/sessions/${id}`, { status, ressenti, dureeReelleMin });
     setSessions((prev) => prev.map((s) => (s.id === id ? data : s)));
   }
 
@@ -97,6 +105,19 @@ export function Historique() {
 
   const pastSessions = hasFullAccess ? allPastSessions : allPastSessions.slice(0, LIMITED_HISTORY_COUNT);
   const hiddenCount = allPastSessions.length - pastSessions.length;
+
+  // La recherche porte sur ce que l'athlète a sous les yeux : le titre de la
+  // séance et son propre ressenti, qui est souvent ce dont il se souvient.
+  const sessionsAffichees = useMemo(() => {
+    const terme = recherche.trim().toLowerCase();
+    if (!terme) return pastSessions;
+    return pastSessions.filter(
+      (s) =>
+        s.titre.toLowerCase().includes(terme) ||
+        (s.ressenti ?? "").toLowerCase().includes(terme) ||
+        (s.description ?? "").toLowerCase().includes(terme)
+    );
+  }, [pastSessions, recherche]);
 
   const maxZoneMinutes = hrZones ? Math.max(1, ...hrZones.zones.map((z) => z.minutes)) : 1;
 
@@ -114,11 +135,17 @@ export function Historique() {
     <div className="space-y-5">
       <h1 className="text-xl font-bold text-white">Historique & progression</h1>
 
+      {/* Ouvert à tous, contrairement à la courbe de progression : c'est le
+          garde-fou anti-surentraînement, pas un argument commercial. */}
+      <RegulariteCard />
+
+      <ChargeChart />
+
       {hasFullAccess ? (
         <ProgressChart sessions={sessions} />
       ) : (
-        <div className="rounded-2xl border border-dashed border-zinc-800 p-6 text-center">
-          <p className="text-sm text-zinc-400">
+        <div className="rounded-2xl border border-dashed border-bordure p-6 text-center">
+          <p className="text-sm text-doux">
             Débloquez la courbe de progression (forme, volume, performance) avec l'offre Standard.
           </p>
           <Link
@@ -131,31 +158,45 @@ export function Historique() {
       )}
 
       {user?.isPremium && hrZones && hrZones.zones.length > 0 && (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+        <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
           <p className="mb-3 text-sm font-semibold text-white">Répartition par zone (30 derniers jours)</p>
           <div className="space-y-2">
             {hrZones.zones.map((z) => (
               <div key={z.zone} className="flex items-center gap-2">
-                <span className="w-16 shrink-0 text-xs text-zinc-400">{z.zone}</span>
+                <span className="w-16 shrink-0 text-xs text-doux">{z.zone}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-900">
                   <div
                     className="h-full rounded-full bg-rose-500"
                     style={{ width: `${(z.minutes / maxZoneMinutes) * 100}%` }}
                   />
                 </div>
-                <span className="w-14 shrink-0 text-right text-xs text-zinc-500">{z.minutes} min</span>
+                <span className="w-14 shrink-0 text-right text-xs text-doux">{z.minutes} min</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <label className="text-sm text-zinc-400">Filtrer :</label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor="recherche-seances" className="sr-only">
+          Rechercher une séance
+        </label>
+        <input
+          id="recherche-seances"
+          type="search"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Rechercher un titre, un ressenti…"
+          className="min-w-0 flex-1 rounded-lg border border-bordure bg-surface px-3 py-2 text-sm text-fort placeholder:text-tres-doux focus:border-accent"
+        />
+        <label htmlFor="filtre-sport" className="sr-only">
+          Filtrer par sport
+        </label>
         <select
+          id="filtre-sport"
           value={sportFilter}
           onChange={(e) => setSportFilter(e.target.value)}
-          className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-white outline-none transition-colors focus:border-rose-500"
+          className="rounded-lg border border-bordure bg-surface px-2 py-2 text-sm text-fort focus:border-accent"
         >
           <option value="tous">Tous les sports</option>
           <option value="natation">Natation</option>
@@ -166,14 +207,26 @@ export function Historique() {
       </div>
 
       {loading ? (
-        <p className="flex items-center gap-2 text-zinc-500">
+        <p className="flex items-center gap-2 text-doux">
           <Spinner /> Chargement...
         </p>
-      ) : pastSessions.length === 0 ? (
-        <p className="text-zinc-500">Aucune séance passée pour le moment.</p>
+      ) : sessionsAffichees.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-bordure p-8 text-center">
+          <span aria-hidden="true" className="mb-3 block text-4xl">
+            {recherche || sportFilter !== "tous" ? "🔍" : "📈"}
+          </span>
+          <p className="text-sm font-semibold text-fort">
+            {recherche || sportFilter !== "tous" ? "Aucune séance ne correspond" : "Pas encore de séance passée"}
+          </p>
+          <p className="mx-auto mt-1.5 max-w-xs text-sm text-doux">
+            {recherche || sportFilter !== "tous"
+              ? "Essayez un autre mot, ou remettez le filtre sur tous les sports."
+              : "Vos séances validées apparaîtront ici, avec vos progrès semaine après semaine."}
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
-          {pastSessions.map((s, i) => (
+          {sessionsAffichees.map((s, i) => (
             <div
               key={s.id}
               role="button"
@@ -182,7 +235,7 @@ export function Historique() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") setSelectedId(s.id);
               }}
-              className="animate-fade-in-up flex cursor-pointer items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 transition-colors duration-200 hover:border-zinc-700"
+              className="animate-fade-in-up flex cursor-pointer items-center gap-3 rounded-2xl border border-bordure bg-zinc-950 px-3 py-2.5 transition-colors duration-200 hover:border-bordure-forte"
               style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
             >
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-lg">
@@ -194,7 +247,7 @@ export function Historique() {
                   {" · "}
                   {SPORT_LABELS[s.sport]} — {s.titre}
                 </p>
-                <p className="truncate text-xs text-zinc-500">
+                <p className="truncate text-xs text-doux">
                   {s.dureeMin} min{s.distanceKm ? ` · ${s.distanceKm} km` : ""}
                   {s.ressenti ? ` · Ressenti : ${s.ressenti}` : ""}
                 </p>
@@ -219,8 +272,8 @@ export function Historique() {
           ))}
 
           {!hasFullAccess && hiddenCount > 0 && (
-            <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-center">
-              <p className="text-sm text-zinc-400">
+            <div className="rounded-2xl border border-dashed border-bordure p-4 text-center">
+              <p className="text-sm text-doux">
                 {hiddenCount} séance{hiddenCount > 1 ? "s" : ""} supplémentaire{hiddenCount > 1 ? "s" : ""} masquée
                 {hiddenCount > 1 ? "s" : ""}. Passez à Standard pour un historique illimité.
               </p>

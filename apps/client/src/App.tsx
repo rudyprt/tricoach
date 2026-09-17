@@ -1,9 +1,13 @@
 import { Suspense, lazy, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { ToastProvider } from "./ui/Toasts";
+import { ConfirmationProvider } from "./ui/Confirmation";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import { AnimatedBackground } from "./components/AnimatedBackground";
+import { IndicateurHorsLigne } from "./components/IndicateurHorsLigne";
+import { NouvelleVersion } from "./components/NouvelleVersion";
 import { SplashScreen } from "./components/SplashScreen";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
@@ -20,6 +24,8 @@ const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin
 const Compte = lazy(() => import("./pages/Compte").then((m) => ({ default: m.Compte })));
 const StravaReturn = lazy(() => import("./pages/StravaReturn").then((m) => ({ default: m.StravaReturn })));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail").then((m) => ({ default: m.VerifyEmail })));
+const Desabonnement = lazy(() => import("./pages/Desabonnement").then((m) => ({ default: m.Desabonnement })));
+const SemainePartagee = lazy(() => import("./pages/SemainePartagee").then((m) => ({ default: m.SemainePartagee })));
 const Conditions = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Conditions })));
 const Confidentialite = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Confidentialite })));
 const MentionsLegales = lazy(() => import("./pages/Legal").then((m) => ({ default: m.MentionsLegales })));
@@ -40,11 +46,13 @@ function AppShell() {
   return (
     <>
       <AnimatedBackground />
+      <IndicateurHorsLigne />
+      <NouvelleVersion />
       {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
       <Suspense
         fallback={
           <div className="flex min-h-screen items-center justify-center">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-rose-500" />
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-bordure-forte border-t-rose-500" />
           </div>
         }
       >
@@ -54,6 +62,8 @@ function AppShell() {
         <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
         <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
         <Route path="/verifier-email" element={<VerifyEmail />} />
+        <Route path="/desabonnement" element={<Desabonnement />} />
+        <Route path="/semaine/:token" element={<SemainePartagee />} />
         <Route
           path="/strava/retour"
           element={
@@ -109,7 +119,11 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppShell />
+        <ToastProvider>
+          <ConfirmationProvider>
+            <AppShell />
+          </ConfirmationProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

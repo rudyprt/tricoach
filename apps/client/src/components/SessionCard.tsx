@@ -17,7 +17,7 @@ const SPORT_LABELS: Record<Session["sport"], string> = {
 };
 
 const STATUS_RING: Record<Session["status"], string> = {
-  planifiee: "border-zinc-800",
+  planifiee: "border-bordure",
   faite: "border-emerald-800",
   manquee: "border-red-900",
 };
@@ -45,7 +45,7 @@ export function SessionCard({ session, onOpen, onQuickUpdate }: Props) {
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") onOpen();
       }}
-      className={`w-full cursor-pointer rounded-2xl border bg-zinc-950 p-3 text-left transition-colors duration-200 hover:border-zinc-700 ${STATUS_RING[session.status]}`}
+      className={`w-full cursor-pointer rounded-2xl border bg-zinc-950 p-3 text-left transition-colors duration-200 hover:border-bordure-forte ${STATUS_RING[session.status]}`}
     >
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xl">
@@ -53,12 +53,14 @@ export function SessionCard({ session, onOpen, onQuickUpdate }: Props) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500">{dateLabel}</p>
+          <p className="text-[11px] uppercase tracking-wide text-doux">{dateLabel}</p>
           <p className="truncate font-semibold text-white">
-            {SPORT_LABELS[session.sport]} — {session.titre}
+            {/* « Repos — Repos » : sur un jour de repos, le sport et le titre
+                disent la même chose. */}
+            {isRestDay ? session.titre : `${SPORT_LABELS[session.sport]} — ${session.titre}`}
           </p>
           {!isRestDay && (
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-doux">
               {session.dureeMin} min{session.distanceKm ? ` · ${session.distanceKm} km` : ""}
             </p>
           )}
@@ -82,7 +84,7 @@ export function SessionCard({ session, onOpen, onQuickUpdate }: Props) {
                 onQuickUpdate(session.id, "manquee");
               }}
               aria-label="Marquer comme manquée"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800 text-zinc-400 transition-all duration-150 hover:scale-110 hover:bg-zinc-900 active:scale-90"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-bordure text-doux transition-all duration-150 hover:scale-110 hover:bg-zinc-900 active:scale-90"
             >
               ✕
             </button>
@@ -104,7 +106,7 @@ export function SessionCard({ session, onOpen, onQuickUpdate }: Props) {
       </div>
 
       {session.description && (
-        <p className="mt-2 truncate pl-[3.75rem] text-sm text-zinc-400">{session.description}</p>
+        <p className="mt-2 truncate pl-[3.75rem] text-sm text-doux">{session.description}</p>
       )}
       {session.ressenti && (
         <p className="mt-1 truncate pl-[3.75rem] text-sm italic text-emerald-300">Ressenti : {session.ressenti}</p>

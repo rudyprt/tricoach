@@ -12,7 +12,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
-let resetAllRateLimits: () => void;
+let resetAllRateLimits: () => Promise<void>;
 let resetPresenceCache: () => void;
 
 describeIfDb("administration", () => {
@@ -33,7 +33,7 @@ describeIfDb("administration", () => {
   });
 
   beforeEach(async () => {
-    resetAllRateLimits();
+    await resetAllRateLimits();
     resetPresenceCache();
     await prisma.adminAction.deleteMany();
     await prisma.aiCall.deleteMany();
@@ -256,10 +256,10 @@ describeIfDb("administration", () => {
       for (let i = 0; i < 5; i++) {
         // La limite d'inscription par adresse IP est réelle : ce test crée plus
         // de comptes qu'elle n'en autorise, on la remet à zéro entre chacun.
-        resetAllRateLimits();
+        await resetAllRateLimits();
         await signUp(`liste${i}@example.com`);
       }
-      resetAllRateLimits();
+      await resetAllRateLimits();
       const cible = await signUp("cherchee@autredomaine.fr");
       await prisma.user.update({ where: { id: cible.user.id }, data: { plan: "premium" } });
 

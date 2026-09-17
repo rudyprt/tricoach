@@ -34,6 +34,9 @@ model User {
   /// version acceptée : une évolution des conditions doit être re-consentie.
   consentAcceptedAt DateTime?
   consentVersion    String?
+  /// Rappels par e-mail (semaine à générer, séances oubliées, fin d'essai).
+  /// Désactivable en un clic depuis chaque message, sans se connecter.
+  rappelsEmail      Boolean   @default(true)
   createdAt         DateTime  @default(now())
 
   profile                AthleteProfile?
@@ -48,6 +51,12 @@ model User {
   EmailVerificationToken EmailVerificationToken[]
   StravaAccount          StravaAccount?
   Activity               Activity[]
+  fitnessTests           FitnessTest[]
+  reminders              Reminder[]
+  pushSubscriptions      PushSubscription[]
+  partages               SharedWeek[]
+  pauses                 TrainingPause[]
+  races                  Race[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -176,22 +185,37 @@ model AdminAction {
 }
 
 model AthleteProfile {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  objectif      String
-  objectifDate  DateTime
-  tempsNatation String   @default("")
-  tempsVelo     String   @default("")
-  tempsCourse   String   @default("")
-  heuresSemaine Float
-  contraintes   String   @default("")
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectif            String
+  objectifDate        DateTime
+  tempsNatation       String   @default("")
+  tempsVelo           String   @default("")
+  tempsCourse         String   @default("")
+  heuresSemaine       Float
+  contraintes         String   @default("")
   /// Zones de puissance vélo si l'athlète connaît sa FTP (sinon estimation par la vitesse).
-  ftpWatts      Int?
+  ftpWatts            Int?
+  /// Allure au seuil en course, en secondes par kilomètre, si l'athlète la connaît.
+  seuilCourseSecParKm Int?
+  /// Vitesse critique en natation (CSS), en secondes aux 100 m.
+  cssSecPer100m       Int?
+  /// Fréquence cardiaque au seuil, mesurée lors d'un test.
+  fcSeuil             Int?
+  /// Fréquence cardiaque maximale connue.
+  fcMax               Int?
   /// Zones corrigées à la main par l'athlète : { course: { Z2: "5:30/km" }, ... }.
   /// Une valeur saisie ici prime sur le calcul automatique.
-  customZones   Json?
-  updatedAt     DateTime @updatedAt
+  customZones         Json?
+  /// Créneaux d'entraînement, jour par jour :
+  /// { lundi: { disponible: true, dureeMaxMin: 90, moment: "soir" }, ... }
+  /// Sans cela, le coach placerait une sortie longue un mardi soir de travail.
+  disponibilites      Json?
+  /// Matériel et accès : home-trainer, piscine, vélo, capteurs.
+  /// Une séance que l'athlète ne peut pas réaliser ne sert à rien.
+  materiel            Json?
+  updatedAt           DateTime @updatedAt
 }
 
 model TrainingPlan {
@@ -210,22 +234,25 @@ model TrainingPlan {
 }
 
 model Session {
-  id          String       @id @default(cuid())
-  planId      String
-  plan        TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date        DateTime
-  sport       String
-  titre       String
-  dureeMin    Int
-  distanceKm  Float?
-  description String       @default("")
-  objectif    String?
-  structure   Json?
-  status      String       @default("planifiee")
-  ressenti    String?
-  completedAt DateTime?
+  id             String       @id @default(cuid())
+  planId         String
+  plan           TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime
+  sport          String
+  titre          String
+  dureeMin       Int
+  distanceKm     Float?
+  description    String       @default("")
+  objectif       String?
+  structure      Json?
+  status         String       @default("planifiee")
+  /// Durée réellement effectuée, quand elle diffère du prévu. Null tant que
+  /// l'athlète n'a rien corrigé : c'est alors `dureeMin` qui fait foi.
+  dureeReelleMin Int?
+  ressenti       String?
+  completedAt    DateTime?
 
   @@index([userId, date])
   @@index([planId])
@@ -253,4 +280,163 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+/// Un test de terrain programmé par le coach IA, puis son résultat. C'est la
+/// mesure qui remplace l'estimation : tant qu'aucun test n'a été réalisé, les
+/// zones reposent sur un temps de référence déclaré, parfois ancien.
+model FitnessTest {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "course" | "velo" | "natation"
+  sport        String
+  /// Protocole appliqué : "course_30min", "velo_20min", "natation_css".
+  kind         String
+  /// Jour où le test est programmé, et semaine à laquelle il appartient.
+  scheduledFor DateTime
+  weekStart    DateTime
+  /// "planifie" | "realise" | "abandonne"
+  status       String    @default("planifie")
+  /// Résultats bruts saisis par l'athlète (ou repris d'une activité importée).
+  distanceM    Int?
+  puissanceMoy Int?
+  temps400S    Int?
+  temps200S    Int?
+  fcMoyenne    Int?
+  /// Valeurs de seuil déduites du résultat, et date de leur application au profil.
+  resume       String?
+  appliedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, scheduledFor])
+  @@index([userId, sport, status])
+}
+
+/// Trace des rappels envoyés. La contrainte d'unicité est le garde-fou : sans
+/// elle, un redémarrage du serveur, ou deux instances tournant en parallèle,
+/// enverraient deux fois le même message au même athlète.
+model Reminder {
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "semaine_a_generer" | "seances_oubliees" | "fin_essai"
+  kind    String
+  /// Clé de période qui rend l'envoi idempotent ("2026-W38", "2026-09-15"...).
+  periode String
+  sentAt  DateTime @default(now())
+
+  @@unique([userId, kind, periode])
+  @@index([userId, sentAt])
+}
+
+/// Interruption d'entraînement : blessure, maladie, indisponibilité.
+///
+/// Sans elle, l'application continuait de produire des semaines comme si de
+/// rien n'était, et la progression de charge repartait du volume d'avant
+/// l'arrêt — le meilleur moyen de re-blesser quelqu'un à la reprise.
+model TrainingPause {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "blessure" | "maladie" | "indisponibilite"
+  raison    String
+  detail    String    @default("")
+  debut     DateTime
+  /// Date de reprise envisagée, si l'athlète la connaît.
+  finPrevue DateTime?
+  /// Date de reprise effective. Tant qu'elle est nulle, la pause est en cours.
+  finReelle DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, debut])
+  @@index([userId, finReelle])
+}
+
+/// Une course inscrite au calendrier de l'athlète.
+///
+/// Un triathlète ne prépare presque jamais une seule course : il en cible une
+/// principale et en court d'autres en chemin. Les traiter toutes comme
+/// l'objectif principal ferait affûter quatre fois dans la saison ; les ignorer
+/// ferait courir un objectif intermédiaire en pleine fatigue.
+model Race {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nom           String
+  date          DateTime
+  /// "sprint" | "olympique" | "half" | "ironman" | "autre"
+  format        String    @default("autre")
+  /// "A" : objectif principal, affûtage complet.
+  /// "B" : objectif secondaire, affûtage court.
+  /// "C" : course d'entraînement, aucun allègement.
+  priorite      String    @default("A")
+  lieu          String    @default("")
+  /// Temps visé, texte libre ("2h30").
+  objectifTemps String    @default("")
+  /// Plan de course : allures cible, nutrition, hydratation, transitions.
+  /// Généré à la demande, puis conservé — l'athlète le relit la veille.
+  planCourse    Json?
+  planGenereLe  DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId, date])
+}
+
+/// Abonnement aux notifications poussées, un par appareil.
+///
+/// L'e-mail dépend d'un prestataire d'envoi et arrive quand la personne relève
+/// sa boîte. Une notification arrive sur l'écran, tout de suite, et fonctionne
+/// sur iPhone dès lors que l'application est installée sur l'écran d'accueil.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Point de terminaison fourni par le navigateur : identifie l'appareil.
+  endpoint   String    @unique
+  /// Clés de chiffrement du navigateur, sans lesquelles il refuse le message.
+  p256dh     String
+  auth       String
+  /// Mis à jour à chaque envoi réussi ; sert à repérer les appareils muets.
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Partage en lecture seule d'une semaine de programme.
+///
+/// Un athlète veut montrer sa semaine à un coach humain, à un partenaire
+/// d'entraînement ou à son kiné. Sans cela, la seule option était la capture
+/// d'écran. Le lien porte un jeton imprévisible, expire, et ne donne accès
+/// qu'aux séances de cette semaine — jamais au compte.
+model SharedWeek {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Seul le hash est conservé : une fuite de la base ne livre aucun lien actif.
+  tokenHash String   @unique
+  weekStart DateTime
+  expiresAt DateTime
+  /// Compte les consultations, pour que l'athlète voie si son lien a servi.
+  vues      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId, weekStart])
+}
+
+/// Compteur de limitation de débit partagé entre les instances du serveur.
+///
+/// Le compteur en mémoire suffit tant qu'une seule instance tourne, mais avec
+/// deux instances derrière un répartiteur, chacune autorise le quota entier :
+/// une protection contre le bourrage de mots de passe qui double dès qu'on
+/// monte en charge n'en est plus une. Seules les routes sensibles l'utilisent,
+/// pour ne pas ajouter une écriture à chaque requête.
+model RateLimitCounter {
+  /// Clé du limiteur et de l'appelant, plus le début de fenêtre.
+  id        String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }

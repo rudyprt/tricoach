@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaPersonSwimming, FaPersonBiking, FaPersonRunning, FaFlagCheckered, FaPen } from "react-icons/fa6";
+import { FaPersonSwimming, FaPersonBiking, FaPersonRunning, FaFlagCheckered, FaPen, FaHeartPulse } from "react-icons/fa6";
 import {
   api,
   apiErrorMessage,
@@ -11,6 +11,11 @@ import {
   type ZonesResponse,
 } from "../lib/api";
 import { Spinner } from "../components/Spinner";
+import { TestsCard } from "../components/TestsCard";
+import { useConfirmation } from "../ui/Confirmation";
+import { useToasts } from "../ui/Toasts";
+import { Terme } from "../ui/Glossaire";
+import { ProgressionSeuilsChart } from "../components/ProgressionSeuilsChart";
 
 const PHASE_HINTS: Record<TrainingPhase, string> = {
   base: "Priorité au volume en endurance fondamentale et à la technique.",
@@ -26,6 +31,13 @@ const SPORTS = [
   { key: "velo", label: "Vélo", Icon: FaPersonBiking, color: "text-amber-400" },
   { key: "course", label: "Course à pied", Icon: FaPersonRunning, color: "text-rose-400" },
 ] as const;
+
+/** Le milieu de nage décide de l'allure atteignable : on le nomme. */
+const MILIEUX: Record<string, string> = {
+  "25m": "bassin de 25 m",
+  "50m": "bassin de 50 m",
+  eau_libre: "eau libre",
+};
 
 const ZONE_COLORS: Record<string, string> = {
   Z1: "bg-sky-500/15 text-sky-300",
@@ -53,7 +65,7 @@ function ZoneTable({ ranges }: { ranges: ZoneRange[] }) {
       {ranges.map((z) => (
         <li key={z.zone} className="flex items-center gap-3 text-sm">
           <ZoneBadge zone={z.zone} />
-          <span className="flex-1 text-zinc-400">{z.label}</span>
+          <span className="flex-1 text-doux">{z.label}</span>
           <span className={`font-mono ${z.custom ? "text-amber-300" : "text-white"}`}>{z.value}</span>
           {z.custom && (
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-amber-500/70" title="Valeur que vous avez saisie">
@@ -97,14 +109,14 @@ function ZoneEditor({
         return (
           <li key={zone} className="flex items-center gap-2">
             <ZoneBadge zone={zone} />
-            <span className="hidden flex-1 text-xs text-zinc-500 sm:block">{auto?.label ?? ZONE_LABELS[zone]}</span>
+            <span className="hidden flex-1 text-xs text-doux sm:block">{auto?.label ?? ZONE_LABELS[zone]}</span>
             <input
               value={draft[zone] ?? ""}
               onChange={(e) => onChange(zone, e.target.value)}
               placeholder={auto?.value ?? "non calculée"}
               maxLength={40}
               aria-label={`Zone ${zone} ${sport}`}
-              className="w-36 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-right font-mono text-sm text-white outline-none transition-colors focus:border-rose-500 sm:w-40"
+              className="w-36 rounded-md border border-bordure bg-zinc-900 px-2 py-1 text-right font-mono text-sm text-white outline-none transition-colors focus:border-rose-500 sm:w-40"
             />
           </li>
         );
@@ -120,6 +132,8 @@ export function Zones() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { demander } = useConfirmation();
+  const { afficher } = useToasts();
 
   useEffect(() => {
     api
@@ -154,6 +168,7 @@ export function Zones() {
       );
       setData((prev) => (prev ? { ...prev, zones: saved.zones, overrides: saved.overrides } : prev));
       setEditing(false);
+      afficher("Vos zones sont enregistrées. Votre prochain programme les utilisera.", { ton: "succes" });
     } catch (err) {
       setError(apiErrorMessage(err, "Impossible d'enregistrer vos zones."));
     } finally {
@@ -162,7 +177,12 @@ export function Zones() {
   }
 
   async function resetAll() {
-    if (!window.confirm("Revenir aux zones calculées à partir de vos temps de référence ?")) return;
+    const { confirme } = await demander({
+      titre: "Revenir aux zones calculées ?",
+      description: "Vos corrections manuelles seront effacées et les zones repartiront de vos temps de référence.",
+      confirmer: "Revenir au calcul",
+    });
+    if (!confirme) return;
     setSaving(true);
     setError(null);
     try {
@@ -207,14 +227,17 @@ export function Zones() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Mes zones d'entraînement</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-doux">
             Calculées à partir de vos temps de référence. Votre programme est construit sur ces allures.
+          </p>
+          <p className="mt-2 text-sm text-doux">
+            <Terme cle="zones" /> · <Terme cle="seuil" /> · <Terme cle="ftp" /> · <Terme cle="css" />
           </p>
         </div>
         {!editing && (
           <button
             onClick={startEditing}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-colors hover:border-rose-700 hover:text-white"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-bordure px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-colors hover:border-rose-700 hover:text-white"
           >
             <FaPen size={10} />
             Modifier
@@ -233,7 +256,7 @@ export function Zones() {
             <h2 className="text-sm font-bold uppercase tracking-wide text-white">{periodization.label}</h2>
           </div>
           <p className="mt-1.5 text-sm text-zinc-300">{PHASE_HINTS[periodization.phase]}</p>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-doux">
             {periodization.weeksToGoal > 0
               ? `Objectif dans ${periodization.weeksToGoal} semaine${periodization.weeksToGoal > 1 ? "s" : ""}.`
               : periodization.weeksToGoal === 0
@@ -242,6 +265,10 @@ export function Zones() {
           </p>
         </div>
       )}
+
+      {!editing && <TestsCard />}
+
+      {!editing && <ProgressionSeuilsChart />}
 
       {editing && (
         <p className="rounded-xl border border-amber-900/50 bg-amber-950/20 px-3 py-2.5 text-sm text-amber-200">
@@ -253,7 +280,7 @@ export function Zones() {
       {SPORTS.map(({ key, label, Icon, color }) => {
         const ranges = zones[key];
         return (
-          <div key={key} className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+          <div key={key} className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
             <div className="mb-3 flex items-center gap-2">
               <Icon className={color} size={15} />
               <h2 className="text-sm font-bold text-white">{label}</h2>
@@ -266,16 +293,67 @@ export function Zones() {
                 onChange={(zone, value) => updateDraft(key, zone, value)}
               />
             ) : ranges ? (
-              <ZoneTable ranges={ranges} />
+              <>
+                {key === "natation" && MILIEUX[data.contexte.bassin ?? ""] && (
+                  <p className="mb-2 text-xs text-doux">
+                    Valables en <strong className="text-fort">{MILIEUX[data.contexte.bassin ?? ""]}</strong>. À
+                    effort égal, le temps aux 100 m change avec le milieu : les équivalences figurent sous
+                    « Méthode de calcul ».
+                  </p>
+                )}
+                <ZoneTable ranges={ranges} />
+              </>
             ) : (
-              <p className="text-sm text-zinc-500">
-                Renseignez un temps de référence en {label.toLowerCase()}, ou saisissez vos zones à la main avec
-                « Modifier ».
+              <p className="text-sm text-doux">
+                {key === "velo" ? (
+                  data.contexte.aCardio ? (
+                    <>
+                      Sans capteur de puissance, votre intensité à vélo se lit à la{" "}
+                      <strong className="text-fort">fréquence cardiaque</strong>, plus bas sur cette page. Une
+                      vitesse en km/h peut servir de repère, mais seulement sur terrain plat et sans vent.
+                    </>
+                  ) : (
+                    <>
+                      Sans capteur ni cardiofréquencemètre, votre intensité à vélo se donne en{" "}
+                      <strong className="text-fort">km/h et à la sensation</strong>. La vitesse ne vaut que sur
+                      terrain plat, sans vent, ou sur home-trainer : en côte ou face au vent, fiez-vous à votre
+                      respiration.
+                    </>
+                  )
+                ) : (
+                  `Renseignez un temps de référence en ${label.toLowerCase()}, ou saisissez vos zones à la main avec « Modifier ».`
+                )}
               </p>
             )}
           </div>
         );
       })}
+
+      {!editing && zones.frequenceCardiaque && (
+        <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <FaHeartPulse className="text-red-400" size={15} />
+            <h2 className="text-sm font-bold text-white">Fréquence cardiaque</h2>
+          </div>
+          <ZoneTable ranges={zones.frequenceCardiaque} />
+          <p className="mt-2 text-xs text-doux">
+            Utile surtout à vélo, où la puissance n'est pas toujours disponible.
+          </p>
+        </div>
+      )}
+
+      {!editing && data.ftpSuggere && (
+        <div className="rounded-xl border border-sky-900/50 bg-sky-950/20 p-3">
+          <p className="text-sm text-sky-200">
+            Vos séances importées montrent une moyenne de {data.ftpSuggere.puissanceMoy} W sur une sortie
+            d'entraînement. Votre FTP est probablement proche de{" "}
+            <strong>{data.ftpSuggere.ftpSuggere} W</strong>.
+          </p>
+          <Link to="/objectif" className="mt-1.5 inline-block text-xs font-semibold text-sky-300 hover:underline">
+            Renseigner ma FTP →
+          </Link>
+        </div>
+      )}
 
       {editing ? (
         <div className="flex flex-wrap gap-2">
@@ -293,7 +371,7 @@ export function Zones() {
               setError(null);
             }}
             disabled={saving}
-            className="rounded-lg border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white disabled:opacity-50"
+            className="rounded-lg border border-bordure px-4 py-2.5 text-sm text-zinc-300 transition-colors hover:border-bordure-forte hover:text-white disabled:opacity-50"
           >
             Annuler
           </button>
@@ -301,11 +379,11 @@ export function Zones() {
       ) : (
         <>
           {zones.notes.length > 0 && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Méthode de calcul</p>
+            <div className="rounded-xl border border-bordure bg-zinc-900/40 p-3">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-doux">Méthode de calcul</p>
               <ul className="space-y-1">
                 {zones.notes.map((note) => (
-                  <li key={note} className="text-xs text-zinc-400">
+                  <li key={note} className="text-xs text-doux">
                     {note}
                   </li>
                 ))}
@@ -317,7 +395,7 @@ export function Zones() {
             <button
               onClick={resetAll}
               disabled={saving}
-              className="w-full rounded-lg border border-zinc-800 px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+              className="w-full rounded-lg border border-bordure px-3 py-2.5 text-sm text-doux transition-colors hover:border-bordure-forte hover:text-zinc-200 disabled:opacity-50"
             >
               Revenir aux zones calculées automatiquement
             </button>
@@ -325,7 +403,7 @@ export function Zones() {
 
           <Link
             to="/objectif"
-            className="block rounded-lg border border-zinc-800 px-3 py-2.5 text-center text-sm text-zinc-300 transition-colors hover:border-rose-800 hover:text-white"
+            className="block rounded-lg border border-bordure px-3 py-2.5 text-center text-sm text-zinc-300 transition-colors hover:border-rose-800 hover:text-white"
           >
             Mettre à jour mes temps de référence
           </Link>
