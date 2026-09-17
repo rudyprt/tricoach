@@ -64,18 +64,34 @@ body {
   border-radius: 0.375rem;
 }
 
-/* Lien d'évitement : premier élément focusable de la page. */
+/*
+ * Lien d'évitement : hors de vue tant qu'il n'a pas le focus.
+ *
+ * Il était remonté de deux fois sa hauteur, ce qui ne suffit pas dès que
+ * l'encoche décale son point de départ : sur un écran avec zone sûre, un
+ * liseré rose dépassait en haut à gauche de toutes les pages. Un masquage qui
+ * ne dépend plus de sa position le fait disparaître quel que soit le décalage,
+ * tout en le laissant accessible au clavier et aux lecteurs d'écran.
+ */
 .lien-evitement {
   position: fixed;
   top: calc(var(--marge-haute) + 0.5rem);
   left: 0.5rem;
   z-index: 100;
-  transform: translateY(-200%);
-  transition: transform 0.15s ease-out;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .lien-evitement:focus {
-  transform: translateY(0);
+  width: auto;
+  height: auto;
+  padding: 0.5rem 0.75rem;
+  overflow: visible;
+  clip-path: none;
 }
 
 /*
