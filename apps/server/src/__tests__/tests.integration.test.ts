@@ -164,6 +164,44 @@ describeIfDb("tests de terrain", () => {
     expect((await intrus.get("/api/tests")).body.enCours).toHaveLength(0);
   });
 
+  it("espace les tests d'au moins deux semaines, toutes disciplines confondues", async () => {
+    // Un débutant n'a aucun seuil connu dans les trois disciplines : sans
+    // garde, il enchaînerait trois efforts maximaux en trois semaines.
+    const { user } = await athlete("debutant@example.com");
+    const profil = await profilPour(user.id);
+
+    await prisma.fitnessTest.create({
+      data: {
+        userId: user.id,
+        sport: "course",
+        kind: "course_30min",
+        scheduledFor: new Date("2026-02-28T00:00:00.000Z"),
+        weekStart: new Date("2026-02-23T00:00:00.000Z"),
+      },
+    });
+
+    expect(await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS)).toBeNull();
+  });
+
+  it("reprend les tests une fois ce répit passé", async () => {
+    const { user } = await athlete("repit@example.com");
+    const profil = await profilPour(user.id);
+
+    await prisma.fitnessTest.create({
+      data: {
+        userId: user.id,
+        sport: "course",
+        kind: "course_30min",
+        status: "realise",
+        scheduledFor: new Date("2026-01-10T00:00:00.000Z"),
+        weekStart: new Date("2026-01-05T00:00:00.000Z"),
+        appliedAt: new Date("2026-01-10T00:00:00.000Z"),
+      },
+    });
+
+    expect(await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS)).not.toBeNull();
+  });
+
   it("abandonne un test resté en attente depuis plus de deux semaines", async () => {
     const { user } = await athlete("perime@example.com");
     const profil = await profilPour(user.id);

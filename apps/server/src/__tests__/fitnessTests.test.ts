@@ -119,3 +119,34 @@ describe("exploitation des résultats", () => {
     expect(describeProgress("course_30min", null, 240)).toBeNull();
   });
 });
+
+describe("rythme des tests", () => {
+  it("vise deux à trois mois entre deux tests d'une même discipline", () => {
+    // Plus court, l'écart mesuré tient autant à la forme du jour, à la météo
+    // ou au sommeil de la veille qu'à un progrès réel.
+    expect(TEST_INTERVAL_WEEKS).toBeGreaterThanOrEqual(8);
+    expect(TEST_INTERVAL_WEEKS).toBeLessThanOrEqual(13);
+  });
+
+  it("ne reteste pas une discipline évaluée deux mois plus tôt", () => {
+    const huitSemaines = new Date(LUNDI.getTime() - 8 * 7 * 24 * 3600 * 1000);
+    const choisi = chooseWeeklyTest(
+      inputs({
+        seuilConnu: { course: true, velo: true, natation: true },
+        dernierTest: { course: huitSemaines, velo: huitSemaines, natation: huitSemaines },
+      })
+    );
+    expect(choisi).toBeNull();
+  });
+
+  it("la reteste passé l'intervalle", () => {
+    const passe = new Date(LUNDI.getTime() - (TEST_INTERVAL_WEEKS + 1) * 7 * 24 * 3600 * 1000);
+    const choisi = chooseWeeklyTest(
+      inputs({
+        seuilConnu: { course: true, velo: true, natation: true },
+        dernierTest: { course: passe, velo: passe, natation: passe },
+      })
+    );
+    expect(choisi).not.toBeNull();
+  });
+});

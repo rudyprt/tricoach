@@ -9,6 +9,7 @@ import {
   type TestResult,
   type TestSport,
 } from "./fitnessTests.js";
+import { addDays } from "./week.js";
 import type { Periodization } from "./training.js";
 import type { ProfileZoneFields } from "./zoneInputs.js";
 
@@ -78,6 +79,24 @@ export async function planWeeklyTest(
   const jour = chooseTestDay(allowedDates);
   if (!jour) return null;
 
+  /*
+   * Deux semaines de répit entre deux tests, toutes disciplines confondues.
+   *
+   * L'intervalle de dix semaines vaut par discipline. Un athlète qui débute
+   * n'a aucun seuil connu dans les trois : sans cette garde, il enchaînerait
+   * trois efforts maximaux en trois semaines, ce qu'aucun coach ne demande
+   * pour établir des valeurs de départ.
+   */
+  const recent = await prisma.fitnessTest.findFirst({
+    where: {
+      userId,
+      status: { in: ["planifie", "realise"] },
+      scheduledFor: { gte: addDays(weekStart, -14), lt: weekStart },
+    },
+    select: { id: true },
+  });
+  if (recent) return null;
+
   const derniers = await prisma.fitnessTest.findMany({
     where: { userId, status: "realise" },
     orderBy: { scheduledFor: "desc" },
@@ -134,7 +153,7 @@ export function testPromptLines(test: ScheduledTest): string[] {
  * qui recalcule mécaniquement toutes les zones à la prochaine génération.
  *
  * Un résultat invraisemblable est refusé plutôt qu'appliqué : une faute de
- * frappe fausserait l'entraînement pendant six semaines.
+ * frappe fausserait l'entraînement pendant des semaines.
  */
 export async function applyTestResult(
   userId: string,
