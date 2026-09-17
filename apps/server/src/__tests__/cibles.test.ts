@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { corrigerCibles, uniteIncoherente, zoneCitee } from "../lib/cibles.js";
+import { bornesNumeriques, corrigerCibles, rafraichirCibles, uniteIncoherente, zoneCitee } from "../lib/cibles.js";
 import type { TrainingZones } from "../lib/training.js";
 
 const ZONES: TrainingZones = {
@@ -163,5 +163,118 @@ describe("correction des cibles", () => {
     expect(seances[0].structure!.corps!.cible).toContain("/100m");
     expect(seances[1].structure!.corps!.cible).toContain("/km");
     expect(seances[2].structure!.corps!.cible).toContain("W");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+
+/** Zones telles qu'elles étaient au moment où la semaine a été écrite. */
+const AVANT: TrainingZones = {
+  course: [
+    { zone: "Z2", label: "endurance fondamentale", value: "5:20–5:55/km" },
+    { zone: "Z4", label: "seuil", value: "4:20–4:42/km" },
+  ],
+  natation: [{ zone: "Z4", label: "seuil", value: "1:50–1:56/100m" }],
+  velo: [{ zone: "Z4", label: "seuil", value: "210–245 W" }],
+  frequenceCardiaque: null,
+  notes: [],
+};
+
+/** Les mêmes zones après un test de terrain réussi : tout s'est décalé. */
+const APRES: TrainingZones = {
+  ...AVANT,
+  course: [
+    { zone: "Z2", label: "endurance fondamentale", value: "5:02–5:35/km" },
+    { zone: "Z4", label: "seuil", value: "4:01–4:21/km" },
+  ],
+  natation: [{ zone: "Z4", label: "seuil", value: "1:44–1:50/100m" }],
+  velo: [{ zone: "Z4", label: "seuil", value: "226–260 W" }],
+};
+
+const planifiee = (sport: string, cible: string, allure?: string) => ({
+  ...seance(sport, cible, allure),
+  status: "planifiee",
+});
+
+describe("bornes numériques d'une cible", () => {
+  it("lit un intervalle d'allures en secondes", () => {
+    expect(bornesNumeriques("Z4 seuil — 4:01–4:21/km")).toEqual([241, 261]);
+  });
+
+  it("lit une allure unique", () => {
+    expect(bornesNumeriques("Z4 seuil — 4:08/km")).toEqual([248, 248]);
+  });
+
+  it("lit des watts et des battements", () => {
+    expect(bornesNumeriques("Z4 seuil — 223–260 W")).toEqual([223, 260]);
+    expect(bornesNumeriques("Z4 seuil — 158–166 bpm")).toEqual([158, 166]);
+  });
+
+  it("ne prend pas le chiffre de la zone pour une valeur", () => {
+    // Sans l'unité accolée, « Z4 » et « 8 × 200 m » seraient lus comme des
+    // intensités et toute comparaison deviendrait absurde.
+    expect(bornesNumeriques("Z4 seuil")).toBeNull();
+    expect(bornesNumeriques("Z4 — 8 × 200 m")).toBeNull();
+  });
+});
+
+describe("mise à jour des intensités après un test", () => {
+  it("remplace une allure devenue trop lente pour sa zone", () => {
+    // L'athlète a progressé samedi : le seuil de dimanche doit suivre.
+    const { seances, rafraichies } = rafraichirCibles([planifiee("course", "Z4 seuil — 4:20–4:42/km")], APRES);
+
+    expect(rafraichies).toBe(1);
+    expect(seances[0].structure!.corps!.cible).toBe("Z4 seuil — 4:01–4:21/km");
+  });
+
+  it("conserve une allure précise encore valable", () => {
+    // 4:10 tient dans 4:01–4:21 : la remplacer par l'intervalle entier ferait
+    // perdre l'intention du coach sans rien corriger.
+    const originale = planifiee("course", "Z4 seuil — 4:10/km");
+    const { seances, rafraichies } = rafraichirCibles([originale], APRES);
+
+    expect(rafraichies).toBe(0);
+    expect(seances[0]).toBe(originale);
+  });
+
+  it("ne réécrit pas une séance déjà faite", () => {
+    // L'athlète a couru à l'allure qu'on lui avait donnée : la modifier
+    // après coup falsifierait son historique.
+    const passee = { ...seance("course", "Z4 seuil — 4:20–4:42/km"), status: "faite" };
+    const { seances, rafraichies } = rafraichirCibles([passee], APRES);
+
+    expect(rafraichies).toBe(0);
+    expect(seances[0]).toBe(passee);
+  });
+
+  it("met aussi à jour l'allure des exercices", () => {
+    const { seances } = rafraichirCibles(
+      [planifiee("natation", "Z4 seuil — 1:44–1:50/100m", "Z4 — 1:50–1:56/100m")],
+      APRES
+    );
+
+    expect(seances[0].structure!.corps!.exercices![0].allure).toBe("Z4 seuil — 1:44–1:50/100m");
+  });
+
+  it("suit aussi la puissance au vélo", () => {
+    const { seances, rafraichies } = rafraichirCibles([planifiee("velo", "Z4 seuil — 210–245 W")], APRES);
+
+    expect(rafraichies).toBe(1);
+    expect(seances[0].structure!.corps!.cible).toBe("Z4 seuil — 226–260 W");
+  });
+
+  it("ne bouge pas quand les zones n'ont pas changé", () => {
+    const programme = [planifiee("course", "Z4 seuil — 4:20–4:42/km")];
+    const { seances, rafraichies } = rafraichirCibles(programme, AVANT);
+
+    expect(rafraichies).toBe(0);
+    expect(seances[0]).toBe(programme[0]);
+  });
+
+  it("laisse en place une cible sans zone identifiable", () => {
+    const { seances, rafraichies } = rafraichirCibles([planifiee("course", "allure vive — 4:35/km")], APRES);
+
+    expect(rafraichies).toBe(0);
+    expect(seances[0].structure!.corps!.cible).toBe("allure vive — 4:35/km");
   });
 });

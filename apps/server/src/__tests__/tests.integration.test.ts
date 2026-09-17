@@ -15,6 +15,8 @@ let prisma: import("@prisma/client").PrismaClient;
 let resetAllRateLimits: () => Promise<void>;
 let planWeeklyTest: typeof import("../lib/testScheduling.js").planWeeklyTest;
 let periodization: typeof import("../lib/training.js").periodization;
+let startOfWeek: typeof import("../lib/week.js").startOfWeek;
+let addJours: typeof import("../lib/week.js").addDays;
 
 const LUNDI = new Date("2026-03-02T00:00:00.000Z");
 const JOURS = [
@@ -37,6 +39,7 @@ describeIfDb("tests de terrain", () => {
     ({ resetAllRateLimits } = await import("../lib/rateLimit.js"));
     ({ planWeeklyTest } = await import("../lib/testScheduling.js"));
     ({ periodization } = await import("../lib/training.js"));
+    ({ startOfWeek, addDays: addJours } = await import("../lib/week.js"));
     app = (await import("../app.js")).createApp();
   });
 
@@ -200,6 +203,77 @@ describeIfDb("tests de terrain", () => {
     });
 
     expect(await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS)).not.toBeNull();
+  });
+
+  it("recale les allures des séances à venir dès que le test est saisi", async () => {
+    // Le cœur de la promesse : l'athlète teste en milieu de semaine, et les
+    // séances qu'il lui reste à faire portent aussitôt ses nouvelles allures.
+    const { agent, user } = await athlete("suivi@example.com");
+    await prisma.athleteProfile.update({
+      where: { userId: user.id },
+      data: { seuilCourseSecParKm: 300 },
+    });
+
+    const lundi = startOfWeek(new Date(), "Europe/Paris");
+    const plan = await prisma.trainingPlan.create({
+      data: { userId: user.id, weekStart: lundi, rawAiJson: "{}", phase: "base" },
+    });
+
+    const structure = (cible: string) => ({
+      echauffement: { dureeMin: 15, cible: "Z1 récupération — 6:20–7:12/km", description: "" },
+      corps: { dureeMin: 30, cible, description: "", exercices: [] },
+      retourCalme: { dureeMin: 10, cible: "Z1 récupération — 6:20–7:12/km", description: "" },
+    });
+    // Allure au seuil telle qu'elle valait avec un seuil à 5:00/km.
+    const ANCIENNE = "Z4 seuil — 4:51–5:16/km";
+
+    const aVenir = await prisma.session.create({
+      data: {
+        planId: plan.id,
+        userId: user.id,
+        date: addJours(lundi, 6),
+        sport: "course",
+        titre: "Seuil",
+        dureeMin: 55,
+        structure: structure(ANCIENNE),
+      },
+    });
+    const dejaFaite = await prisma.session.create({
+      data: {
+        planId: plan.id,
+        userId: user.id,
+        date: addJours(lundi, 1),
+        sport: "course",
+        titre: "Seuil",
+        dureeMin: 55,
+        status: "faite",
+        structure: structure(ANCIENNE),
+      },
+    });
+
+    const test = await prisma.fitnessTest.create({
+      data: {
+        userId: user.id,
+        sport: "course",
+        kind: "course_30min",
+        scheduledFor: addJours(lundi, 3),
+        weekStart: lundi,
+      },
+    });
+    // 7,5 km en 30 min : le seuil passe de 5:00 à 4:00/km.
+    await agent.post(`/api/tests/${test.id}/result`).send({ distanceM: 7500, fcMoyenne: 172 });
+
+    const res = await agent.get("/api/plans/current");
+    expect(res.status).toBe(200);
+
+    const cibleDe = (id: string) =>
+      res.body.sessions.find((s: { id: string }) => s.id === id).structure.corps.cible as string;
+
+    expect(cibleDe(aVenir.id)).not.toBe(ANCIENNE);
+    expect(cibleDe(aVenir.id)).toContain("Z4");
+    expect(cibleDe(aVenir.id)).toMatch(/3:5\d–4:1\d\/km/);
+    // L'historique garde ce qui avait été prescrit ce jour-là.
+    expect(cibleDe(dejaFaite.id)).toBe(ANCIENNE);
   });
 
   it("abandonne un test resté en attente depuis plus de deux semaines", async () => {

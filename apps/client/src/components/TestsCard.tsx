@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useToasts } from "../ui/Toasts";
 import { FaFlask, FaPersonSwimming, FaPersonBiking, FaPersonRunning, FaCheck } from "react-icons/fa6";
 import { api, apiErrorMessage, type FitnessTest, type FitnessTestsResponse } from "../lib/api";
 import { formatJourLong, parseChrono } from "../lib/formats";
@@ -29,6 +30,7 @@ function FormulaireResultat({ test, onDone }: { test: FitnessTest; onDone: () =>
   const [champs, setChamps] = useState<ChampsFormulaire>(CHAMPS_VIDES);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { afficher } = useToasts();
 
   const set = (cle: keyof ChampsFormulaire) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setChamps((c) => ({ ...c, [cle]: e.target.value }));
@@ -39,13 +41,22 @@ function FormulaireResultat({ test, onDone }: { test: FitnessTest; onDone: () =>
     setError(null);
     try {
       const km = Number(champs.distanceKm.replace(",", "."));
-      await api.post(`/tests/${test.id}/result`, {
-        distanceM: Number.isFinite(km) && km > 0 ? Math.round(km * 1000) : null,
-        puissanceMoy: champs.puissanceMoy ? Number(champs.puissanceMoy) : null,
-        temps400S: parseChrono(champs.temps400),
-        temps200S: parseChrono(champs.temps200),
-        fcMoyenne: champs.fcMoyenne ? Number(champs.fcMoyenne) : null,
-      });
+      const { data } = await api.post<{ resume: string; progression: string | null }>(
+        `/tests/${test.id}/result`,
+        {
+          distanceM: Number.isFinite(km) && km > 0 ? Math.round(km * 1000) : null,
+          puissanceMoy: champs.puissanceMoy ? Number(champs.puissanceMoy) : null,
+          temps400S: parseChrono(champs.temps400),
+          temps200S: parseChrono(champs.temps200),
+          fcMoyenne: champs.fcMoyenne ? Number(champs.fcMoyenne) : null,
+        }
+      );
+      // Le test ne sert à rien si l'athlète ne voit pas ce qu'il change : ses
+      // zones viennent de bouger, et ses séances à venir avec elles.
+      afficher(
+        `${data.progression ?? data.resume} — tes séances à venir sont recalées sur tes nouvelles zones.`,
+        { ton: "succes", dureeMs: 7000 }
+      );
       onDone();
     } catch (err) {
       setError(apiErrorMessage(err, "Enregistrement impossible."));

@@ -1,5 +1,5 @@
 import { prisma } from "./prisma.js";
-import type { ZoneInputs } from "./training.js";
+import { computeTrainingZones, type TrainingZones, type ZoneInputs } from "./training.js";
 import { parseZoneOverrides } from "./zoneOverrides.js";
 import { parseMateriel } from "./disponibilites.js";
 
@@ -80,4 +80,17 @@ export async function suggestFtp(userId: string): Promise<{ puissanceMoy: number
 
   if (!meilleure?.puissanceMoy) return null;
   return { puissanceMoy: meilleure.puissanceMoy, ftpSuggere: Math.round(meilleure.puissanceMoy * 0.95) };
+}
+
+/**
+ * Zones de l'athlète telles qu'elles valent aujourd'hui.
+ *
+ * Toute route qui renvoie des séances à venir en a besoin : un test de terrain
+ * recale les seuils, et les séances déjà écrites doivent suivre plutôt que de
+ * garder l'allure calculée le jour de leur génération.
+ */
+export async function zonesActuelles(userId: string): Promise<TrainingZones | null> {
+  const profile = await prisma.athleteProfile.findUnique({ where: { userId } });
+  if (!profile) return null;
+  return computeTrainingZones(await buildZoneInputs(userId, profile));
 }

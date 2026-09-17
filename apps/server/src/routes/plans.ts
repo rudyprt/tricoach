@@ -27,7 +27,7 @@ import {
 } from "../lib/pause.js";
 import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../lib/races.js";
 import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
-import { corrigerCibles } from "../lib/cibles.js";
+import { corrigerCibles, rafraichirCibles } from "../lib/cibles.js";
 import {
   disponibilitesPromptLines,
   joursIndisponibles,
@@ -474,10 +474,21 @@ async function persistPlan(params: {
   });
 }
 
-function planPayload(plan: { sessions: Parameters<typeof serializeSession>[0][] }, phase: Periodization) {
+/**
+ * `zones` remet les intensités des séances encore à faire sur les zones du
+ * moment : un test de terrain les recale, et une séance écrite avant lui
+ * afficherait sinon une allure périmée. Le rafraîchissement porte sur la
+ * structure déjà validée, la colonne JSON brute n'étant pas typée.
+ */
+function planPayload(
+  plan: { sessions: Parameters<typeof serializeSession>[0][] },
+  phase: Periodization,
+  zones?: TrainingZones
+) {
+  const sessions = plan.sessions.map(serializeSession);
   return {
     ...plan,
-    sessions: plan.sessions.map(serializeSession),
+    sessions: zones ? rafraichirCibles(sessions, zones).seances : sessions,
     periodization: { phase: phase.phase, label: phase.label, weeksToGoal: phase.weeksToGoal },
   };
 }
@@ -960,14 +971,16 @@ plansRouter.get(
       orderBy: { date: "asc" },
     });
 
-    const profile = await prisma.athleteProfile.findUnique({
-      where: { userId: req.userId! },
-      select: { objectifDate: true },
-    });
+    const profile = await prisma.athleteProfile.findUnique({ where: { userId: req.userId! } });
     const phase = profile
       ? periodization(weekStart, profile.objectifDate)
       : { phase: "base" as const, label: "Fondation aérobie", weeksToGoal: 0, volumeFactor: 1, guidance: "" };
 
-    res.json(planPayload({ ...plan, sessions }, phase));
+    // Un test de terrain recale les seuils, donc les zones — mais les séances
+    // de la semaine sont déjà écrites. Celles qui restent à faire suivent les
+    // zones du moment ; celles déjà vécues gardent ce qui avait été prescrit.
+    const zones = profile ? computeTrainingZones(await buildZoneInputs(req.userId!, profile)) : undefined;
+
+    res.json(planPayload({ ...plan, sessions }, phase, zones));
   })
 );
