@@ -3,6 +3,8 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah } from "../lib/http.js";
 import { serializeSession } from "../lib/session.js";
+import { zonesActuelles } from "../lib/zoneInputs.js";
+import { rafraichirCibles } from "../lib/cibles.js";
 
 export const calendarRouter = Router();
 calendarRouter.use(requireAuth);
@@ -58,8 +60,13 @@ calendarRouter.get(
       "X-WR-CALNAME:TriCoach — mes séances",
     ];
 
-    for (const raw of sessions) {
-      const session = serializeSession(raw);
+    // Le calendrier de l'athlète doit porter les intensités du moment, pas
+    // celles calculées le jour où la séance a été écrite.
+    const zones = await zonesActuelles(req.userId!);
+    const brutes = sessions.map(serializeSession);
+    const serialisees = zones ? rafraichirCibles(brutes, zones).seances : brutes;
+
+    for (const session of serialisees) {
       const sport = SPORT_LABELS[session.sport] ?? session.sport;
       const next = new Date(session.date);
       next.setUTCDate(next.getUTCDate() + 1);

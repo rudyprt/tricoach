@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { serializeSession } from "../lib/session.js";
 import { ah, HttpError } from "../lib/http.js";
+import { zonesActuelles } from "../lib/zoneInputs.js";
+import { rafraichirCibles } from "../lib/cibles.js";
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
@@ -50,8 +52,13 @@ sessionsRouter.get(
     const hasMore = sessions.length > limit;
     const page = hasMore ? sessions.slice(0, limit) : sessions;
 
+    // Les séances encore à faire sont relues sur les zones du moment : un test
+    // passé depuis leur génération a pu déplacer les seuils.
+    const zones = await zonesActuelles(req.userId!);
+    const serialisees = page.map(serializeSession);
+
     res.json({
-      sessions: page.map(serializeSession),
+      sessions: zones ? rafraichirCibles(serialisees, zones).seances : serialisees,
       nextCursor: hasMore ? page[page.length - 1]?.id : null,
     });
   })

@@ -184,3 +184,137 @@ export function corrigerCibles<T extends SeanceCorrigeable>(
 
   return { seances: corrigees, corrections };
 }
+
+/* ------------------------------------------------------------------ */
+/* Suivi des zones au fil des tests                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Bornes numériques d'une valeur d'intensité : « 4:01–4:21/km » → [241, 261],
+ * « 223–260 W » → [223, 260], « 4:08/km » → [248, 248].
+ *
+ * Les allures sont converties en secondes, les watts et battements restent
+ * tels quels. Renvoie null si rien d'exploitable n'est trouvé.
+ */
+export function bornesNumeriques(valeur: string): [number, number] | null {
+  const chronos = valeur.match(/\d{1,2}\s?:\s?\d{2}/g);
+  if (chronos?.length) {
+    const secondes = chronos.map((c) => {
+      const [m, s] = c.split(":").map((n) => Number(n.trim()));
+      return m * 60 + s;
+    });
+    return [Math.min(...secondes), Math.max(...secondes)];
+  }
+
+  /*
+   * Un nombre n'est retenu que s'il porte une unité, sinon le « 4 » de « Z4 »
+   * ou le « 200 » de « 8 × 200 m » passerait pour une intensité. Dans un
+   * intervalle, seul le second nombre porte l'unité : « 223–260 W ». Les deux
+   * formes sont donc reconnues, l'intervalle d'abord.
+   */
+  const unite = /(?:W|bpm|km\s?\/\s?h)\b/.source;
+  const nombres: number[] = [];
+  for (const m of valeur.matchAll(new RegExp(`(\\d{2,4})\\s*[–—-]\\s*(\\d{2,4})\\s*${unite}`, "gi"))) {
+    nombres.push(Number(m[1]), Number(m[2]));
+  }
+  if (nombres.length === 0) {
+    for (const m of valeur.matchAll(new RegExp(`(\\d{2,4})\\s*${unite}`, "gi"))) nombres.push(Number(m[1]));
+  }
+  if (nombres.length === 0) return null;
+  return [Math.min(...nombres), Math.max(...nombres)];
+}
+
+/**
+ * La valeur prescrite tient-elle encore dans la zone telle qu'elle est
+ * aujourd'hui calculée ? Une tolérance d'une unité absorbe les arrondis.
+ */
+function tientDansLaZone(prescrite: string, zone: string): boolean | null {
+  const cible = bornesNumeriques(prescrite);
+  const plage = bornesNumeriques(zone);
+  if (!cible || !plage) return null;
+  return cible[0] >= plage[0] - 1 && cible[1] <= plage[1] + 1;
+}
+
+/**
+ * Remet les intensités d'une séance à jour sur les zones du moment.
+ *
+ * Un test de terrain recale les valeurs de seuil, donc toutes les zones — mais
+ * les séances de la semaine sont déjà écrites, et gardaient l'allure calculée
+ * au moment de leur génération. L'athlète testait le samedi et lisait le
+ * dimanche une allure périmée.
+ *
+ * L'allure précise choisie par le coach est conservée tant qu'elle reste dans
+ * sa zone : la remplacer par l'intervalle complet ferait perdre en précision
+ * sans rien corriger. Elle n'est remplacée que lorsqu'elle en est sortie.
+ */
+export function rafraichirCibles<T extends SeanceCorrigeable & { status?: string }>(
+  seances: T[],
+  zones: TrainingZones
+): { seances: T[]; rafraichies: number } {
+  let rafraichies = 0;
+
+  const misesAJour = seances.map((seance) => {
+    // L'historique reste tel qu'il a été prescrit : l'athlète a couru à
+    // l'allure qu'on lui avait donnée, la réécrire falsifierait son passé.
+    if (seance.status && seance.status !== "planifiee") return seance;
+
+    const ranges = rangesPour(seance.sport, zones);
+    if (!seance.structure || !ranges) return seance;
+
+    const structure = { ...seance.structure };
+    let modifiee = false;
+
+    const remplacer = (texte: string): string | null => {
+      const zone = zoneCitee(texte);
+      const attendue = zone ? ranges.find((r) => r.zone === zone) : null;
+      if (!attendue) return null;
+
+      /*
+       * Deux raisons de réécrire une cible, et une seule de la laisser.
+       *
+       * L'unité d'abord : « 4:08/km » sur une séance de vélo est illisible quoi
+       * qu'en dise le nombre. Le contrôle existe à la génération, mais une
+       * séance écrite avant que la règle n'existe le porte encore.
+       *
+       * La dérive ensuite : l'allure était juste, les zones ont bougé depuis.
+       */
+      if (!uniteIncoherente(seance.sport, texte, zones) && tientDansLaZone(texte, attendue.value) !== false) {
+        return null;
+      }
+      return `${attendue.zone} ${attendue.label} — ${attendue.value}`;
+    };
+
+    for (const nom of BLOCS) {
+      const bloc = structure[nom];
+      if (!bloc) continue;
+      let nouveauBloc = bloc;
+
+      if (bloc.cible) {
+        const remplacement = remplacer(bloc.cible);
+        if (remplacement) {
+          nouveauBloc = { ...nouveauBloc, cible: remplacement };
+          rafraichies += 1;
+          modifiee = true;
+        }
+      }
+
+      if (bloc.exercices?.length) {
+        const exercices = bloc.exercices.map((exercice) => {
+          if (!exercice.allure) return exercice;
+          const remplacement = remplacer(exercice.allure);
+          if (!remplacement) return exercice;
+          rafraichies += 1;
+          modifiee = true;
+          return { ...exercice, allure: remplacement };
+        });
+        nouveauBloc = { ...nouveauBloc, exercices };
+      }
+
+      if (nouveauBloc !== bloc) structure[nom] = nouveauBloc;
+    }
+
+    return modifiee ? { ...seance, structure } : seance;
+  });
+
+  return { seances: misesAJour, rafraichies };
+}
