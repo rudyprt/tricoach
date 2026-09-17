@@ -143,7 +143,7 @@ export function TestsCard() {
 
       <p className="mb-3 text-xs text-doux">
         Un coach ne devine pas vos allures : il vous teste, puis il réajuste. Ces tests sont insérés automatiquement
-        dans votre semaine, environ toutes les six semaines par discipline.
+        dans votre semaine, tous les deux à trois mois par discipline.
       </p>
 
       {message && (

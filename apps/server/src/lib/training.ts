@@ -124,12 +124,24 @@ interface ZoneBand {
 }
 
 /** Course à pied : fractions de la vitesse au seuil (VMA anaérobie exclue). */
+/**
+ * Bornes calées sur les tables de Jack Daniels, rapportées à la vitesse au
+ * seuil plutôt qu'au VDOT.
+ *
+ * La version précédente plaçait l'endurance fondamentale entre 80 et 88 % de
+ * la vitesse au seuil, soit 4:42–5:10/km pour un seuil à 4:08 — quand Daniels
+ * donne 5:07–5:39 pour le même coureur. Cette zone recouvrait donc l'allure
+ * marathon : l'athlète courait ses sorties faciles bien trop vite, ce qui est
+ * précisément le défaut que ce modèle devait corriger.
+ */
 const RUN_BANDS: ZoneBand[] = [
-  { zone: "Z1", label: "récupération", from: 0.65, to: 0.8 },
-  { zone: "Z2", label: "endurance fondamentale", from: 0.8, to: 0.88 },
-  { zone: "Z3", label: "tempo", from: 0.88, to: 0.95 },
-  { zone: "Z4", label: "seuil", from: 0.95, to: 1.02 },
-  { zone: "Z5", label: "VO2max", from: 1.02, to: 1.12 },
+  { zone: "Z1", label: "récupération", from: 0.65, to: 0.74 },
+  // « Easy » chez Daniels : l'allure des quatre cinquièmes du volume.
+  { zone: "Z2", label: "endurance fondamentale", from: 0.74, to: 0.84 },
+  // Englobe l'allure marathon, à 94 % environ de la vitesse au seuil.
+  { zone: "Z3", label: "tempo", from: 0.84, to: 0.95 },
+  { zone: "Z4", label: "seuil", from: 0.95, to: 1.03 },
+  { zone: "Z5", label: "VO2max", from: 1.03, to: 1.15 },
 ];
 
 /**
@@ -146,21 +158,42 @@ const SWIM_BANDS: ZoneBand[] = [
 ];
 
 /** Vélo : pourcentages de FTP, selon le découpage de référence de Coggan. */
+/**
+ * Zones de puissance de Coggan, en fraction de la FTP.
+ *
+ * Bornes rendues jointives : Coggan les publie en pourcentages entiers —
+ * « Z2 : 56 à 75 %, Z3 : 76 à 90 % » — ce qui, converti en watts, laissait des
+ * trous. Un cycliste roulant à 187 W avec une FTP de 248 n'était dans aucune
+ * zone, alors que 186 et 188 en avaient une.
+ */
 const BIKE_BANDS: ZoneBand[] = [
   { zone: "Z1", label: "récupération", from: 0.4, to: 0.55 },
-  { zone: "Z2", label: "endurance fondamentale", from: 0.56, to: 0.75 },
-  { zone: "Z3", label: "tempo", from: 0.76, to: 0.9 },
-  { zone: "Z4", label: "seuil", from: 0.91, to: 1.05 },
-  { zone: "Z5", label: "PMA", from: 1.06, to: 1.2 },
+  { zone: "Z2", label: "endurance fondamentale", from: 0.55, to: 0.75 },
+  { zone: "Z3", label: "tempo", from: 0.75, to: 0.9 },
+  { zone: "Z4", label: "seuil", from: 0.9, to: 1.05 },
+  { zone: "Z5", label: "PMA", from: 1.05, to: 1.2 },
 ];
 
-/** Fréquence cardiaque : pourcentages de la FC au seuil. */
+/**
+ * Zones de fréquence cardiaque du modèle Joe Friel à cinq zones, en pourcentage
+ * de la fréquence cardiaque au seuil.
+ *
+ * La version précédente transposait les tables détaillées de Friel, écrites en
+ * pourcentages entiers — « Z3 : 90 à 93 %, Z4 : 94 à 99 % » — ce qui laissait
+ * des battements orphelins une fois converti, et plaçait le seuil lui-même
+ * hors de la zone qui porte son nom. Ce découpage-ci est jointif, et sa
+ * quatrième zone encadre le seuil.
+ */
 const HR_BANDS: ZoneBand[] = [
-  { zone: "Z1", label: "récupération", from: 0.7, to: 0.81 },
-  { zone: "Z2", label: "endurance fondamentale", from: 0.81, to: 0.89 },
-  { zone: "Z3", label: "tempo", from: 0.89, to: 0.93 },
-  { zone: "Z4", label: "seuil", from: 0.94, to: 0.99 },
-  { zone: "Z5", label: "VO2max", from: 1.0, to: 1.06 },
+  { zone: "Z1", label: "récupération", from: 0.65, to: 0.85 },
+  { zone: "Z2", label: "endurance fondamentale", from: 0.85, to: 0.9 },
+  { zone: "Z3", label: "tempo", from: 0.9, to: 0.95 },
+  { zone: "Z4", label: "seuil", from: 0.95, to: 1.02 },
+  // Friel n'assigne pas de plafond à la cinquième zone. Faute de fréquence
+  // cardiaque maximale connue, on s'arrête un peu au-dessus du seuil : mieux
+  // vaut une borne prudente qu'un intervalle ouvert sur une valeur
+  // qu'aucun athlète n'atteindra.
+  { zone: "Z5", label: "VO2max", from: 1.02, to: 1.06 },
 ];
 
 /**
@@ -191,8 +224,13 @@ function formatWattBand(ftp: number, band: ZoneBand): string {
   return `${Math.round(ftp * band.from)}–${Math.round(ftp * band.to)} W`;
 }
 
-function formatHrBand(lthr: number, band: ZoneBand): string {
-  return `${Math.round(lthr * band.from)}–${Math.round(lthr * band.to)} bpm`;
+function formatHrBand(lthr: number, band: ZoneBand, fcMax?: number | null): string {
+  const bas = Math.round(lthr * band.from);
+  // La zone haute n'a pas de plafond chez Friel : quand la fréquence cardiaque
+  // maximale est connue, c'est elle la vraie borne, et elle est plus parlante
+  // qu'un pourcentage arbitraire.
+  const haut = band.zone === "Z5" && fcMax && fcMax > bas ? fcMax : Math.round(lthr * band.to);
+  return `${bas}–${haut} bpm`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -399,7 +437,9 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
 
   if (inputs.fcSeuil && inputs.fcSeuil > 100) {
     seuilFc = inputs.fcSeuil;
-    notes.push(`Fréquence cardiaque : zones calculées sur une FC au seuil de ${seuilFc} bpm.`);
+    notes.push(
+      `Fréquence cardiaque : zones du modèle Joe Friel, calculées sur une FC au seuil de ${seuilFc} bpm.`
+    );
   } else if (inputs.fcMax && inputs.fcMax > 120) {
     // Approximation usuelle en l'absence de test de seuil. Signalée comme telle :
     // la FC au seuil varie sensiblement d'un athlète à l'autre.
@@ -413,8 +453,13 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     frequenceCardiaque = HR_BANDS.map((b) => ({
       zone: b.zone,
       label: b.label,
-      value: formatHrBand(seuilFc!, b),
+      value: formatHrBand(seuilFc!, b, inputs.fcMax),
     }));
+    // Dit quel que soit le chemin suivi : le malentendu est de lire ce tableau
+    // comme un second jeu de zones qui devrait coïncider avec les allures.
+    notes.push(
+      "La fréquence cardiaque retarde sur l'allure : au départ d'un bloc au seuil, elle met une à deux minutes à monter, et elle dérive à la chaleur ou en fin de séance. C'est un repère de contrôle, pas une seconde vérité — sur un effort court, fiez-vous à l'allure."
+    );
   }
 
   /* --- Corrections manuelles ---------------------------------------- */

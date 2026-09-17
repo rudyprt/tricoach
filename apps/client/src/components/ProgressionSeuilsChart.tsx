@@ -18,7 +18,7 @@ function jourCourt(date: string): string {
  * Progression des seuils, test après test.
  *
  * L'historique existait, mais en phrases. Voir sa FTP monter sur douze mois est
- * ce qui donne envie de refaire un test dans six semaines, et c'est la seule
+ * ce qui donne envie de refaire un test au prochain cycle, et c'est la seule
  * preuve tangible que l'entraînement paie.
  */
 export function ProgressionSeuilsChart() {

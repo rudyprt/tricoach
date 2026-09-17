@@ -51,8 +51,16 @@ export const PROTOCOLS: Record<TestSport, TestProtocol> = {
   },
 };
 
-/** Intervalle visé entre deux tests d'une même discipline. */
-export const TEST_INTERVAL_WEEKS = 6;
+/**
+ * Intervalle visé entre deux tests d'une même discipline.
+ *
+ * Dix semaines, soit un peu plus de deux mois : c'est le délai au bout duquel
+ * un seuil a réellement bougé. À six semaines, l'écart mesuré tenait souvent
+ * autant à la forme du jour, à la météo ou au sommeil de la veille qu'à un
+ * progrès — et, avec trois disciplines et un test au plus par semaine, une
+ * semaine sur deux devenait une semaine de test.
+ */
+export const TEST_INTERVAL_WEEKS = 10;
 
 /**
  * Un test se court à fond : il fatigue comme une course. Le programmer pendant
