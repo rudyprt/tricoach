@@ -278,3 +278,21 @@ describe("mise à jour des intensités après un test", () => {
     expect(seances[0].structure!.corps!.cible).toBe("allure vive — 4:35/km");
   });
 });
+
+describe("unités réparées à la lecture", () => {
+  it("corrige une unité impossible même quand le nombre tombe dans la zone", () => {
+    // « 4:08/km » sur du vélo : 248 s tombe par hasard entre 226 et 260 W.
+    // Sans contrôle d'unité, cette cible illisible passerait pour valable.
+    const { seances, rafraichies } = rafraichirCibles([planifiee("velo", "Z4 seuil — 4:08/km")], APRES);
+
+    expect(rafraichies).toBe(1);
+    expect(seances[0].structure!.corps!.cible).toBe("Z4 seuil — 226–260 W");
+  });
+
+  it("ne réécrit pas l'unité d'une séance déjà faite", () => {
+    const passee = { ...seance("velo", "Z4 seuil — 4:08/km"), status: "faite" };
+    const { seances } = rafraichirCibles([passee], APRES);
+
+    expect(seances[0]).toBe(passee);
+  });
+});

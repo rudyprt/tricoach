@@ -268,7 +268,19 @@ export function rafraichirCibles<T extends SeanceCorrigeable & { status?: string
       const zone = zoneCitee(texte);
       const attendue = zone ? ranges.find((r) => r.zone === zone) : null;
       if (!attendue) return null;
-      if (tientDansLaZone(texte, attendue.value) !== false) return null;
+
+      /*
+       * Deux raisons de réécrire une cible, et une seule de la laisser.
+       *
+       * L'unité d'abord : « 4:08/km » sur une séance de vélo est illisible quoi
+       * qu'en dise le nombre. Le contrôle existe à la génération, mais une
+       * séance écrite avant que la règle n'existe le porte encore.
+       *
+       * La dérive ensuite : l'allure était juste, les zones ont bougé depuis.
+       */
+      if (!uniteIncoherente(seance.sport, texte, zones) && tientDansLaZone(texte, attendue.value) !== false) {
+        return null;
+      }
       return `${attendue.zone} ${attendue.label} — ${attendue.value}`;
     };
 
