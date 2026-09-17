@@ -175,27 +175,24 @@ const BIKE_BANDS: ZoneBand[] = [
 ];
 
 /**
- * Zones de fréquence cardiaque, en fraction de la FC au seuil.
+ * Zones de fréquence cardiaque du modèle Joe Friel à cinq zones, en pourcentage
+ * de la fréquence cardiaque au seuil.
  *
- * Deux exigences que la transposition littérale des tableaux de Friel ne
- * respectait pas.
- *
- * Contiguïté : ces tableaux s'écrivent en pourcentages entiers — « Z3 : 90 à
- * 93 %, Z4 : 94 à 99 % » — ce qui, rendu en battements, laissait des trous.
- * Un athlète dont la montre affiche 157 bpm n'était dans aucune zone.
- *
- * Et surtout : la zone nommée « seuil » doit contenir la fréquence cardiaque
- * au seuil. Z4 s'arrêtait à 99 %, si bien que le seuil lui-même tombait dans
- * la zone VO2max — alors que les zones d'allure, elles, encadrent bien le
- * seuil. Les deux tableaux se contredisaient.
+ * La version précédente transposait les tables détaillées de Friel, écrites en
+ * pourcentages entiers — « Z3 : 90 à 93 %, Z4 : 94 à 99 % » — ce qui laissait
+ * des battements orphelins une fois converti, et plaçait le seuil lui-même
+ * hors de la zone qui porte son nom. Ce découpage-ci est jointif, et sa
+ * quatrième zone encadre le seuil.
  */
 const HR_BANDS: ZoneBand[] = [
-  { zone: "Z1", label: "récupération", from: 0.7, to: 0.81 },
-  { zone: "Z2", label: "endurance fondamentale", from: 0.81, to: 0.89 },
-  { zone: "Z3", label: "tempo", from: 0.89, to: 0.94 },
-  // Encadre le seuil, comme les zones d'allure : sur un effort au seuil, la
-  // fréquence cardiaque oscille de part et d'autre de sa valeur seuil.
-  { zone: "Z4", label: "seuil", from: 0.94, to: 1.02 },
+  { zone: "Z1", label: "récupération", from: 0.65, to: 0.85 },
+  { zone: "Z2", label: "endurance fondamentale", from: 0.85, to: 0.9 },
+  { zone: "Z3", label: "tempo", from: 0.9, to: 0.95 },
+  { zone: "Z4", label: "seuil", from: 0.95, to: 1.02 },
+  // Friel n'assigne pas de plafond à la cinquième zone. Faute de fréquence
+  // cardiaque maximale connue, on s'arrête un peu au-dessus du seuil : mieux
+  // vaut une borne prudente qu'un intervalle ouvert sur une valeur
+  // qu'aucun athlète n'atteindra.
   { zone: "Z5", label: "VO2max", from: 1.02, to: 1.06 },
 ];
 
@@ -227,8 +224,13 @@ function formatWattBand(ftp: number, band: ZoneBand): string {
   return `${Math.round(ftp * band.from)}–${Math.round(ftp * band.to)} W`;
 }
 
-function formatHrBand(lthr: number, band: ZoneBand): string {
-  return `${Math.round(lthr * band.from)}–${Math.round(lthr * band.to)} bpm`;
+function formatHrBand(lthr: number, band: ZoneBand, fcMax?: number | null): string {
+  const bas = Math.round(lthr * band.from);
+  // La zone haute n'a pas de plafond chez Friel : quand la fréquence cardiaque
+  // maximale est connue, c'est elle la vraie borne, et elle est plus parlante
+  // qu'un pourcentage arbitraire.
+  const haut = band.zone === "Z5" && fcMax && fcMax > bas ? fcMax : Math.round(lthr * band.to);
+  return `${bas}–${haut} bpm`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -435,7 +437,9 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
 
   if (inputs.fcSeuil && inputs.fcSeuil > 100) {
     seuilFc = inputs.fcSeuil;
-    notes.push(`Fréquence cardiaque : zones calculées sur une FC au seuil de ${seuilFc} bpm.`);
+    notes.push(
+      `Fréquence cardiaque : zones du modèle Joe Friel, calculées sur une FC au seuil de ${seuilFc} bpm.`
+    );
   } else if (inputs.fcMax && inputs.fcMax > 120) {
     // Approximation usuelle en l'absence de test de seuil. Signalée comme telle :
     // la FC au seuil varie sensiblement d'un athlète à l'autre.
@@ -449,7 +453,7 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     frequenceCardiaque = HR_BANDS.map((b) => ({
       zone: b.zone,
       label: b.label,
-      value: formatHrBand(seuilFc!, b),
+      value: formatHrBand(seuilFc!, b, inputs.fcMax),
     }));
     // Dit quel que soit le chemin suivi : le malentendu est de lire ce tableau
     // comme un second jeu de zones qui devrait coïncider avec les allures.

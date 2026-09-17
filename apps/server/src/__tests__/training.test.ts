@@ -183,10 +183,11 @@ describe("computeTrainingZones", () => {
 
   describe("fréquence cardiaque", () => {
     it("calcule les zones sur la FC au seuil quand elle est connue", () => {
+      // Modèle Joe Friel à cinq zones : Z4 va de 95 à 102 % du seuil, elle
+      // contient donc les 170 bpm.
       const { frequenceCardiaque } = computeTrainingZones({ fcSeuil: 170 });
-      // Z4 porte le nom « seuil » : elle doit contenir les 170 bpm du seuil.
-      expect(zoneDe(frequenceCardiaque, "Z4")).toBe("160–173 bpm");
-      expect(zoneDe(frequenceCardiaque, "Z2")).toBe("138–151 bpm");
+      expect(zoneDe(frequenceCardiaque, "Z4")).toBe("162–173 bpm");
+      expect(zoneDe(frequenceCardiaque, "Z2")).toBe("145–153 bpm");
     });
 
     it("estime le seuil depuis la FC max, en le signalant", () => {
@@ -198,7 +199,7 @@ describe("computeTrainingZones", () => {
 
     it("préfère un seuil mesuré à une estimation depuis la FC max", () => {
       const avec = computeTrainingZones({ fcSeuil: 160, fcMax: 200 });
-      expect(zoneDe(avec.frequenceCardiaque, "Z4")).toBe("150–163 bpm");
+      expect(zoneDe(avec.frequenceCardiaque, "Z4")).toBe("152–163 bpm");
     });
 
     it("ne propose rien sans donnée cardiaque", () => {
@@ -436,5 +437,34 @@ describe("cohérence des tables de zones", () => {
 
     expect(rapide).toBeGreaterThanOrEqual(285);
     expect(rapide).toBeLessThanOrEqual(310);
+  });
+});
+
+describe("modèle Joe Friel à cinq zones", () => {
+  const zoneDeFc = (zone: string, inputs: Parameters<typeof computeTrainingZones>[0]) =>
+    computeTrainingZones(inputs).frequenceCardiaque!.find((r) => r.zone === zone)!.value;
+
+  it("découpe les zones aux pourcentages du modèle", () => {
+    // 65-85, 85-90, 90-95, 95-102 pour une FC au seuil de 160 bpm.
+    const seuil = { fcSeuil: 160 };
+    expect(zoneDeFc("Z1", seuil)).toBe("104–136 bpm");
+    expect(zoneDeFc("Z2", seuil)).toBe("136–144 bpm");
+    expect(zoneDeFc("Z3", seuil)).toBe("144–152 bpm");
+    expect(zoneDeFc("Z4", seuil)).toBe("152–163 bpm");
+  });
+
+  it("fait monter la zone haute jusqu'à la FC maximale connue", () => {
+    // Friel ne lui donne pas de plafond : la FC max est la vraie borne, et
+    // elle parle davantage à l'athlète qu'un pourcentage arbitraire.
+    expect(zoneDeFc("Z5", { fcSeuil: 168, fcMax: 186 })).toBe("171–186 bpm");
+  });
+
+  it("se rabat sur une borne prudente sans FC maximale", () => {
+    expect(zoneDeFc("Z5", { fcSeuil: 168 })).toBe("171–178 bpm");
+  });
+
+  it("ignore une FC maximale incohérente avec le seuil", () => {
+    // Une valeur inférieure au bas de la zone ne peut pas en être le plafond.
+    expect(zoneDeFc("Z5", { fcSeuil: 168, fcMax: 150 })).toBe("171–178 bpm");
   });
 });
