@@ -337,7 +337,9 @@ export function Zones() {
           </div>
           <ZoneTable ranges={zones.frequenceCardiaque} />
           <p className="mt-2 text-xs text-doux">
-            Utile surtout à vélo, où la puissance n'est pas toujours disponible.
+            Un repère de contrôle, pas un second jeu d'allures : la fréquence cardiaque met une à deux minutes à
+            monter en début d'effort, et elle dérive à la chaleur. Sur un effort court, fiez-vous à l'allure ; à
+            vélo sans capteur de puissance, c'est elle qui fait référence.
           </p>
         </div>
       )}

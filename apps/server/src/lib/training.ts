@@ -124,12 +124,24 @@ interface ZoneBand {
 }
 
 /** Course à pied : fractions de la vitesse au seuil (VMA anaérobie exclue). */
+/**
+ * Bornes calées sur les tables de Jack Daniels, rapportées à la vitesse au
+ * seuil plutôt qu'au VDOT.
+ *
+ * La version précédente plaçait l'endurance fondamentale entre 80 et 88 % de
+ * la vitesse au seuil, soit 4:42–5:10/km pour un seuil à 4:08 — quand Daniels
+ * donne 5:07–5:39 pour le même coureur. Cette zone recouvrait donc l'allure
+ * marathon : l'athlète courait ses sorties faciles bien trop vite, ce qui est
+ * précisément le défaut que ce modèle devait corriger.
+ */
 const RUN_BANDS: ZoneBand[] = [
-  { zone: "Z1", label: "récupération", from: 0.65, to: 0.8 },
-  { zone: "Z2", label: "endurance fondamentale", from: 0.8, to: 0.88 },
-  { zone: "Z3", label: "tempo", from: 0.88, to: 0.95 },
-  { zone: "Z4", label: "seuil", from: 0.95, to: 1.02 },
-  { zone: "Z5", label: "VO2max", from: 1.02, to: 1.12 },
+  { zone: "Z1", label: "récupération", from: 0.65, to: 0.74 },
+  // « Easy » chez Daniels : l'allure des quatre cinquièmes du volume.
+  { zone: "Z2", label: "endurance fondamentale", from: 0.74, to: 0.84 },
+  // Englobe l'allure marathon, à 94 % environ de la vitesse au seuil.
+  { zone: "Z3", label: "tempo", from: 0.84, to: 0.95 },
+  { zone: "Z4", label: "seuil", from: 0.95, to: 1.03 },
+  { zone: "Z5", label: "VO2max", from: 1.03, to: 1.15 },
 ];
 
 /**
@@ -146,21 +158,45 @@ const SWIM_BANDS: ZoneBand[] = [
 ];
 
 /** Vélo : pourcentages de FTP, selon le découpage de référence de Coggan. */
+/**
+ * Zones de puissance de Coggan, en fraction de la FTP.
+ *
+ * Bornes rendues jointives : Coggan les publie en pourcentages entiers —
+ * « Z2 : 56 à 75 %, Z3 : 76 à 90 % » — ce qui, converti en watts, laissait des
+ * trous. Un cycliste roulant à 187 W avec une FTP de 248 n'était dans aucune
+ * zone, alors que 186 et 188 en avaient une.
+ */
 const BIKE_BANDS: ZoneBand[] = [
   { zone: "Z1", label: "récupération", from: 0.4, to: 0.55 },
-  { zone: "Z2", label: "endurance fondamentale", from: 0.56, to: 0.75 },
-  { zone: "Z3", label: "tempo", from: 0.76, to: 0.9 },
-  { zone: "Z4", label: "seuil", from: 0.91, to: 1.05 },
-  { zone: "Z5", label: "PMA", from: 1.06, to: 1.2 },
+  { zone: "Z2", label: "endurance fondamentale", from: 0.55, to: 0.75 },
+  { zone: "Z3", label: "tempo", from: 0.75, to: 0.9 },
+  { zone: "Z4", label: "seuil", from: 0.9, to: 1.05 },
+  { zone: "Z5", label: "PMA", from: 1.05, to: 1.2 },
 ];
 
-/** Fréquence cardiaque : pourcentages de la FC au seuil. */
+/**
+ * Zones de fréquence cardiaque, en fraction de la FC au seuil.
+ *
+ * Deux exigences que la transposition littérale des tableaux de Friel ne
+ * respectait pas.
+ *
+ * Contiguïté : ces tableaux s'écrivent en pourcentages entiers — « Z3 : 90 à
+ * 93 %, Z4 : 94 à 99 % » — ce qui, rendu en battements, laissait des trous.
+ * Un athlète dont la montre affiche 157 bpm n'était dans aucune zone.
+ *
+ * Et surtout : la zone nommée « seuil » doit contenir la fréquence cardiaque
+ * au seuil. Z4 s'arrêtait à 99 %, si bien que le seuil lui-même tombait dans
+ * la zone VO2max — alors que les zones d'allure, elles, encadrent bien le
+ * seuil. Les deux tableaux se contredisaient.
+ */
 const HR_BANDS: ZoneBand[] = [
   { zone: "Z1", label: "récupération", from: 0.7, to: 0.81 },
   { zone: "Z2", label: "endurance fondamentale", from: 0.81, to: 0.89 },
-  { zone: "Z3", label: "tempo", from: 0.89, to: 0.93 },
-  { zone: "Z4", label: "seuil", from: 0.94, to: 0.99 },
-  { zone: "Z5", label: "VO2max", from: 1.0, to: 1.06 },
+  { zone: "Z3", label: "tempo", from: 0.89, to: 0.94 },
+  // Encadre le seuil, comme les zones d'allure : sur un effort au seuil, la
+  // fréquence cardiaque oscille de part et d'autre de sa valeur seuil.
+  { zone: "Z4", label: "seuil", from: 0.94, to: 1.02 },
+  { zone: "Z5", label: "VO2max", from: 1.02, to: 1.06 },
 ];
 
 /**
@@ -415,6 +451,11 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
       label: b.label,
       value: formatHrBand(seuilFc!, b),
     }));
+    // Dit quel que soit le chemin suivi : le malentendu est de lire ce tableau
+    // comme un second jeu de zones qui devrait coïncider avec les allures.
+    notes.push(
+      "La fréquence cardiaque retarde sur l'allure : au départ d'un bloc au seuil, elle met une à deux minutes à monter, et elle dérive à la chaleur ou en fin de séance. C'est un repère de contrôle, pas une seconde vérité — sur un effort court, fiez-vous à l'allure."
+    );
   }
 
   /* --- Corrections manuelles ---------------------------------------- */

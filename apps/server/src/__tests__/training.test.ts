@@ -150,8 +150,8 @@ describe("computeTrainingZones", () => {
   describe("vélo", () => {
     it("calcule des zones de puissance sur la FTP", () => {
       const { velo } = computeTrainingZones({ ftpWatts: 250 });
-      expect(zoneDe(velo, "Z4")).toBe("228–263 W");
-      expect(zoneDe(velo, "Z2")).toBe("140–188 W");
+      expect(zoneDe(velo, "Z4")).toBe("225–263 W");
+      expect(zoneDe(velo, "Z2")).toBe("138–188 W");
     });
 
     it("n'invente aucune zone de puissance sans FTP", () => {
@@ -184,7 +184,8 @@ describe("computeTrainingZones", () => {
   describe("fréquence cardiaque", () => {
     it("calcule les zones sur la FC au seuil quand elle est connue", () => {
       const { frequenceCardiaque } = computeTrainingZones({ fcSeuil: 170 });
-      expect(zoneDe(frequenceCardiaque, "Z4")).toBe("160–168 bpm");
+      // Z4 porte le nom « seuil » : elle doit contenir les 170 bpm du seuil.
+      expect(zoneDe(frequenceCardiaque, "Z4")).toBe("160–173 bpm");
       expect(zoneDe(frequenceCardiaque, "Z2")).toBe("138–151 bpm");
     });
 
@@ -197,7 +198,7 @@ describe("computeTrainingZones", () => {
 
     it("préfère un seuil mesuré à une estimation depuis la FC max", () => {
       const avec = computeTrainingZones({ fcSeuil: 160, fcMax: 200 });
-      expect(zoneDe(avec.frequenceCardiaque, "Z4")).toBe("150–158 bpm");
+      expect(zoneDe(avec.frequenceCardiaque, "Z4")).toBe("150–163 bpm");
     });
 
     it("ne propose rien sans donnée cardiaque", () => {
@@ -361,5 +362,79 @@ describe("milieu de nage", () => {
     const { notes } = computeTrainingZones({ cssSecPer100m: 104 });
     expect(notes.join(" ")).not.toContain("Équivalences");
     expect(equivalencesNatation(104, "")).toBeNull();
+  });
+});
+
+/**
+ * Deux propriétés que toute table de zones doit vérifier, quelle que soit la
+ * discipline. Elles ont toutes deux été violées en production : la première
+ * laissait des fréquences cardiaques et des puissances sans zone, la seconde
+ * plaçait la fréquence cardiaque au seuil dans la zone VO2max.
+ */
+describe("cohérence des tables de zones", () => {
+  const ATHLETE = {
+    seuilCourseSecParKm: 248,
+    cssSecPer100m: 104,
+    ftpWatts: 248,
+    fcSeuil: 168,
+  };
+
+  /** « 4:01–4:21/km », « 223–260 W », « 158–171 bpm » → [min, max] numériques. */
+  function bornes(valeur: string): [number, number] {
+    const chronos = valeur.match(/(\d+):(\d{2})/g);
+    if (chronos && chronos.length === 2) {
+      const enSecondes = chronos.map((c) => {
+        const [m, s] = c.split(":").map(Number);
+        return m * 60 + s;
+      });
+      // Une allure se lit à l'envers : le temps le plus grand est le plus lent.
+      return [Math.min(...enSecondes), Math.max(...enSecondes)];
+    }
+    const nombres = valeur.match(/\d+/g)!.map(Number);
+    return [Math.min(...nombres), Math.max(...nombres)];
+  }
+
+  const tables = () => {
+    const z = computeTrainingZones(ATHLETE);
+    return [
+      { nom: "course", ranges: z.course!, seuil: 248, allure: true },
+      { nom: "natation", ranges: z.natation!, seuil: 104, allure: true },
+      { nom: "vélo", ranges: z.velo!, seuil: 248, allure: false },
+      { nom: "fréquence cardiaque", ranges: z.frequenceCardiaque!, seuil: 168, allure: false },
+    ];
+  };
+
+  it("ne laisse aucun trou entre deux zones consécutives", () => {
+    for (const { nom, ranges, allure } of tables()) {
+      const paliers = ranges.map((r) => bornes(r.value));
+      for (let i = 0; i < paliers.length - 1; i += 1) {
+        // Une allure se lit en décroissant — Z2 est plus rapide, donc un temps
+        // plus petit — alors que watts et battements croissent. La borne
+        // partagée n'est donc pas du même côté.
+        const [finZone, debutSuivante] = allure
+          ? [paliers[i][0], paliers[i + 1][1]]
+          : [paliers[i][1], paliers[i + 1][0]];
+        expect(Math.abs(finZone - debutSuivante), `${nom} entre Z${i + 1} et Z${i + 2}`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("place la valeur au seuil dans la zone qui porte ce nom", () => {
+    for (const { nom, ranges, seuil } of tables()) {
+      const z4 = ranges.find((r) => r.zone === "Z4")!;
+      const [min, max] = bornes(z4.value);
+      expect(seuil, `${nom} : Z4 vaut ${z4.value}`).toBeGreaterThanOrEqual(min);
+      expect(seuil, `${nom} : Z4 vaut ${z4.value}`).toBeLessThanOrEqual(max);
+    }
+  });
+
+  it("garde l'endurance fondamentale nettement plus lente que le seuil", () => {
+    // Elle recouvrait l'allure marathon : l'athlète courait ses sorties
+    // faciles trop vite, le défaut même que ce modèle doit empêcher.
+    const { course } = computeTrainingZones(ATHLETE);
+    const [rapide] = bornes(course!.find((r) => r.zone === "Z2")!.value);
+
+    expect(rapide).toBeGreaterThanOrEqual(285);
+    expect(rapide).toBeLessThanOrEqual(310);
   });
 });
