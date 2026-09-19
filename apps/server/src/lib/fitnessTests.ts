@@ -159,8 +159,18 @@ export interface DerivedThresholds {
  * jour que de recalculer toutes les zones d'un athlète sur une saisie erronée.
  */
 export function deriveThresholds(kind: string, result: TestResult): DerivedThresholds | null {
+  /*
+   * La fréquence au seuil ne se relève pas dans l'eau.
+   *
+   * Le protocole de natation ne la demande pas — allongé, refroidi, en apnée
+   * partielle, un nageur a dix à quinze battements de moins qu'un coureur au
+   * même effort. Le formulaire proposait pourtant le champ pour tous les
+   * tests : une valeur saisie là aurait tiré vers le bas les zones cardiaques
+   * des trois disciplines, puisque l'application n'en retient qu'une.
+   */
+  const fcExploitable = kind !== "natation_css";
   const fcSeuil =
-    result.fcMoyenne && result.fcMoyenne >= 100 && result.fcMoyenne <= 220
+    fcExploitable && result.fcMoyenne && result.fcMoyenne >= 100 && result.fcMoyenne <= 220
       ? Math.round(result.fcMoyenne)
       : undefined;
 

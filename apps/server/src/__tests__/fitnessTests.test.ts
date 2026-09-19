@@ -150,3 +150,18 @@ describe("rythme des tests", () => {
     expect(choisi).not.toBeNull();
   });
 });
+
+describe("ce qu'un test transmet aux zones", () => {
+  it("ne retient pas la fréquence cardiaque d'un test de natation", () => {
+    // Dix à quinze battements sous la valeur en course : la retenir
+    // fausserait les zones cardiaques des trois disciplines.
+    const d = deriveThresholds("natation_css", { temps400S: 400, temps200S: 190, fcMoyenne: 150 });
+    expect(d?.cssSecPer100m).toBe(105);
+    expect(d?.fcSeuil).toBeUndefined();
+  });
+
+  it("retient celle d'un test de course ou de vélo", () => {
+    expect(deriveThresholds("course_30min", { distanceM: 7500, fcMoyenne: 172 })?.fcSeuil).toBe(172);
+    expect(deriveThresholds("velo_20min", { puissanceMoy: 261, fcMoyenne: 165 })?.fcSeuil).toBe(165);
+  });
+});
