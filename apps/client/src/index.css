@@ -82,6 +82,10 @@ body {
   height: 1px;
   padding: 0;
   overflow: hidden;
+  /* `clip` est obsolète mais reste le seul rognage compris par les Safari
+     antérieurs à la version 14, où `clip-path` non préfixé est ignoré. */
+  clip: rect(0 0 0 0);
+  -webkit-clip-path: inset(50%);
   clip-path: inset(50%);
   white-space: nowrap;
 }
@@ -91,6 +95,8 @@ body {
   height: auto;
   padding: 0.5rem 0.75rem;
   overflow: visible;
+  clip: auto;
+  -webkit-clip-path: none;
   clip-path: none;
 }
 

@@ -7,7 +7,7 @@
  * validée sans réseau donnerait une fausse confirmation à l'athlète.
  */
 
-const VERSION = "v1";
+const VERSION = "v2";
 const COQUILLE = `tricoach-coquille-${VERSION}`;
 /* Les fichiers de /assets portent un hachage dans leur nom : leur contenu ne
  * change jamais. Ce cache n'est donc pas versionné, sans quoi chaque
@@ -103,7 +103,23 @@ self.addEventListener("fetch", (event) => {
    * Hors ligne, on la ressort du cache pour que le routeur prenne la main. */
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(async () => (await caches.match("/")) ?? Response.error())
+      (async () => {
+        try {
+          const reponse = await fetch(request);
+          /* La coquille de secours n'était jamais rafraîchie : figée à
+           * l'installation, elle renvoyait vers les fragments d'un ancien
+           * déploiement dès que le réseau flanchait une seule fois — et
+           * l'application repartait sur du vieux code sans rien en dire.
+           * Chaque navigation réussie la remet à jour. */
+          if (reponse.ok) {
+            const cache = await caches.open(COQUILLE);
+            await cache.put("/", reponse.clone());
+          }
+          return reponse;
+        } catch {
+          return (await caches.match("/")) ?? Response.error();
+        }
+      })()
     );
     return;
   }
