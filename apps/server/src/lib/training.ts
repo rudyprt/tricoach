@@ -12,24 +12,44 @@ export interface ParsedPerformance {
 
 const DISTANCE_RE = /(\d+(?:[.,]\d+)?)\s*(km|k|m)\b/i;
 
-/** "1h15", "1h15min", "45min", "48:30", "28 min", "1:05:30" */
-function parseDuration(text: string): number | null {
+/**
+ * Vitesses au-delà desquelles une lecture est forcément fausse, toutes
+ * disciplines confondues : de la nage la plus lente au sprint cycliste. Elles
+ * ne servent qu'à écarter l'absurde, jamais à juger un athlète.
+ */
+const VITESSE_MIN_MS = 0.3;
+const VITESSE_MAX_MS = 20;
+
+/**
+ * Durées possibles pour un texte. Plusieurs, car « 1:45 » ne se lit pas seul :
+ * c'est 1 min 45 s sur un 400 m, 1 h 45 sur un semi-marathon. La distance
+ * tranche, et elle n'est connue qu'un cran plus haut.
+ *
+ * "1h15", "1h15min", "45min", "48:30", "28 min", "1:05:30"
+ */
+function dureesPossibles(text: string): number[] {
   const hms = text.match(/(\d{1,2}):(\d{2}):(\d{2})/);
-  if (hms) return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
+  if (hms) return [Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3])];
 
   const hoursMin = text.match(/(\d{1,2})\s*h\s*(\d{1,2})?/i);
   if (hoursMin) {
     const minutes = hoursMin[2] ? Number(hoursMin[2]) : 0;
-    return Number(hoursMin[1]) * 3600 + minutes * 60;
+    return [Number(hoursMin[1]) * 3600 + minutes * 60];
   }
 
   const ms = text.match(/(\d{1,3}):(\d{2})(?!\d)/);
-  if (ms) return Number(ms[1]) * 60 + Number(ms[2]);
+  // La lecture en minutes d'abord : c'est la plus courante, et la seule
+  // possible dès que le second nombre dépasse 59 minutes.
+  if (ms) {
+    const a = Number(ms[1]);
+    const b = Number(ms[2]);
+    return b < 60 ? [a * 60 + b, a * 3600 + b * 60] : [a * 60 + b];
+  }
 
   const minutes = text.match(/(\d{1,3})\s*(?:min|mn|')/i);
-  if (minutes) return Number(minutes[1]) * 60;
+  if (minutes) return [Number(minutes[1]) * 60];
 
-  return null;
+  return [];
 }
 
 function parseDistance(text: string): number | null {
@@ -48,10 +68,42 @@ function parseDistance(text: string): number | null {
 export function parsePerformance(text: string | null | undefined): ParsedPerformance | null {
   if (!text) return null;
   const distanceM = parseDistance(text);
-  const durationS = parseDuration(text);
-  if (!distanceM || !durationS) return null;
-  if (durationS < 30 || durationS > 24 * 3600) return null;
-  return { distanceM, durationS };
+  if (!distanceM) return null;
+
+  /*
+   * Entre deux lectures d'un « 1:45 », celle qui donne une vitesse humaine.
+   *
+   * « 21km en 1:45 » était lu 1 min 45 s : 589 km/h, accepté sans broncher, et
+   * l'athlète se retrouvait avec des zones à sept secondes au kilomètre. Une
+   * allure impossible n'est pas une allure : elle disqualifie la lecture.
+   */
+  /*
+   * Une allure saisie à la place d'un temps : « 42,2 km en 5:00/km ». Le
+   * suffixe la désigne sans ambiguïté, et la distance permet d'en tirer le
+   * temps total. Sans cette lecture, « 5:00 » passait pour cinq heures — un
+   * marathon plausible, donc accepté, et pourtant faux d'une heure et demie.
+   */
+  const allure = text.match(/(\d{1,3})\s*:\s*(\d{2})\s*\/\s*(km|100\s?m)\b/i);
+  if (allure) {
+    const parUnite = Number(allure[1]) * 60 + Number(allure[2]);
+    const unites = allure[3].toLowerCase().startsWith("km") ? distanceM / 1000 : distanceM / 100;
+    const total = Math.round(parUnite * unites);
+    const vitesse = distanceM / total;
+    if (total >= 30 && total <= 24 * 3600 && vitesse >= VITESSE_MIN_MS && vitesse <= VITESSE_MAX_MS) {
+      return { distanceM, durationS: total };
+    }
+    return null;
+  }
+
+  const candidates = dureesPossibles(text)
+    .filter((d) => d >= 30 && d <= 24 * 3600)
+    .filter((d) => {
+      const vitesse = distanceM / d;
+      return vitesse >= VITESSE_MIN_MS && vitesse <= VITESSE_MAX_MS;
+    });
+
+  if (candidates.length === 0) return null;
+  return { distanceM, durationS: candidates[0] };
 }
 
 /**
@@ -82,6 +134,12 @@ export interface ZoneRange {
   value: string;
   /** true si la valeur a été saisie par l'athlète et non calculée. */
   custom?: boolean;
+  /**
+   * Fréquence cardiaque de la même zone, quand elle est connue. Deuxième
+   * repère et non second jeu de zones : l'allure se tient, la fréquence se
+   * constate — elle retarde en début d'effort et dérive à la chaleur.
+   */
+  fc?: string;
 }
 
 export const ZONE_SPORTS = ["course", "natation", "velo"] as const;
@@ -94,6 +152,12 @@ export interface TrainingZones {
   course: ZoneRange[] | null;
   natation: ZoneRange[] | null;
   velo: ZoneRange[] | null;
+  /**
+   * Repères de vitesse à vélo, quand ni la puissance ni la fréquence
+   * cardiaque ne sont connues. Séparés des zones de puissance : ce ne sont pas
+   * les mêmes valeurs, et ce ne sont pas les mêmes garanties.
+   */
+  veloVitesse: ZoneRange[] | null;
   /** Zones de fréquence cardiaque, communes aux trois disciplines. */
   frequenceCardiaque: ZoneRange[] | null;
   /** Explique d'où viennent les valeurs, pour l'affichage et pour le prompt. */
@@ -218,6 +282,21 @@ function formatPaceBand(thresholdSpeedMs: number, band: ZoneBand, per: 1000 | 10
   const unite = per === 1000 ? "/km" : "/100m";
   const fmt = (v: number) => (per === 1000 ? formatPacePerKm(v) : formatPacePer100m(v)).replace(unite, "");
   return `${fmt(rapide)}–${fmt(lent)}${unite}`;
+}
+
+/**
+ * Une fraction de puissance ne se transpose pas telle quelle en fraction de
+ * vitesse : sur le plat, la puissance croît à peu près comme le cube de la
+ * vitesse. Rouler à 55 % de sa FTP, ce n'est pas rouler à 55 % de sa vitesse
+ * au seuil, mais à 82 % — appliquer les pourcentages de Coggan directement à
+ * des km/h donnerait des zones basses absurdement lentes.
+ *
+ * L'approximation vaut sur terrain plat et sans vent, ce que la note qui
+ * accompagne ces zones rappelle à l'athlète.
+ */
+function formatSpeedBand(thresholdSpeedMs: number, band: ZoneBand): string {
+  const kmh = (fraction: number) => Math.round(thresholdSpeedMs * Math.cbrt(fraction) * 3.6);
+  return `${kmh(band.from)}–${kmh(band.to)} km/h`;
 }
 
 function formatWattBand(ftp: number, band: ZoneBand): string {
@@ -356,10 +435,22 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     if (perf) {
       // Exposant 1.06 : valeur classique de Riegel pour la course à pied.
       // Le seuil correspond à l'effort tenable une heure.
-      vitesseSeuilCourse = thresholdSpeed(perf, 3600, 1.06);
-      notes.push(
-        `Course : seuil estimé à ${formatPacePerKm(1000 / vitesseSeuilCourse)} à partir de votre temps de référence.`
-      );
+      const estimee = thresholdSpeed(perf, 3600, 1.06);
+      const allure = 1000 / estimee;
+      /*
+       * Une estimation reste une déduction : elle peut sortir du domaine
+       * humain si le temps saisi a été mal compris. Mieux vaut alors ne rien
+       * afficher et le dire, plutôt que des zones à sept secondes au kilomètre
+       * que l'athlète prendra pour une panne de l'application.
+       */
+      if (allure >= 120 && allure <= 900) {
+        vitesseSeuilCourse = estimee;
+        notes.push(`Course : seuil estimé à ${formatPacePerKm(allure)} à partir de votre temps de référence.`);
+      } else {
+        notes.push(
+          "Course : votre temps de référence n'a pas pu être interprété. Réécrivez-le sous la forme « 10 km en 50:00 » ou « 21,1 km en 1h45 »."
+        );
+      }
     }
   }
 
@@ -383,8 +474,18 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     if (perf) {
       // Exposant 1.03 : la fatigue progresse plus lentement en natation.
       // La CSS correspond à l'effort tenable environ trente minutes.
-      vitesseCss = thresholdSpeed(perf, 1800, 1.03);
-      notes.push(`Natation : CSS estimée à ${formatPacePer100m(100 / vitesseCss)}.`);
+      const estimee = thresholdSpeed(perf, 1800, 1.03);
+      const cent = 100 / estimee;
+      // Même garde qu'en course : de 50 s à 5 min aux 100 m, au-delà la
+      // lecture du temps de référence est en cause, pas le nageur.
+      if (cent >= 50 && cent <= 300) {
+        vitesseCss = estimee;
+        notes.push(`Natation : CSS estimée à ${formatPacePer100m(cent)}.`);
+      } else {
+        notes.push(
+          "Natation : votre temps de référence n'a pas pu être interprété. Réécrivez-le sous la forme « 400 m en 7:30 »."
+        );
+      }
     }
   }
 
@@ -408,6 +509,7 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
 
   /* --- Vélo --------------------------------------------------------- */
   let velo: ZoneRange[] | null = null;
+  let veloVitesse: ZoneRange[] | null = null;
 
   if (inputs.ftpWatts && inputs.ftpWatts > 50) {
     velo = BIKE_BANDS.map((b) => ({
@@ -429,6 +531,31 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     notes.push(
       "Renseignez votre FTP, ou faites un test de 20 minutes (FTP ≈ 95 % de la puissance moyenne), pour des zones vélo exactes."
     );
+
+    /*
+     * Des repères chiffrés, plutôt qu'une phrase qui promet des km/h sans en
+     * donner aucun. L'athlète lisait « votre intensité se donne en km/h » et ne
+     * voyait pas un seul chiffre : la consigne était inapplicable.
+     */
+    const perf = parsePerformance(inputs.tempsVelo);
+    if (perf) {
+      // Exposant 1.04 : la dérive est plus faible qu'en course, l'effort étant
+      // porté par la machine. Le seuil reste l'effort tenable une heure.
+      const estimee = thresholdSpeed(perf, 3600, 1.04);
+      const kmh = estimee * 3.6;
+      // De 15 à 55 km/h au seuil : au-delà, c'est le temps saisi qui est en
+      // cause, pas le cycliste.
+      if (kmh >= 15 && kmh <= 55) {
+        veloVitesse = BIKE_BANDS.map((b) => ({
+          zone: b.zone,
+          label: b.label,
+          value: formatSpeedBand(estimee, b),
+        }));
+        notes.push(
+          `Vélo : vitesse au seuil estimée à ${Math.round(kmh)} km/h à partir de votre temps de référence. Ces repères ne valent que sur terrain plat et sans vent.`
+        );
+      }
+    }
   }
 
   /* --- Fréquence cardiaque ------------------------------------------ */
@@ -468,6 +595,23 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   natation = applyOverrides(natation, overrides.natation, SWIM_BANDS);
   velo = applyOverrides(velo, overrides.velo, BIKE_BANDS);
 
+  /*
+   * La fréquence cardiaque en regard de chaque zone d'allure.
+   *
+   * Les deux repères se complètent : l'allure est ce que l'athlète vise, la
+   * fréquence ce qu'il vérifie. Les afficher côte à côte dans le tableau des
+   * zones est utile ; les mélanger dans une cible de séance ne l'est pas, et
+   * les cibles continuent de ne porter qu'une seule valeur.
+   */
+  const fcParZone = new Map((frequenceCardiaque ?? []).map((z) => [z.zone, z.value]));
+  const avecFc = (ranges: ZoneRange[] | null): ZoneRange[] | null =>
+    ranges?.map((z) => (fcParZone.has(z.zone) ? { ...z, fc: fcParZone.get(z.zone) } : z)) ?? null;
+
+  course = avecFc(course);
+  natation = avecFc(natation);
+  velo = avecFc(velo);
+  veloVitesse = avecFc(veloVitesse);
+
   const corriges = ZONE_SPORTS.filter((sport) => ({ course, natation, velo })[sport]?.some((z) => z.custom));
   if (corriges.length > 0) {
     notes.push(
@@ -475,13 +619,13 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     );
   }
 
-  if (!course && !natation && !velo && !frequenceCardiaque) {
+  if (!course && !natation && !velo && !veloVitesse && !frequenceCardiaque) {
     notes.push(
       "Aucune donnée exploitable : renseignez un temps de référence, votre FTP ou votre FC au seuil pour obtenir des zones chiffrées."
     );
   }
 
-  return { course, natation, velo, frequenceCardiaque, notes };
+  return { course, natation, velo, veloVitesse, frequenceCardiaque, notes };
 }
 
 export function formatZonesForPrompt(zones: TrainingZones): string {
@@ -499,6 +643,9 @@ export function formatZonesForPrompt(zones: TrainingZones): string {
   push("Course à pied", zones.course);
   push("Natation", zones.natation);
   push("Vélo", zones.velo);
+  // Le coach recevait la consigne d'écrire des km/h sans qu'aucune vitesse ne
+  // lui soit donnée : il les inventait, et elles ne correspondaient à rien.
+  if (!zones.velo) push("Vélo (vitesse estimée, terrain plat)", zones.veloVitesse);
   push("Fréquence cardiaque", zones.frequenceCardiaque);
 
   if (!zones.velo) {

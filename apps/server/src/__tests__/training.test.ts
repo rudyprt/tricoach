@@ -468,3 +468,115 @@ describe("modèle Joe Friel à cinq zones", () => {
     expect(zoneDeFc("Z5", { fcSeuil: 168, fcMax: 150 })).toBe("171–178 bpm");
   });
 });
+
+describe("lecture d'un temps de référence ambigu", () => {
+  it("lit « 1:45 » en heures sur un semi-marathon", () => {
+    // Lu en minutes, ce temps donnait 589 km/h — et des zones à sept
+    // secondes au kilomètre, affichées sans le moindre avertissement.
+    expect(parsePerformance("21km en 1:45")).toEqual({ distanceM: 21000, durationS: 6300 });
+  });
+
+  it("le lit en minutes quand c'est la seule lecture plausible", () => {
+    expect(parsePerformance("10km en 50:00")).toEqual({ distanceM: 10000, durationS: 3000 });
+    expect(parsePerformance("400m en 7:30")).toEqual({ distanceM: 400, durationS: 450 });
+  });
+
+  it("comprend une allure saisie à la place d'un temps", () => {
+    // « 5:00/km » sur 42,2 km, c'est 3 h 31, pas cinq heures — lecture qui
+    // passait pourtant le contrôle de plausibilité.
+    expect(parsePerformance("42,2km en 5:00/km")).toEqual({ distanceM: 42200, durationS: 12660 });
+    expect(parsePerformance("10km en 5:00/km")).toEqual({ distanceM: 10000, durationS: 3000 });
+  });
+
+  it("refuse un temps qu'aucune lecture ne rend humain", () => {
+    expect(parsePerformance("10km en 0:02")).toBeNull();
+  });
+});
+
+describe("garde-fou sur les seuils estimés", () => {
+  const base = {
+    tempsCourse: "", tempsNatation: "", tempsVelo: "",
+    seuilCourseSecParKm: null, ftpWatts: null, cssSecPer100m: null,
+    fcSeuil: null, fcMax: null, overrides: {},
+  };
+
+  it("estime un seuil cohérent depuis un semi en 1h45", () => {
+    const z = computeTrainingZones({ ...base, tempsCourse: "21km en 1:45" });
+    expect(z.notes.join(" ")).toContain("seuil estimé à 4:5");
+    // Aucune zone ne doit tomber sous la minute au kilomètre.
+    for (const r of z.course ?? []) expect(r.value).not.toMatch(/\b0:\d{2}\//);
+  });
+
+  it("n'affiche aucune zone plutôt qu'une zone absurde", () => {
+    // 10 km en 10 minutes se lit sans peine, mais aucun humain ne le court :
+    // le seuil déduit sort du domaine, la zone n'est pas affichée.
+    const z = computeTrainingZones({ ...base, tempsCourse: "10km en 0:10" });
+    expect(z.course).toBeNull();
+    expect(z.notes.join(" ")).toContain("n'a pas pu être interprété");
+  });
+});
+
+describe("repères de vitesse à vélo", () => {
+  const base = {
+    tempsCourse: "", tempsNatation: "", tempsVelo: "",
+    seuilCourseSecParKm: null, ftpWatts: null, cssSecPer100m: null,
+    fcSeuil: null, fcMax: null, overrides: {},
+  };
+
+  it("donne des km/h quand ni puissance ni fréquence cardiaque ne sont connues", () => {
+    // L'application annonçait des km/h et n'en affichait aucun.
+    const z = computeTrainingZones({ ...base, tempsVelo: "40km en 1h15" });
+    expect(z.velo).toBeNull();
+    expect(z.veloVitesse).toHaveLength(5);
+    for (const r of z.veloVitesse ?? []) expect(r.value).toMatch(/^\d{1,2}–\d{1,2} km\/h$/);
+  });
+
+  it("classe les vitesses dans l'ordre croissant des zones", () => {
+    const z = computeTrainingZones({ ...base, tempsVelo: "40km en 1h15" });
+    const bas = (v: string) => Number(v.split("–")[0]);
+    const vitesses = (z.veloVitesse ?? []).map((r) => bas(r.value));
+    expect([...vitesses].sort((a, b) => a - b)).toEqual(vitesses);
+  });
+
+  it("s'efface dès qu'une FTP est connue : la puissance fait foi", () => {
+    const z = computeTrainingZones({ ...base, tempsVelo: "40km en 1h15", ftpWatts: 248 });
+    expect(z.velo).toHaveLength(5);
+    expect(z.veloVitesse).toBeNull();
+  });
+});
+
+describe("allure et fréquence cardiaque de front", () => {
+  const base = {
+    tempsCourse: "21km en 1:45", tempsNatation: "400m en 7:30", tempsVelo: "40km en 1h15",
+    seuilCourseSecParKm: null, ftpWatts: null, cssSecPer100m: null,
+    fcSeuil: 168, fcMax: 188, overrides: {},
+  };
+
+  it("joint la fréquence de la même zone à chaque allure", () => {
+    const z = computeTrainingZones(base);
+    for (const tableau of [z.course, z.natation, z.veloVitesse]) {
+      expect(tableau).not.toBeNull();
+      for (const r of tableau ?? []) expect(r.fc).toMatch(/^\d{2,3}–\d{2,3} bpm$/);
+    }
+  });
+
+  it("apparie bien les zones entre elles", () => {
+    const z = computeTrainingZones(base);
+    const parZone = new Map((z.frequenceCardiaque ?? []).map((r) => [r.zone, r.value]));
+    for (const r of z.course ?? []) expect(r.fc).toBe(parZone.get(r.zone));
+  });
+
+  it("n'ajoute rien quand aucune fréquence n'est connue", () => {
+    // Inventer une fourchette de battements serait pire que ne rien dire.
+    const z = computeTrainingZones({ ...base, fcSeuil: null, fcMax: null });
+    for (const r of z.course ?? []) expect(r.fc).toBeUndefined();
+  });
+
+  it("garde la fréquence sur une zone corrigée à la main", () => {
+    const z = computeTrainingZones({ ...base, overrides: { course: { Z4: "4:30–4:50/km" } } });
+    const seuil = (z.course ?? []).find((r) => r.zone === "Z4");
+    expect(seuil?.value).toBe("4:30–4:50/km");
+    expect(seuil?.custom).toBe(true);
+    expect(seuil?.fc).toMatch(/bpm$/);
+  });
+});

@@ -276,6 +276,25 @@ describeIfDb("tests de terrain", () => {
     expect(cibleDe(dejaFaite.id)).toBe(ANCIENNE);
   });
 
+  it("programme quand même un test de vélo malgré des zones de vitesse", async () => {
+    /*
+     * Les repères de vitesse sont déduits d'un temps de référence, pas mesurés.
+     * Ils rendent la consigne lisible en attendant, ils ne remplacent pas une
+     * FTP — le test doit donc rester programmé.
+     */
+    const { user } = await athlete("vitesse@example.com");
+    await prisma.athleteProfile.update({
+      where: { userId: user.id },
+      // Seuils de course et de natation connus : seul le vélo reste à mesurer.
+      data: { tempsVelo: "40km en 1h15", seuilCourseSecParKm: 240, cssSecPer100m: 105 },
+    });
+    const profil = await profilPour(user.id);
+
+    const test = await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS);
+
+    expect(test?.protocol.sport).toBe("velo");
+  });
+
   it("abandonne un test resté en attente depuis plus de deux semaines", async () => {
     const { user } = await athlete("perime@example.com");
     const profil = await profilPour(user.id);

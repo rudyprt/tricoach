@@ -17,6 +17,7 @@ const ZONES: TrainingZones = {
     { zone: "Z2", label: "endurance", value: "150-186 W" },
     { zone: "Z4", label: "seuil", value: "226-260 W" },
   ],
+  veloVitesse: null,
   frequenceCardiaque: [
     { zone: "Z2", label: "endurance", value: "136-149 bpm" },
     { zone: "Z4", label: "seuil", value: "158-166 bpm" },
@@ -176,6 +177,7 @@ const AVANT: TrainingZones = {
   ],
   natation: [{ zone: "Z4", label: "seuil", value: "1:50–1:56/100m" }],
   velo: [{ zone: "Z4", label: "seuil", value: "210–245 W" }],
+  veloVitesse: null,
   frequenceCardiaque: null,
   notes: [],
 };

@@ -121,7 +121,10 @@ const BLOCS = ["echauffement", "corps", "retourCalme"] as const;
 function rangesPour(sport: string, zones: TrainingZones): ZoneRange[] | null {
   if (sport === "natation") return zones.natation;
   if (sport === "course") return zones.course;
-  if (sport === "velo") return zones.velo ?? zones.frequenceCardiaque;
+  // Même hiérarchie que les règles d'unité : puissance, à défaut fréquence
+  // cardiaque, à défaut vitesse. Sans ce dernier recours, une cible vélo
+  // erronée restait telle quelle chez un athlète sans capteur ni cardio.
+  if (sport === "velo") return zones.velo ?? zones.frequenceCardiaque ?? zones.veloVitesse;
   return null;
 }
 

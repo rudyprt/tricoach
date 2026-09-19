@@ -89,6 +89,8 @@ export interface ZoneRange {
   value: string;
   /** true si la valeur a été saisie par l'athlète et non calculée. */
   custom?: boolean;
+  /** Fréquence cardiaque de la même zone, quand elle est connue. */
+  fc?: string;
 }
 
 export type ZoneSport = "course" | "natation" | "velo";
@@ -100,6 +102,8 @@ export interface TrainingZones {
   course: ZoneRange[] | null;
   natation: ZoneRange[] | null;
   velo: ZoneRange[] | null;
+  /** Repères de vitesse à vélo, faute de puissance et de fréquence cardiaque. */
+  veloVitesse: ZoneRange[] | null;
   /** Zones de fréquence cardiaque, communes aux trois disciplines. */
   frequenceCardiaque: ZoneRange[] | null;
   notes: string[];

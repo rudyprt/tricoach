@@ -97,10 +97,23 @@ function FormulaireResultat({ test, onDone }: { test: FitnessTest; onDone: () =>
         </div>
       )}
 
-      <label className="block">
-        <span className="text-xs text-doux">Fréquence cardiaque moyenne (facultatif)</span>
-        <input className={champStyle} inputMode="numeric" placeholder="168" value={champs.fcMoyenne} onChange={set("fcMoyenne")} />
-      </label>
+      {/*
+        Le champ ne s'affiche que pour les tests dont le protocole demande la
+        fréquence, et l'intitulé reprend ce qu'il demande exactement. « Moyenne »
+        tout court invitait à donner celle des trente minutes du test de course,
+        soit quelques battements sous le vrai seuil — et toutes les zones
+        cardiaques s'en trouvaient décalées.
+      */}
+      {test.kind !== "natation_css" && (
+        <label className="block">
+          <span className="text-xs text-doux">
+            {test.kind === "course_30min"
+              ? "FC moyenne des 20 dernières minutes (facultatif)"
+              : "FC moyenne sur les 20 minutes (facultatif)"}
+          </span>
+          <input className={champStyle} inputMode="numeric" placeholder="168" value={champs.fcMoyenne} onChange={set("fcMoyenne")} />
+        </label>
+      )}
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
