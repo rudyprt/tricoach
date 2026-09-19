@@ -3,7 +3,7 @@ import type { Session, SessionBlock } from "../lib/api";
 import { Dialog } from "../ui/Dialog";
 import { Bouton } from "../ui/Bouton";
 import { SeanceGuidee } from "./SeanceGuidee";
-import { FaPlay } from "react-icons/fa6";
+import { FaPlay, FaDownload } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
   natation: "🏊",
@@ -164,15 +164,34 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
         )}
 
         {session.structure && !isRestDay && (
-          <Bouton
-            variante="principal"
-            pleineLargeur
-            className="mb-4"
-            icone={<FaPlay size={12} />}
-            onClick={() => setGuidee(true)}
-          >
-            Démarrer la séance
-          </Bouton>
+          <div className="mb-4 space-y-2">
+            <Bouton
+              variante="principal"
+              pleineLargeur
+              icone={<FaPlay size={12} />}
+              onClick={() => setGuidee(true)}
+            >
+              Démarrer la séance
+            </Bouton>
+
+            {/*
+              Un lien, pas un bouton : le navigateur télécharge le fichier
+              lui-même, y compris sur iOS où il part vers « Fichiers » et de là
+              vers Garmin Connect ou Coros.
+            */}
+            <a
+              href={`/api/sessions/${session.id}/workout.fit`}
+              download
+              className="flex min-h-cible w-full items-center justify-center gap-2 rounded-xl border border-bordure bg-surface-haute text-sm font-semibold text-fort transition-colors hover:bg-white/5"
+            >
+              <FaDownload size={12} aria-hidden="true" />
+              Envoyer à ma montre (.fit)
+            </a>
+            <p className="text-center text-xs text-doux">
+              Garmin : Connect → Entraînement → Importer. Coros : application → Entraînement → Importer.
+              La séance part ensuite sur la montre à la synchronisation.
+            </p>
+          </div>
         )}
 
         {session.structure ? (

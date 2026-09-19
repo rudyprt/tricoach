@@ -23,4 +23,17 @@ declare module "@garmin/fitsdk" {
     checkIntegrity(): boolean;
     read(): { messages: FitMessages; errors: unknown[] };
   }
+
+  /** Écriture : sert à produire les séances structurées pour les montres. */
+  export class Encoder {
+    constructor(options?: { fieldDescriptions?: Record<number, unknown> });
+    onMesg(mesgNum: number, mesg: Record<string, unknown>): void;
+    writeMesg(mesg: Record<string, unknown>): void;
+    close(): Uint8Array;
+  }
+
+  export const Profile: {
+    MesgNum: Record<string, number>;
+    types: Record<string, Record<number, string>>;
+  };
 }

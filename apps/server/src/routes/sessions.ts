@@ -6,6 +6,7 @@ import { serializeSession } from "../lib/session.js";
 import { ah, HttpError } from "../lib/http.js";
 import { zonesActuelles } from "../lib/zoneInputs.js";
 import { rafraichirCibles } from "../lib/cibles.js";
+import { construireFitWorkout, nomFichierFit } from "../lib/fitWorkout.js";
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
@@ -141,5 +142,41 @@ sessionsRouter.post(
     ]);
 
     res.json([serializeSession(updatedA), serializeSession(updatedB)]);
+  })
+);
+
+/**
+ * La séance au format FIT, à importer dans Garmin Connect, l'application Coros
+ * ou tout autre outil qui accepte un entraînement structuré.
+ *
+ * Les intensités sont celles du moment, pas celles de la génération : un test
+ * passé depuis a pu déplacer les seuils, et c'est le fichier emporté sur la
+ * montre qui doit en tenir compte.
+ */
+sessionsRouter.get(
+  "/:id/workout.fit",
+  ah(async (req: AuthedRequest, res) => {
+    const seance = await prisma.session.findFirst({
+      where: { id: req.params.id, userId: req.userId! },
+    });
+    if (!seance) throw new HttpError(404, "Séance introuvable.");
+
+    const zones = await zonesActuelles(req.userId!);
+    if (!zones) throw new HttpError(400, "Renseignez votre profil pour exporter une séance.");
+
+    const serialisee = serializeSession(seance);
+    const [aJour] = rafraichirCibles([serialisee], zones).seances;
+
+    const fichier = construireFitWorkout(aJour, zones);
+    if (!fichier) {
+      throw new HttpError(422, "Cette séance n'a pas de structure exportable (repos ou séance libre).");
+    }
+
+    res.setHeader("Content-Type", "application/vnd.ant.fit");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${nomFichierFit(seance.date, seance.sport, seance.titre)}"`
+    );
+    res.send(Buffer.from(fichier));
   })
 );
