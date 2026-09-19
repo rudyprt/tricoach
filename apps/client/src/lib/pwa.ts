@@ -10,12 +10,32 @@ export function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
   if (!import.meta.env.PROD) return;
 
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((erreur) => {
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js");
+
+      /*
+       * Une application installée n'est presque jamais fermée : elle passe en
+       * arrière-plan et revient. Sans ces vérifications, le navigateur ne
+       * cherchait une nouvelle version qu'au tout premier chargement, et un
+       * correctif déployé pouvait attendre des jours avant d'être remarqué.
+       */
+      const verifier = () => {
+        if (document.visibilityState !== "visible") return;
+        registration.update().catch(() => {
+          // Hors ligne, ou serveur injoignable : la prochaine ouverture
+          // réessaiera. Rien à signaler à l'athlète.
+        });
+      };
+
+      document.addEventListener("visibilitychange", verifier);
+      window.addEventListener("online", verifier);
+      verifier();
+    } catch (erreur) {
       // Un échec d'enregistrement ne doit jamais empêcher l'application de
       // fonctionner : elle marche simplement sans mode hors ligne.
       console.warn("[pwa] service worker non enregistré", erreur);
-    });
+    }
   });
 }
 

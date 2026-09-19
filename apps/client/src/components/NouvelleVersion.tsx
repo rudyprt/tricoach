@@ -2,13 +2,37 @@ import { useEffect, useState } from "react";
 import { FaArrowsRotate } from "react-icons/fa6";
 
 /**
- * Invitation à recharger après un déploiement.
+ * Bascule vers la version déployée.
  *
- * Le service worker basculait tout seul : l'onglet ouvert gardait pourtant
- * l'ancien code, sans que rien ne le dise. Et remplacer le code sous les pieds
- * de quelqu'un en pleine saisie lui ferait perdre ce qu'il écrit. La nouvelle
- * version attend donc, et c'est l'athlète qui décide quand basculer.
+ * La nouvelle version attendait qu'on la réclame. Sur une application
+ * installée, jamais vraiment fermée, elle pouvait attendre des jours : un
+ * correctif poussé restait invisible sans que rien ne le dise.
+ *
+ * Elle s'installe donc d'elle-même dès qu'il n'y a rien à perdre — et rien
+ * seulement : remplacer le code sous les pieds de quelqu'un en pleine saisie
+ * ou en pleine séance lui ferait perdre ce qu'il fait. Dans ces cas-là, elle
+ * patiente et se propose, comme avant.
  */
+
+/** Y a-t-il quelque chose qu'un rechargement ferait perdre ? */
+function rechargementRisque(): boolean {
+  // Une séance guidée en cours : le chronomètre et le bloc atteint ne
+  // survivraient pas au rechargement.
+  if (document.querySelector('[data-plein-ecran="seance"]')) return true;
+  // Une boîte de dialogue ouverte : l'athlète est au milieu d'une décision.
+  if (document.querySelector('[role="dialog"]')) return true;
+
+  const actif = document.activeElement;
+  if (!(actif instanceof HTMLElement)) return false;
+  if (actif.isContentEditable) return true;
+  // Un champ vide n'a rien à perdre ; un champ commencé, si.
+  if (actif instanceof HTMLTextAreaElement) return actif.value.trim().length > 0;
+  if (actif instanceof HTMLInputElement) {
+    const saisissable = ["text", "email", "password", "search", "tel", "url", "number", ""];
+    return saisissable.includes(actif.type) && actif.value.trim().length > 0;
+  }
+  return false;
+}
 export function NouvelleVersion() {
   const [enAttente, setEnAttente] = useState<ServiceWorker | null>(null);
 
@@ -50,6 +74,30 @@ export function NouvelleVersion() {
       navigator.serviceWorker.removeEventListener("controllerchange", surChangement);
     };
   }, []);
+
+  /*
+   * Dès qu'une version attend, on bascule sans rien demander — sauf si
+   * quelque chose est en cours. On réessaie alors à chaque retour au premier
+   * plan : c'est le moment où l'athlète n'est, le plus souvent, en train de
+   * rien faire dans l'application.
+   */
+  useEffect(() => {
+    if (!enAttente) return;
+
+    const tenter = () => {
+      if (document.visibilityState !== "visible") return;
+      if (rechargementRisque()) return;
+      enAttente.postMessage("activer-maintenant");
+    };
+
+    document.addEventListener("visibilitychange", tenter);
+    const minuteur = window.setTimeout(tenter, 0);
+
+    return () => {
+      document.removeEventListener("visibilitychange", tenter);
+      window.clearTimeout(minuteur);
+    };
+  }, [enAttente]);
 
   if (!enAttente) return null;
 

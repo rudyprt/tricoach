@@ -75,7 +75,11 @@ export function createApp() {
         // Le service worker, lui, doit être revalidé à chaque visite : un
         // exemplaire figé en cache empêcherait toute mise à jour de
         // l'application installée.
-        if (filePath.endsWith("sw.js") || filePath.endsWith("manifest.webmanifest")) {
+        if (
+          filePath.endsWith("sw.js") ||
+          filePath.endsWith("manifest.webmanifest") ||
+          filePath.endsWith("index.html")
+        ) {
           res.setHeader("Cache-Control", "no-cache");
         }
       },
@@ -86,6 +90,9 @@ export function createApp() {
       next();
       return;
     }
+    // La coquille ne doit jamais être servie depuis un cache intermédiaire :
+    // elle seule désigne les fragments du déploiement courant.
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.join(clientDist, "index.html"), (err) => {
       if (err) next();
     });

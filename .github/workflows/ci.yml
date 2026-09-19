@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Relance à la demande : un événement de PR peut se perdre, et il n'existait
+  # alors aucun moyen de refaire tourner la CI sans pousser un commit.
+  workflow_dispatch:
 
 jobs:
   check:
