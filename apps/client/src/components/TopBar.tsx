@@ -91,11 +91,20 @@ export function TopBar() {
   }
 
   return (
-    <div data-impression="masquer" className="relative shrink-0 border-b border-bordure bg-black lg:hidden">
-      <div className="flex items-center justify-between px-4 py-3.5">
+    <div
+      data-impression="masquer"
+      className="relative shrink-0 border-b border-bordure bg-black lg:hidden"
+      /*
+       * La barre passait sous la barre d'état de l'iPhone : l'heure et la
+       * batterie se superposaient au titre, et les commandes du haut étaient
+       * hors d'atteinte. Réserver l'encoche les ramène dans l'écran.
+       */
+      style={{ paddingTop: "var(--marge-haute)" }}
+    >
+      <div className="flex items-center justify-between px-4 py-2">
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex h-8 w-8 items-center justify-center text-xl text-white transition-transform duration-150 active:scale-90"
+          className="flex min-h-cible min-w-cible items-center justify-center text-xl text-white transition-transform duration-150 active:scale-90"
           aria-label="Menu"
         >
           ☰
@@ -103,7 +112,7 @@ export function TopBar() {
         <button
           onClick={() => navigate("/dashboard")}
           aria-label="Revenir à mon programme"
-          className="text-lg font-black italic tracking-wide text-white transition-transform duration-150 active:scale-95"
+          className="flex min-h-cible items-center px-3 text-lg font-black italic tracking-wide text-white transition-transform duration-150 active:scale-95"
         >
           TRI<span className="text-rose-500">COACH</span>
         </button>
@@ -111,7 +120,7 @@ export function TopBar() {
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           aria-label="Changer la photo de profil"
-          className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-rose-600 text-sm font-bold text-white transition-transform duration-150 active:scale-90 disabled:opacity-60"
+          className="relative flex h-cible w-cible shrink-0 items-center justify-center overflow-hidden rounded-full bg-rose-600 text-sm font-bold text-white transition-transform duration-150 active:scale-90 disabled:opacity-60"
         >
           {photo ? (
             <img src={photo} alt="" className="h-full w-full object-cover" />
