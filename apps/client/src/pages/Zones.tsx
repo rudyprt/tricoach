@@ -59,14 +59,30 @@ function ZoneBadge({ zone }: { zone: string }) {
   );
 }
 
+/**
+ * Allure et fréquence cardiaque côte à côte.
+ *
+ * Deux repères pour un même effort, sur deux lignes distinctes : l'allure est
+ * ce que l'athlète vise, la fréquence ce qu'il vérifie. Les empiler dans une
+ * même phrase les rendait douteux tous les deux ; les aligner en colonnes les
+ * rend comparables.
+ */
 function ZoneTable({ ranges }: { ranges: ZoneRange[] }) {
   return (
     <ul className="space-y-1.5">
       {ranges.map((z) => (
         <li key={z.zone} className="flex items-center gap-3 text-sm">
           <ZoneBadge zone={z.zone} />
-          <span className="flex-1 text-doux">{z.label}</span>
-          <span className={`font-mono ${z.custom ? "text-amber-300" : "text-white"}`}>{z.value}</span>
+          <span className="min-w-0 flex-1 text-doux">{z.label}</span>
+          {/*
+            Les deux repères empilés plutôt que côte à côte : sur un écran de
+            téléphone, deux colonnes chiffrées plus un libellé ne tiennent pas,
+            et la fréquence se retrouvait coupée au bord.
+          */}
+          <span className="shrink-0 text-right">
+            <span className={`block font-mono ${z.custom ? "text-amber-300" : "text-white"}`}>{z.value}</span>
+            {z.fc && <span className="block font-mono text-xs text-doux">{z.fc}</span>}
+          </span>
           {z.custom && (
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-amber-500/70" title="Valeur que vous avez saisie">
               perso

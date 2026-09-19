@@ -134,6 +134,12 @@ export interface ZoneRange {
   value: string;
   /** true si la valeur a été saisie par l'athlète et non calculée. */
   custom?: boolean;
+  /**
+   * Fréquence cardiaque de la même zone, quand elle est connue. Deuxième
+   * repère et non second jeu de zones : l'allure se tient, la fréquence se
+   * constate — elle retarde en début d'effort et dérive à la chaleur.
+   */
+  fc?: string;
 }
 
 export const ZONE_SPORTS = ["course", "natation", "velo"] as const;
@@ -588,6 +594,23 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   course = applyOverrides(course, overrides.course, RUN_BANDS);
   natation = applyOverrides(natation, overrides.natation, SWIM_BANDS);
   velo = applyOverrides(velo, overrides.velo, BIKE_BANDS);
+
+  /*
+   * La fréquence cardiaque en regard de chaque zone d'allure.
+   *
+   * Les deux repères se complètent : l'allure est ce que l'athlète vise, la
+   * fréquence ce qu'il vérifie. Les afficher côte à côte dans le tableau des
+   * zones est utile ; les mélanger dans une cible de séance ne l'est pas, et
+   * les cibles continuent de ne porter qu'une seule valeur.
+   */
+  const fcParZone = new Map((frequenceCardiaque ?? []).map((z) => [z.zone, z.value]));
+  const avecFc = (ranges: ZoneRange[] | null): ZoneRange[] | null =>
+    ranges?.map((z) => (fcParZone.has(z.zone) ? { ...z, fc: fcParZone.get(z.zone) } : z)) ?? null;
+
+  course = avecFc(course);
+  natation = avecFc(natation);
+  velo = avecFc(velo);
+  veloVitesse = avecFc(veloVitesse);
 
   const corriges = ZONE_SPORTS.filter((sport) => ({ course, natation, velo })[sport]?.some((z) => z.custom));
   if (corriges.length > 0) {

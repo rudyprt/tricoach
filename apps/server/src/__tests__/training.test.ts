@@ -544,3 +544,39 @@ describe("repères de vitesse à vélo", () => {
     expect(z.veloVitesse).toBeNull();
   });
 });
+
+describe("allure et fréquence cardiaque de front", () => {
+  const base = {
+    tempsCourse: "21km en 1:45", tempsNatation: "400m en 7:30", tempsVelo: "40km en 1h15",
+    seuilCourseSecParKm: null, ftpWatts: null, cssSecPer100m: null,
+    fcSeuil: 168, fcMax: 188, overrides: {},
+  };
+
+  it("joint la fréquence de la même zone à chaque allure", () => {
+    const z = computeTrainingZones(base);
+    for (const tableau of [z.course, z.natation, z.veloVitesse]) {
+      expect(tableau).not.toBeNull();
+      for (const r of tableau ?? []) expect(r.fc).toMatch(/^\d{2,3}–\d{2,3} bpm$/);
+    }
+  });
+
+  it("apparie bien les zones entre elles", () => {
+    const z = computeTrainingZones(base);
+    const parZone = new Map((z.frequenceCardiaque ?? []).map((r) => [r.zone, r.value]));
+    for (const r of z.course ?? []) expect(r.fc).toBe(parZone.get(r.zone));
+  });
+
+  it("n'ajoute rien quand aucune fréquence n'est connue", () => {
+    // Inventer une fourchette de battements serait pire que ne rien dire.
+    const z = computeTrainingZones({ ...base, fcSeuil: null, fcMax: null });
+    for (const r of z.course ?? []) expect(r.fc).toBeUndefined();
+  });
+
+  it("garde la fréquence sur une zone corrigée à la main", () => {
+    const z = computeTrainingZones({ ...base, overrides: { course: { Z4: "4:30–4:50/km" } } });
+    const seuil = (z.course ?? []).find((r) => r.zone === "Z4");
+    expect(seuil?.value).toBe("4:30–4:50/km");
+    expect(seuil?.custom).toBe(true);
+    expect(seuil?.fc).toMatch(/bpm$/);
+  });
+});
