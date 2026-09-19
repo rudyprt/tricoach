@@ -87,6 +87,9 @@ export function SeanceGuidee({ session, onFermer }: { session: Session; onFermer
    */
   return createPortal(
     <div
+      /* Repère lu par la mise à jour automatique : recharger pendant une
+         séance ferait perdre le chronomètre et le bloc en cours. */
+      data-plein-ecran="seance"
       className="fixed inset-0 z-[70] flex flex-col bg-fond"
       style={{ paddingTop: "var(--marge-haute)", paddingBottom: "var(--marge-basse)" }}
     >
