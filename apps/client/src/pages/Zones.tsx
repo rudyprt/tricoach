@@ -325,6 +325,20 @@ export function Zones() {
                 )}
               </p>
             )}
+
+            {/*
+              Annoncer des km/h sans en afficher aucun rendait la consigne
+              inapplicable : l'athlète lisait qu'il devait rouler à telle
+              vitesse et n'avait aucun chiffre à viser.
+            */}
+            {!editing && key === "velo" && !ranges && zones.veloVitesse && (
+              <div className="mt-3">
+                <ZoneTable ranges={zones.veloVitesse} />
+                <p className="mt-2 text-xs text-doux">
+                  Estimés depuis votre temps de référence à vélo, sur terrain plat et sans vent.
+                </p>
+              </div>
+            )}
           </div>
         );
       })}
