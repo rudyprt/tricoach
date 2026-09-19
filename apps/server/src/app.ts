@@ -56,8 +56,17 @@ export function createApp() {
   app.use("/api/push", pushRouter);
   app.use("/api/partage", partageRouter);
 
+  /*
+   * La version déployée, lisible sans outil ni connexion.
+   *
+   * Trois jours ont été perdus à chercher dans le code un défaut déjà corrigé,
+   * faute de pouvoir répondre à « le serveur tourne-t-il sur le dernier
+   * commit ? ». Render expose le commit construit ; le dire ici rend la
+   * question vérifiable en une seconde.
+   */
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
+    const commit = process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? null;
+    res.json({ ok: true, version: commit ? commit.slice(0, 7) : "dev" });
   });
 
   // En production, ce même serveur sert aussi le frontend compilé (même origine :
