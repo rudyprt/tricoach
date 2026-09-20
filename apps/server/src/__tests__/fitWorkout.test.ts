@@ -4,7 +4,7 @@ import { construireFitWorkout, lireRecuperation, lireRepetitions, nomFichierFit 
 import { computeTrainingZones } from "../lib/training.js";
 import type { SessionStructure } from "../lib/session.js";
 
-const PROFIL = {
+const PROFIL: Parameters<typeof computeTrainingZones>[0] = {
   tempsCourse: "",
   tempsNatation: "",
   tempsVelo: "40km en 1h15",
@@ -16,7 +16,7 @@ const PROFIL = {
   overrides: {},
 };
 
-const zonesAvec = (surcharge: Partial<typeof PROFIL> = {}) =>
+const zonesAvec = (surcharge: Partial<Parameters<typeof computeTrainingZones>[0]> = {}) =>
   computeTrainingZones({ ...PROFIL, ...surcharge });
 
 const structure = (exercice?: SessionStructure["corps"]["exercices"]): SessionStructure => ({

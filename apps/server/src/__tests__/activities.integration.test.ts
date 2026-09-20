@@ -75,6 +75,73 @@ describeIfDb("import de fichiers", () => {
     return plan.sessions[0];
   }
 
+  it("rattache à la séance désignée, même un autre jour", async () => {
+    /*
+     * L'athlète importe depuis la séance qu'il vient de faire : c'est lui qui
+     * dit laquelle, et cela prime sur le rapprochement par jour et discipline.
+     * Une sortie décalée d'un jour se range alors au bon endroit.
+     */
+    const { agent, user } = await athlete("designe@example.com");
+    const session = await seancePrevue(user.id, "course", 45);
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { date: new Date("2026-09-12T00:00:00.000Z") },
+    });
+
+    const res = await agent
+      .post("/api/activities/import")
+      .field("sessionId", session.id)
+      .attach("fichiers", path.join(fixtures, "course.fit"));
+
+    expect(res.body.resultats[0].statut).toBe("importe_et_rattache");
+    const apres = await prisma.session.findUniqueOrThrow({ where: { id: session.id } });
+    expect(apres.status).toBe("faite");
+  });
+
+  it("refuse de rattacher une sortie à une séance d'une autre discipline", async () => {
+    // Une faute de doigt marquerait la mauvaise séance comme faite.
+    const { agent, user } = await athlete("discipline@example.com");
+    const session = await seancePrevue(user.id, "natation", 45);
+
+    const res = await agent
+      .post("/api/activities/import")
+      .field("sessionId", session.id)
+      .attach("fichiers", path.join(fixtures, "course.fit"));
+
+    expect(res.body.resultats[0].statut).toBe("erreur");
+    expect(res.body.resultats[0].detail).toContain("course à pied");
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: session.id } })).status).toBe("planifiee");
+  });
+
+  it("refuse de rattacher à la séance d'un autre", async () => {
+    const { user: autre } = await athlete("proprietaire@example.com");
+    const session = await seancePrevue(autre.id, "course", 45);
+    const { agent } = await athlete("intrus@example.com");
+
+    const res = await agent
+      .post("/api/activities/import")
+      .field("sessionId", session.id)
+      .attach("fichiers", path.join(fixtures, "course.fit"));
+
+    expect(res.status).toBe(404);
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: session.id } })).status).toBe("planifiee");
+  });
+
+  it("inscrit la durée réellement effectuée, et non celle prévue", async () => {
+    // Sans cela, une sortie écourtée comptait pour une sortie entière, et la
+    // charge de la semaine suivante était calculée sur le programme plutôt que
+    // sur ce que l'athlète a fait.
+    const { agent, user } = await athlete("duree@example.com");
+    const session = await seancePrevue(user.id, "course", 45);
+
+    await agent.post("/api/activities/import").attach("fichiers", path.join(fixtures, "course.fit"));
+
+    const apres = await prisma.session.findUniqueOrThrow({ where: { id: session.id } });
+    const activite = await prisma.activity.findFirstOrThrow({ where: { userId: user.id } });
+    expect(apres.dureeReelleMin).toBe(activite.dureeMin);
+    expect(apres.dureeMin).toBe(45);
+  });
+
   it("importe un .fit et valide la séance de course correspondante", async () => {
     const { agent, user } = await athlete("fit@example.com");
     const session = await seancePrevue(user.id, "course", 45);

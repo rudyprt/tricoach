@@ -149,3 +149,44 @@ describe("fichiers refusés", () => {
     expect(() => parseActivityFile(Buffer.from(court), "court.gpx")).toThrow(/moins de 30 secondes/);
   });
 });
+
+describe("résumé écrit par la montre", () => {
+  /** Fichier d'activité réduit à son résumé, sans point de trace. */
+  async function fichierResume(): Promise<Buffer> {
+    const { Encoder, Profile } = await import("@garmin/fitsdk");
+    const e = new Encoder();
+    const debut = new Date("2026-09-20T07:30:00.000Z");
+    e.onMesg(Profile.MesgNum.FILE_ID, {
+      type: "activity",
+      manufacturer: "development",
+      product: 0,
+      timeCreated: debut,
+      serialNumber: 2,
+    });
+    e.onMesg(Profile.MesgNum.SESSION, {
+      timestamp: new Date(debut.getTime() + 62 * 60000),
+      startTime: debut,
+      sport: "running",
+      totalElapsedTime: 62 * 60,
+      totalTimerTime: 62 * 60,
+      totalDistance: 12400,
+      avgHeartRate: 156,
+      maxHeartRate: 178,
+      totalAscent: 210,
+    });
+    return Buffer.from(e.close());
+  }
+
+  it("lit la fréquence cardiaque même sans points de trace", async () => {
+    // Elle n'était cherchée que seconde par seconde : un export réduit au
+    // résumé arrivait sans fréquence, sans dénivelé, et le coach travaillait
+    // à l'aveugle sur une séance pourtant mesurée.
+    const activite = parseActivityFile(await fichierResume(), "course.fit");
+
+    expect(activite.fcMoyenne).toBe(156);
+    expect(activite.fcMax).toBe(178);
+    expect(activite.denivelePosM).toBe(210);
+    expect(activite.dureeMin).toBe(62);
+    expect(activite.distanceKm).toBe(12.4);
+  });
+});
