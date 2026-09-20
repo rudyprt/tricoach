@@ -30,6 +30,17 @@ interface ParsedFile {
   durationS: number;
   distanceM: number | null;
   points: TrackPoint[];
+  /**
+   * Valeurs que la montre a elle-même calculées pour la séance entière. Elles
+   * priment sur une moyenne refaite point par point : la montre exclut les
+   * pauses, et certains exports ne contiennent aucun point de trace.
+   */
+  resume?: {
+    fcMoyenne?: number | null;
+    fcMax?: number | null;
+    puissanceMoy?: number | null;
+    denivelePosM?: number | null;
+  };
 }
 
 function toNumber(value: unknown): number | null {
@@ -127,6 +138,12 @@ function parseFit(buffer: Buffer): ParsedFile {
     durationS,
     distanceM: toNumber(session.totalDistance) ?? points[points.length - 1]?.distanceM ?? null,
     points,
+    resume: {
+      fcMoyenne: toNumber(session.avgHeartRate),
+      fcMax: toNumber(session.maxHeartRate),
+      puissanceMoy: toNumber(session.avgPower),
+      denivelePosM: toNumber(session.totalAscent),
+    },
   };
 }
 
@@ -307,10 +324,10 @@ export function parseActivityFile(
     startedAt: parsed.startedAt,
     dureeMin: Math.max(1, Math.round(durationS / 60)),
     distanceKm: distanceKm ? Math.round(distanceKm * 100) / 100 : null,
-    denivelePosM: denivelePositif(parsed.points),
-    fcMoyenne: moyenne(parsed.points.map((p) => p.heartRate)),
-    fcMax: maximum(parsed.points.map((p) => p.heartRate)),
-    puissanceMoy: moyenne(parsed.points.map((p) => p.power)),
+    denivelePosM: parsed.resume?.denivelePosM ?? denivelePositif(parsed.points),
+    fcMoyenne: parsed.resume?.fcMoyenne ?? moyenne(parsed.points.map((p) => p.heartRate)),
+    fcMax: parsed.resume?.fcMax ?? maximum(parsed.points.map((p) => p.heartRate)),
+    puissanceMoy: parsed.resume?.puissanceMoy ?? moyenne(parsed.points.map((p) => p.power)),
     allureSecParKm: distanceKm && distanceKm > 0.1 ? Math.round(durationS / distanceKm) : null,
   };
 }

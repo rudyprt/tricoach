@@ -7,6 +7,14 @@ import { MAX_FILE_BYTES, formatFromFilename, parseActivityFile } from "../lib/ac
 import { findMatchingSession } from "../lib/activityMatching.js";
 import { rateLimit, byUser } from "../lib/rateLimit.js";
 
+/** Pour dire à l'athlète ce qu'il vient de déposer, dans sa langue. */
+const LIBELLE_SPORT: Record<string, string> = {
+  natation: "natation",
+  velo: "vélo",
+  course: "course à pied",
+  renfo: "renforcement",
+};
+
 export const activitiesRouter = Router();
 activitiesRouter.use(requireAuth);
 
@@ -51,6 +59,21 @@ activitiesRouter.post(
       throw new HttpError(400, "Aucun fichier reçu. Déposez un fichier .fit, .gpx ou .tcx.");
     }
 
+    /*
+     * Séance désignée par l'athlète, quand l'import part de la séance
+     * elle-même. Elle vaut mieux que le rapprochement automatique : lui sait ce
+     * qu'il vient de faire, le serveur ne fait que le déduire du jour et de la
+     * discipline.
+     */
+    const demandee = typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
+    const seanceVisee = demandee
+      ? await prisma.session.findFirst({
+          where: { id: demandee, userId: req.userId! },
+          select: { id: true, date: true, sport: true, dureeMin: true, status: true },
+        })
+      : null;
+    if (demandee && !seanceVisee) throw new HttpError(404, "Séance introuvable.");
+
     const resultats: { fichier: string; statut: string; detail?: string }[] = [];
     let importees = 0;
     let rapprochees = 0;
@@ -86,7 +109,22 @@ activitiesRouter.post(
           },
           select: { id: true, date: true, sport: true, dureeMin: true, status: true },
         });
-        const session = findMatchingSession(activite, sessions);
+        /*
+         * La séance désignée doit tout de même être de la bonne discipline.
+         * Rattacher une sortie vélo à une séance de natation sur une faute de
+         * doigt marquerait la natation comme faite et fausserait l'historique
+         * — le rapprochement automatique s'interdit déjà exactement cela.
+         */
+        if (seanceVisee && seanceVisee.sport !== activite.sport) {
+          resultats.push({
+            fichier: nom,
+            statut: "erreur",
+            detail: `Ce fichier est une séance de ${LIBELLE_SPORT[activite.sport] ?? activite.sport}, alors que la séance choisie est ${LIBELLE_SPORT[seanceVisee.sport] ?? seanceVisee.sport}.`,
+          });
+          continue;
+        }
+
+        const session = seanceVisee ?? findMatchingSession(activite, sessions);
 
         const { format, ...donnees } = activite;
         await prisma.activity.create({
@@ -98,7 +136,18 @@ activitiesRouter.post(
         if (session && session.status === "planifiee") {
           await prisma.session.update({
             where: { id: session.id },
-            data: { status: "faite", completedAt: activite.startedAt },
+            data: {
+              status: "faite",
+              completedAt: activite.startedAt,
+              /*
+               * La durée mesurée fait foi sur la durée prévue. Sans elle, une
+               * sortie écourtée de trente minutes comptait pour une sortie
+               * entière : la charge de la semaine, et donc la suivante, était
+               * calculée sur ce que le programme avait demandé plutôt que sur
+               * ce que l'athlète a fait.
+               */
+              dureeReelleMin: activite.dureeMin,
+            },
           });
           rapprochees += 1;
         }

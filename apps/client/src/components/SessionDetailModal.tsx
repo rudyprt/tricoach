@@ -1,9 +1,9 @@
-import { useState } from "react";
-import type { Session, SessionBlock } from "../lib/api";
+import { useRef, useState } from "react";
+import { api, apiErrorMessage, type Session, type SessionBlock } from "../lib/api";
 import { Dialog } from "../ui/Dialog";
 import { Bouton } from "../ui/Bouton";
 import { SeanceGuidee } from "./SeanceGuidee";
-import { FaPlay } from "react-icons/fa6";
+import { FaPlay, FaDownload, FaUpload } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
   natation: "🏊",
@@ -77,7 +77,48 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   const [saving, setSaving] = useState(false);
   const [reorganizing, setReorganizing] = useState(false);
   const [guidee, setGuidee] = useState(false);
+  const [importEnCours, setImportEnCours] = useState(false);
+  const [retourImport, setRetourImport] = useState<{ ok: boolean; texte: string } | null>(null);
+  const fichierRef = useRef<HTMLInputElement>(null);
   const isRestDay = session.sport === "repos";
+
+  /**
+   * Import du fichier rapporté par la montre, depuis la séance elle-même.
+   *
+   * La séance est désignée explicitement plutôt que devinée : l'athlète sait ce
+   * qu'il vient de faire, là où le rapprochement automatique ne peut que le
+   * déduire du jour et de la discipline.
+   */
+  async function importerFichier(e: React.ChangeEvent<HTMLInputElement>) {
+    const fichier = e.target.files?.[0];
+    e.target.value = "";
+    if (!fichier) return;
+
+    setImportEnCours(true);
+    setRetourImport(null);
+    try {
+      const corps = new FormData();
+      corps.append("fichiers", fichier);
+      corps.append("sessionId", session.id);
+      const { data } = await api.post<{ resultats: { statut: string; detail?: string }[] }>(
+        "/activities/import",
+        corps
+      );
+      const premier = data.resultats[0];
+      if (premier?.statut === "deja_importe") {
+        setRetourImport({ ok: true, texte: "Ce fichier a déjà été importé." });
+      } else if (premier?.statut?.startsWith("importe")) {
+        setRetourImport({ ok: true, texte: `Séance enregistrée — ${premier.detail ?? "importée"}.` });
+        await onUpdate(session.id, "faite", ressenti || undefined, dureeCorrigee());
+      } else {
+        setRetourImport({ ok: false, texte: premier?.detail ?? "Fichier non reconnu." });
+      }
+    } catch (err) {
+      setRetourImport({ ok: false, texte: apiErrorMessage(err, "Import impossible.") });
+    } finally {
+      setImportEnCours(false);
+    }
+  }
 
   /** Vide signifie « pas de correction » ; null efface une correction existante. */
   function dureeCorrigee(): number | null | undefined {
@@ -164,15 +205,64 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
         )}
 
         {session.structure && !isRestDay && (
-          <Bouton
-            variante="principal"
-            pleineLargeur
-            className="mb-4"
-            icone={<FaPlay size={12} />}
-            onClick={() => setGuidee(true)}
-          >
-            Démarrer la séance
-          </Bouton>
+          <div className="mb-4 space-y-2">
+            <Bouton
+              variante="principal"
+              pleineLargeur
+              icone={<FaPlay size={12} />}
+              onClick={() => setGuidee(true)}
+            >
+              Démarrer la séance
+            </Bouton>
+
+            {/*
+              Un lien, pas un bouton : le navigateur télécharge le fichier
+              lui-même, y compris sur iOS où il part vers « Fichiers » et de là
+              vers Garmin Connect ou Coros.
+            */}
+            <a
+              href={`/api/sessions/${session.id}/workout.fit`}
+              download
+              className="flex min-h-cible w-full items-center justify-center gap-2 rounded-xl border border-bordure bg-surface-haute text-sm font-semibold text-fort transition-colors hover:bg-white/5"
+            >
+              <FaDownload size={12} aria-hidden="true" />
+              Envoyer à ma montre (.fit)
+            </a>
+            <p className="text-center text-xs text-doux">
+              Garmin : Connect → Entraînement → Importer. Coros : application → Entraînement → Importer.
+              La séance part ensuite sur la montre à la synchronisation.
+            </p>
+
+            {/*
+              Le retour : le fichier que la montre a produit une fois la séance
+              faite. Il était jusqu'ici à déposer depuis la page du compte, à
+              deux écrans de là où l'athlète se trouve en rentrant.
+            */}
+            <input
+              ref={fichierRef}
+              type="file"
+              accept=".fit,.gpx,.tcx"
+              className="hidden"
+              onChange={importerFichier}
+            />
+            <Bouton
+              variante="secondaire"
+              pleineLargeur
+              enCours={importEnCours}
+              icone={<FaUpload size={12} />}
+              onClick={() => fichierRef.current?.click()}
+            >
+              J'ai fait la séance — importer mon fichier
+            </Bouton>
+            {retourImport && (
+              <p
+                role="status"
+                className={`text-center text-xs ${retourImport.ok ? "text-emerald-400" : "text-accent-clair"}`}
+              >
+                {retourImport.texte}
+              </p>
+            )}
+          </div>
         )}
 
         {session.structure ? (

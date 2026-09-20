@@ -65,6 +65,19 @@ async function attendre(agent: ReturnType<typeof request.agent>, jobId: string) 
 
 describeIfDb("réajustement de la semaine", () => {
   beforeAll(async () => {
+    /*
+     * Date figée à un mercredi.
+     *
+     * Le réajustement refuse volontairement d'opérer quand il reste un seul
+     * jour dans la semaine : ces tests, qui partaient de la date du jour,
+     * étaient donc verts du lundi au vendredi et rouges le samedi et le
+     * dimanche — y compris en intégration continue. Seule l'horloge est
+     * simulée : les minuteurs restent réels, sinon la base et les requêtes
+     * ne répondraient plus.
+     */
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-09-16T10:00:00.000Z"));
+
     process.env.DATABASE_URL = TEST_DATABASE_URL;
     process.env.JWT_SECRET = "secret-de-test-suffisamment-long-pour-zod";
     process.env.NODE_ENV = "test";
@@ -76,6 +89,7 @@ describeIfDb("réajustement de la semaine", () => {
   });
 
   afterAll(async () => {
+    vi.useRealTimers();
     await prisma.$disconnect();
   });
 
