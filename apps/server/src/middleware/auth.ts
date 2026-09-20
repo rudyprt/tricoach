@@ -14,7 +14,12 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
     return;
   }
   try {
-    const payload = jwt.verify(token, env().JWT_SECRET) as { userId: string };
+    /*
+     * L'algorithme est imposé, jamais lu dans le jeton. Le laisser libre est la
+     * porte d'entrée classique de la confusion d'algorithmes : un attaquant
+     * présente un jeton signé autrement et la vérification l'accepte.
+     */
+    const payload = jwt.verify(token, env().JWT_SECRET, { algorithms: ["HS256"] }) as { userId: string };
     req.userId = payload.userId;
     // Suivi de fréquentation : volontairement hors du chemin de réponse.
     touchLastSeen(payload.userId);

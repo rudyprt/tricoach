@@ -23,6 +23,13 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 const BCRYPT_ROUNDS = 12;
 
+/**
+ * Empreinte d'un mot de passe qui n'appartient à personne, au même coût que les
+ * autres. Elle sert uniquement à égaliser le temps de réponse d'une tentative
+ * de connexion sur une adresse inconnue.
+ */
+const EMPREINTE_DE_REBUT = bcrypt.hashSync("aucun-compte-ne-porte-ce-mot-de-passe", BCRYPT_ROUNDS);
+
 function cookieOptions() {
   return {
     httpOnly: true,
@@ -77,7 +84,7 @@ function withSubscriptionInfo<
 }
 
 function issueSession(res: import("express").Response, userId: string) {
-  const token = jwt.sign({ userId }, env().JWT_SECRET, { expiresIn: "30d" });
+  const token = jwt.sign({ userId }, env().JWT_SECRET, { expiresIn: "30d", algorithm: "HS256" });
   res.cookie("token", token, cookieOptions());
 }
 
@@ -159,8 +166,17 @@ authRouter.post(
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      // Même réponse qu'un mot de passe faux : l'existence d'un compte ne doit
-      // pas se déduire du message d'erreur.
+      /*
+       * Le message ne disait déjà rien, mais le temps de réponse, si : sans
+       * compte, on répondait aussitôt, alors qu'un compte existant coûtait la
+       * vérification du mot de passe. L'écart se mesure, et il suffit à
+       * dresser la liste des adresses inscrites.
+       *
+       * La même vérification est donc faite contre une empreinte de rebut. Elle
+       * n'ouvre pas de nouvelle charge : une adresse valide la déclenchait déjà,
+       * et le nombre de tentatives reste borné.
+       */
+      await bcrypt.compare(password, EMPREINTE_DE_REBUT);
       res.status(401).json({ error: "Email ou mot de passe incorrect." });
       return;
     }
