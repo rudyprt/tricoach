@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { authRouter } from "./routes/auth.js";
 import { profileRouter } from "./routes/profile.js";
@@ -20,7 +21,7 @@ import { racesRouter } from "./routes/races.js";
 import { pushRouter } from "./routes/push.js";
 import { partageRouter } from "./routes/partage.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
-import { env } from "./lib/env.js";
+import { env, isProduction } from "./lib/env.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +35,47 @@ export function createApp() {
   // Render (comme la plupart des hébergeurs) place un proxy devant l'application :
   // sans cela, req.ip vaut l'adresse du proxy et le rate limiting devient global.
   app.set("trust proxy", 1);
+
+  /*
+   * En-têtes de sécurité.
+   *
+   * Il n'y en avait aucun : la page pouvait être encadrée par un site tiers
+   * pour piéger les clics, le navigateur devinait le type des fichiers servis,
+   * et rien n'empêchait l'exécution d'un script injecté.
+   *
+   * La politique de contenu peut être stricte parce que l'application ne charge
+   * rien d'extérieur : ni police, ni script, ni image d'un autre domaine. Seule
+   * exception, les styles en ligne, que React écrit dans les attributs `style`
+   * pour les marges des zones de sécurité.
+   */
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          "default-src": ["'self'"],
+          "script-src": ["'self'"],
+          "style-src": ["'self'", "'unsafe-inline'"],
+          // `data:` pour l'aperçu d'une photo de profil avant son envoi.
+          "img-src": ["'self'", "data:"],
+          "font-src": ["'self'"],
+          "connect-src": ["'self'"],
+          "manifest-src": ["'self'"],
+          "worker-src": ["'self'"],
+          "object-src": ["'none'"],
+          "base-uri": ["'self'"],
+          "form-action": ["'self'"],
+          "frame-ancestors": ["'none'"],
+          ...(isProduction() ? { "upgrade-insecure-requests": [] } : {}),
+        },
+      },
+      // L'isolation d'origine n'apporte rien ici et casse le chargement des
+      // ressources servies par le même serveur sur certains navigateurs.
+      crossOriginEmbedderPolicy: false,
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+      hsts: isProduction() ? { maxAge: 63072000, includeSubDomains: true, preload: true } : false,
+    })
+  );
 
   app.use(cors({ origin: env().CLIENT_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
