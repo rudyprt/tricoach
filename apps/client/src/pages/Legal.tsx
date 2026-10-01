@@ -120,7 +120,11 @@ export function Conditions() {
 
       <Section title="Résiliation">
         <p>
-          Vous pouvez supprimer votre compte à tout moment depuis la page « Mon compte ». La suppression est
+          Vous pouvez{" "}
+          <Link to="/compte#supprimer" className="text-rose-400 hover:underline">
+            supprimer votre compte
+          </Link>{" "}
+          à tout moment. La suppression est
           définitive et entraîne l'effacement de vos données, dans les conditions décrites par la{" "}
           <Link to="/confidentialite" className="text-rose-400 hover:underline">
             politique de confidentialité
@@ -229,8 +233,11 @@ export function Confidentialite() {
             .
           </li>
           <li>
-            <strong className="text-zinc-300">Effacement</strong> — supprimez définitivement votre compte et toutes vos
-            données depuis la même page.
+            <strong className="text-zinc-300">Effacement</strong> —{" "}
+            <Link to="/compte#supprimer" className="text-rose-400 hover:underline">
+              supprimez définitivement votre compte
+            </Link>{" "}
+            et toutes vos données.
           </li>
         </ul>
         <p>
