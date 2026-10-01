@@ -162,6 +162,10 @@ describe("ce qu'un test transmet aux zones", () => {
 
   it("retient celle d'un test de course ou de vélo", () => {
     expect(deriveThresholds("course_30min", { distanceM: 7500, fcMoyenne: 172 })?.fcSeuil).toBe(172);
-    expect(deriveThresholds("velo_20min", { puissanceMoy: 261, fcMoyenne: 165 })?.fcSeuil).toBe(165);
+    // La fréquence du test FTP va dans la colonne du vélo : l'écrire dans
+    // celle de la course abaissait les zones de course à chaque test.
+    const velo = deriveThresholds("velo_20min", { puissanceMoy: 261, fcMoyenne: 165 });
+    expect(velo?.fcSeuilVelo).toBe(165);
+    expect(velo?.fcSeuil).toBeUndefined();
   });
 });

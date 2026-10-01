@@ -20,7 +20,8 @@
     "test": "npm run test -w apps/server && npm run test -w apps/client",
     "typecheck": "npm run typecheck -w apps/server && tsc -b apps/client",
     "lint": "npm run lint -w apps/client",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "eval-coach": "npm run eval-coach -w apps/server"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

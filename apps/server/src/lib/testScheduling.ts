@@ -189,6 +189,7 @@ export async function applyTestResult(
         ...(derive.ftpWatts != null ? { ftpWatts: derive.ftpWatts } : {}),
         ...(derive.cssSecPer100m != null ? { cssSecPer100m: derive.cssSecPer100m } : {}),
         ...(derive.fcSeuil != null ? { fcSeuil: derive.fcSeuil } : {}),
+        ...(derive.fcSeuilVelo != null ? { fcSeuilVelo: derive.fcSeuilVelo } : {}),
       },
     }),
     prisma.fitnessTest.update({

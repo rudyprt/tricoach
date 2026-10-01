@@ -158,8 +158,14 @@ export interface TrainingZones {
    * les mêmes valeurs, et ce ne sont pas les mêmes garanties.
    */
   veloVitesse: ZoneRange[] | null;
-  /** Zones de fréquence cardiaque, communes aux trois disciplines. */
+  /** Zones de fréquence cardiaque en course à pied, la discipline de référence. */
   frequenceCardiaque: ZoneRange[] | null;
+  /**
+   * Zones de fréquence cardiaque à vélo. Mesurées si l'athlète a passé un test
+   * FTP avec cardio, déduites de la course sinon. Ce sont elles qui doivent
+   * servir à prescrire une séance de vélo sans capteur de puissance.
+   */
+  frequenceCardiaqueVelo: ZoneRange[] | null;
   /** Explique d'où viennent les valeurs, pour l'affichage et pour le prompt. */
   notes: string[];
 }
@@ -248,6 +254,21 @@ const BIKE_BANDS: ZoneBand[] = [
  * hors de la zone qui porte son nom. Ce découpage-ci est jointif, et sa
  * quatrième zone encadre le seuil.
  */
+/**
+ * Écart de fréquence au seuil entre disciplines, en battements.
+ *
+ * À effort égal, le cœur ne bat pas au même rythme selon la posture et la masse
+ * musculaire engagée : assis sur un vélo, cinq à dix battements sous la course ;
+ * allongé dans l'eau, refroidi et en apnée partielle, dix à quinze de moins.
+ * Les valeurs retenues sont les milieux de ces fourchettes.
+ *
+ * Ce sont des ordres de grandeur, pas des constantes : une mesure propre à la
+ * discipline les remplace toujours, et les zones disent laquelle des deux
+ * elles utilisent.
+ */
+const ECART_FC_VELO = 7;
+const ECART_FC_NATATION = 12;
+
 const HR_BANDS: ZoneBand[] = [
   { zone: "Z1", label: "récupération", from: 0.65, to: 0.85 },
   { zone: "Z2", label: "endurance fondamentale", from: 0.85, to: 0.9 },
@@ -334,6 +355,10 @@ export interface ZoneInputs {
   bassin?: string | null;
   /** Fréquence cardiaque au seuil. */
   fcSeuil?: number | null;
+  /** FC au seuil mesurée à vélo. À défaut, estimée depuis celle de course. */
+  fcSeuilVelo?: number | null;
+  /** FC au seuil mesurée en natation. À défaut, estimée depuis celle de course. */
+  fcSeuilNatation?: number | null;
   /** Fréquence cardiaque maximale observée ou testée. */
   fcMax?: number | null;
   /** Corrections saisies par l'athlète, prioritaires sur le calcul. */
@@ -603,14 +628,43 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
    * zones est utile ; les mélanger dans une cible de séance ne l'est pas, et
    * les cibles continuent de ne porter qu'une seule valeur.
    */
-  const fcParZone = new Map((frequenceCardiaque ?? []).map((z) => [z.zone, z.value]));
-  const avecFc = (ranges: ZoneRange[] | null): ZoneRange[] | null =>
-    ranges?.map((z) => (fcParZone.has(z.zone) ? { ...z, fc: fcParZone.get(z.zone) } : z)) ?? null;
+  /*
+   * Chaque discipline reçoit SA fréquence au seuil.
+   *
+   * Une valeur unique servait aux trois, et le test de vélo l'écrasait : passer
+   * un test FTP abaissait les zones de course de cinq à dix battements. Quand
+   * une mesure propre manque, la valeur est déduite de la course avec l'écart
+   * documenté plus haut — et la note le dit, pour qu'on sache ce qu'on lit.
+   */
+  const bandesFc = (seuil: number) =>
+    HR_BANDS.map((b) => ({ zone: b.zone, label: b.label, value: formatHrBand(seuil, b, inputs.fcMax) }));
 
-  course = avecFc(course);
-  natation = avecFc(natation);
-  velo = avecFc(velo);
-  veloVitesse = avecFc(veloVitesse);
+  const fcDiscipline = (mesuree: number | null | undefined, ecart: number, nom: string) => {
+    if (!seuilFc) return null;
+    if (mesuree && mesuree > 100) {
+      notes.push(`Fréquence cardiaque ${nom} : mesurée à ${mesuree} bpm.`);
+      return bandesFc(mesuree);
+    }
+    const estimee = seuilFc - ecart;
+    notes.push(
+      `Fréquence cardiaque ${nom} : estimée à ${estimee} bpm, soit ${ecart} battements sous votre seuil en course. Un test dans cette discipline donnerait une valeur plus juste.`
+    );
+    return bandesFc(estimee);
+  };
+
+  const fcVelo = fcDiscipline(inputs.fcSeuilVelo, ECART_FC_VELO, "à vélo");
+  const fcNatation = fcDiscipline(inputs.fcSeuilNatation, ECART_FC_NATATION, "en natation");
+
+  const joindre = (ranges: ZoneRange[] | null, source: ZoneRange[] | null): ZoneRange[] | null => {
+    if (!ranges || !source) return ranges;
+    const parZone = new Map(source.map((z) => [z.zone, z.value]));
+    return ranges.map((z) => (parZone.has(z.zone) ? { ...z, fc: parZone.get(z.zone) } : z));
+  };
+
+  course = joindre(course, frequenceCardiaque);
+  natation = joindre(natation, fcNatation);
+  velo = joindre(velo, fcVelo);
+  veloVitesse = joindre(veloVitesse, fcVelo);
 
   const corriges = ZONE_SPORTS.filter((sport) => ({ course, natation, velo })[sport]?.some((z) => z.custom));
   if (corriges.length > 0) {
@@ -625,7 +679,7 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     );
   }
 
-  return { course, natation, velo, veloVitesse, frequenceCardiaque, notes };
+  return { course, natation, velo, veloVitesse, frequenceCardiaque, frequenceCardiaqueVelo: fcVelo, notes };
 }
 
 export function formatZonesForPrompt(zones: TrainingZones): string {

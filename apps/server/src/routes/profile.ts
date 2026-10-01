@@ -32,6 +32,8 @@ const profileSchema = z.object({
   seuilCourseSecParKm: z.number().int().min(150, "Allure trop rapide.").max(900, "Allure trop lente.").nullable().optional(),
   cssSecPer100m: z.number().int().min(50, "Allure trop rapide.").max(300, "Allure trop lente.").nullable().optional(),
   fcSeuil: z.number().int().min(100).max(220).nullable().optional(),
+  // Mesurée à vélo : elle tourne quelques battements sous celle de course.
+  fcSeuilVelo: z.number().int().min(100).max(220).nullable().optional(),
   fcMax: z.number().int().min(120).max(230).nullable().optional(),
   disponibilites: disponibilitesSchema,
   materiel: materielSchema,
@@ -53,7 +55,7 @@ profileRouter.put(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Données invalides." });
       return;
     }
-    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcMax, disponibilites, materiel, consentSante, ...rest } =
+    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcSeuilVelo, fcMax, disponibilites, materiel, consentSante, ...rest } =
       parsed.data;
 
     /*
@@ -94,6 +96,7 @@ profileRouter.put(
       seuilCourseSecParKm: seuilCourseSecParKm ?? null,
       cssSecPer100m: cssSecPer100m ?? null,
       fcSeuil: fcSeuil ?? null,
+      fcSeuilVelo: fcSeuilVelo ?? null,
       fcMax: fcMax ?? null,
       objectifDate: new Date(`${objectifDate}T00:00:00.000Z`),
     };

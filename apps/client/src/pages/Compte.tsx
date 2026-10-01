@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FaDownload, FaEnvelopeCircleCheck, FaLock, FaTriangleExclamation } from "react-icons/fa6";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
@@ -9,13 +9,30 @@ import { ImportSeances } from "../components/ImportSeances";
 import { FraicheurDonnees } from "../components/FraicheurDonnees";
 import { RappelsCard } from "../components/RappelsCard";
 
-function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-bordure bg-zinc-950/80 p-4">{children}</div>;
+function Card({ children, id }: { children: React.ReactNode; id?: string }) {
+  return (
+    <div id={id} className="rounded-2xl border border-bordure bg-zinc-950/80 p-4 scroll-mt-4">
+      {children}
+    </div>
+  );
 }
 
 export function Compte() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { hash } = useLocation();
+
+  /*
+   * Le contenu défile dans `<main>` et non dans la fenêtre : le navigateur ne
+   * suit donc pas l'ancre tout seul. Sans cela, un lien « supprimer mon
+   * compte » ouvrirait la page en haut, et le droit promis resterait à
+   * chercher au bas d'un écran et demi.
+   */
+  useEffect(() => {
+    if (hash !== "#supprimer") return;
+
+    document.getElementById("supprimer")?.scrollIntoView({ block: "center" });
+  }, [hash]);
 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -206,7 +223,12 @@ export function Compte() {
         </button>
       </Card>
 
-      <Card>
+      {/*
+        L'ancre rend la suppression atteignable d'un clic depuis l'endroit où
+        elle est promise — les conditions et la politique de confidentialité —
+        plutôt qu'au prix d'un long défilement.
+      */}
+      <Card id="supprimer">
         <div className="mb-2 flex items-center gap-2">
           <FaTriangleExclamation className="text-red-500" size={13} />
           <h2 className="text-sm font-bold text-white">Supprimer mon compte</h2>

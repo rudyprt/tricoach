@@ -120,7 +120,11 @@ export function Conditions() {
 
       <Section title="Résiliation">
         <p>
-          Vous pouvez supprimer votre compte à tout moment depuis la page « Mon compte ». La suppression est
+          Vous pouvez{" "}
+          <Link to="/compte#supprimer" className="text-rose-400 hover:underline">
+            supprimer votre compte
+          </Link>{" "}
+          à tout moment. La suppression est
           définitive et entraîne l'effacement de vos données, dans les conditions décrites par la{" "}
           <Link to="/confidentialite" className="text-rose-400 hover:underline">
             politique de confidentialité
@@ -181,8 +185,9 @@ export function Confidentialite() {
         <ul className="ml-4 list-disc space-y-1">
           <li>Fournir le service et générer vos programmes — exécution du contrat.</li>
           <li>
-            Traiter vos données de santé déclarées — votre consentement explicite, donné à l'inscription et
-            retirable à tout moment en supprimant ces informations ou votre compte.
+            Traiter vos données de santé déclarées — votre consentement explicite, donné par une case distincte
+            sous le champ des blessures, et retirable à tout moment en vidant ce champ. Sans ce consentement, ces
+            informations ne sont pas enregistrées.
           </li>
           <li>Sécuriser les accès et prévenir les abus — intérêt légitime.</li>
           <li>Gérer les abonnements — exécution du contrat et obligations comptables.</li>
@@ -209,9 +214,18 @@ export function Confidentialite() {
 
       <Section title="Durée de conservation">
         <p>
-          Vos données sont conservées tant que votre compte existe. Elles sont effacées lors de sa suppression. Les
-          jetons de réinitialisation et de vérification expirent automatiquement.
+          Vos données sont conservées tant que votre compte est actif. Elles sont effacées dans les trente jours
+          suivant sa suppression.
         </p>
+        {/* L'application supprime réellement les comptes inactifs : la page doit
+            le dire, faute de quoi l'effacement reposerait sur une règle que
+            personne n'a pu lire. */}
+        <p>
+          Un compte resté <strong className="text-zinc-300">deux ans sans connexion</strong> est supprimé
+          automatiquement, avec l'ensemble de son historique. Un e-mail vous prévient trente jours avant : il suffit
+          de vous reconnecter une fois pour conserver votre compte.
+        </p>
+        <p>Les jetons de réinitialisation et de vérification expirent automatiquement.</p>
       </Section>
 
       <Section title="Vos droits">
@@ -229,8 +243,11 @@ export function Confidentialite() {
             .
           </li>
           <li>
-            <strong className="text-zinc-300">Effacement</strong> — supprimez définitivement votre compte et toutes vos
-            données depuis la même page.
+            <strong className="text-zinc-300">Effacement</strong> —{" "}
+            <Link to="/compte#supprimer" className="text-rose-400 hover:underline">
+              supprimez définitivement votre compte
+            </Link>{" "}
+            et toutes vos données.
           </li>
         </ul>
         <p>
