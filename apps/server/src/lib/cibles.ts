@@ -38,7 +38,7 @@ function reglesVelo(zones: TrainingZones): ReglesUnite {
   if (zones.velo) {
     return { attendue: WATTS, interdites: [ALLURE_KM, ALLURE_100M] };
   }
-  if (zones.frequenceCardiaque) {
+  if (zones.frequenceCardiaqueVelo ?? zones.frequenceCardiaque) {
     // La FC ou la vitesse conviennent ; seules les allures à pied et les watts
     // inventés sont écartés.
     return { attendue: /\bbpm\b|\bFC\b/i, interdites: [ALLURE_KM, ALLURE_100M, WATTS] };
@@ -124,7 +124,9 @@ function rangesPour(sport: string, zones: TrainingZones): ZoneRange[] | null {
   // Même hiérarchie que les règles d'unité : puissance, à défaut fréquence
   // cardiaque, à défaut vitesse. Sans ce dernier recours, une cible vélo
   // erronée restait telle quelle chez un athlète sans capteur ni cardio.
-  if (sport === "velo") return zones.velo ?? zones.frequenceCardiaque ?? zones.veloVitesse;
+  // La FC du vélo, pas celle de la course : les deux diffèrent de cinq à dix
+  // battements, et prescrire l'une pour l'autre fait rouler trop haut.
+  if (sport === "velo") return zones.velo ?? zones.frequenceCardiaqueVelo ?? zones.veloVitesse;
   return null;
 }
 

@@ -12,6 +12,8 @@ export interface ProfileZoneFields {
   seuilCourseSecParKm: number | null;
   cssSecPer100m: number | null;
   fcSeuil: number | null;
+  fcSeuilVelo?: number | null;
+  fcSeuilNatation?: number | null;
   fcMax: number | null;
   customZones: unknown;
   /** Matériel et accès déclarés, dont le bassin où l'athlète nage. */
@@ -52,6 +54,8 @@ export async function buildZoneInputs(userId: string, profile: ProfileZoneFields
     seuilCourseSecParKm: profile.seuilCourseSecParKm,
     cssSecPer100m: profile.cssSecPer100m,
     fcSeuil: profile.fcSeuil,
+    fcSeuilVelo: profile.fcSeuilVelo ?? null,
+    fcSeuilNatation: profile.fcSeuilNatation ?? null,
     fcMax,
     // Le milieu où l'athlète nage change le temps aux 100 m à effort égal :
     // une allure calculée en bassin est inatteignable en eau libre.

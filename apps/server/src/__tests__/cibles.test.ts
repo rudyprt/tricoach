@@ -22,6 +22,12 @@ const ZONES: TrainingZones = {
     { zone: "Z2", label: "endurance", value: "136-149 bpm" },
     { zone: "Z4", label: "seuil", value: "158-166 bpm" },
   ],
+  // À vélo, quelques battements sous la course : c'est cette table que les
+  // cibles de vélo doivent utiliser.
+  frequenceCardiaqueVelo: [
+    { zone: "Z2", label: "endurance", value: "129-142 bpm" },
+    { zone: "Z4", label: "seuil", value: "151-159 bpm" },
+  ],
   notes: [],
 };
 
@@ -29,7 +35,12 @@ const ZONES: TrainingZones = {
 const SANS_CAPTEUR: TrainingZones = { ...ZONES, velo: null };
 
 /** Athlète sans capteur ni cardio : il ne lit qu'une vitesse. */
-const SANS_RIEN: TrainingZones = { ...ZONES, velo: null, frequenceCardiaque: null };
+const SANS_RIEN: TrainingZones = {
+  ...ZONES,
+  velo: null,
+  frequenceCardiaque: null,
+  frequenceCardiaqueVelo: null,
+};
 
 const seance = (sport: string, cible: string, allure?: string) => ({
   sport,
@@ -132,7 +143,10 @@ describe("correction des cibles", () => {
     const { seances, corrections } = corrigerCibles([seance("velo", "Z4 seuil — 240 W")], SANS_CAPTEUR);
 
     expect(corrections).toHaveLength(1);
-    expect(seances[0].structure!.corps!.cible).toBe("Z4 seuil — 158-166 bpm");
+    // La table du vélo, pas celle de la course : les deux diffèrent de
+    // plusieurs battements, et prescrire l'une pour l'autre fait rouler trop
+    // haut. L'attente portait auparavant sur la valeur de course.
+    expect(seances[0].structure!.corps!.cible).toBe("Z4 seuil — 151-159 bpm");
   });
 
   it("laisse la cible en place quand aucune valeur de remplacement n'existe", () => {
@@ -179,6 +193,7 @@ const AVANT: TrainingZones = {
   velo: [{ zone: "Z4", label: "seuil", value: "210–245 W" }],
   veloVitesse: null,
   frequenceCardiaque: null,
+  frequenceCardiaqueVelo: null,
   notes: [],
 };
 

@@ -210,8 +210,17 @@ model AthleteProfile {
   seuilCourseSecParKm Int?
   /// Vitesse critique en natation (CSS), en secondes aux 100 m.
   cssSecPer100m       Int?
-  /// Fréquence cardiaque au seuil, mesurée lors d'un test.
+  /// Fréquence cardiaque au seuil en COURSE À PIED, mesurée lors d'un test.
+  /// Sert de référence : c'est la plus haute des trois disciplines, et celle
+  /// que les protocoles de terrain mesurent le plus souvent.
   fcSeuil             Int?
+  /// Fréquence cardiaque au seuil à VÉLO. Position assise, masse musculaire
+  /// moindre : elle tourne cinq à dix battements sous celle de la course. La
+  /// confondre avec elle faisait travailler trop haut sur le vélo.
+  fcSeuilVelo         Int?
+  /// Fréquence cardiaque au seuil en NATATION. Allongé, refroidi, en apnée
+  /// partielle : l'écart avec la course atteint dix à quinze battements.
+  fcSeuilNatation     Int?
   /// Fréquence cardiaque maximale connue.
   fcMax               Int?
   /// Zones corrigées à la main par l'athlète : { course: { Z2: "5:30/km" }, ... }.

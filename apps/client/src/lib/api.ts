@@ -43,6 +43,8 @@ export interface AthleteProfile {
   seuilCourseSecParKm: number | null;
   cssSecPer100m: number | null;
   fcSeuil: number | null;
+  /** FC au seuil à vélo : quelques battements sous celle de course. */
+  fcSeuilVelo: number | null;
   fcMax: number | null;
   disponibilites: Disponibilites | null;
   materiel: Materiel | null;

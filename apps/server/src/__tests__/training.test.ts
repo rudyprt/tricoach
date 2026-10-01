@@ -580,3 +580,45 @@ describe("allure et fréquence cardiaque de front", () => {
     expect(seuil?.fc).toMatch(/bpm$/);
   });
 });
+
+describe("fréquence au seuil, par discipline", () => {
+  const base = {
+    tempsCourse: "21km en 1:45", tempsNatation: "400m en 7:30", tempsVelo: "40km en 1h15",
+    seuilCourseSecParKm: null, ftpWatts: null, cssSecPer100m: null,
+    fcSeuil: 168, fcMax: 188, overrides: {},
+  };
+
+  const seuilDe = (tableau: { zone: string; fc?: string }[] | null) =>
+    tableau?.find((r) => r.zone === "Z4")?.fc;
+
+  it("descend la fréquence du vélo sous celle de la course", () => {
+    // Assis, moins de masse musculaire engagée : à effort égal le cœur bat
+    // plus bas qu'en courant. Les confondre fait rouler trop haut.
+    const z = computeTrainingZones(base);
+
+    expect(seuilDe(z.course)).not.toBe(seuilDe(z.velo ?? z.veloVitesse));
+    expect(z.notes.join(" ")).toContain("Fréquence cardiaque à vélo : estimée à 161 bpm");
+  });
+
+  it("descend celle de la natation plus bas encore", () => {
+    const z = computeTrainingZones(base);
+
+    expect(z.notes.join(" ")).toContain("Fréquence cardiaque en natation : estimée à 156 bpm");
+    expect(seuilDe(z.natation)).not.toBe(seuilDe(z.course));
+  });
+
+  it("préfère toujours une mesure propre à une estimation", () => {
+    const z = computeTrainingZones({ ...base, fcSeuilVelo: 155 });
+
+    expect(z.notes.join(" ")).toContain("Fréquence cardiaque à vélo : mesurée à 155 bpm");
+    expect(z.notes.join(" ")).not.toContain("Fréquence cardiaque à vélo : estimée");
+  });
+
+  it("n'invente aucune fréquence quand la course elle-même est inconnue", () => {
+    const z = computeTrainingZones({ ...base, fcSeuil: null, fcMax: null });
+
+    expect(z.frequenceCardiaque).toBeNull();
+    expect(z.frequenceCardiaqueVelo).toBeNull();
+    for (const r of z.course ?? []) expect(r.fc).toBeUndefined();
+  });
+});

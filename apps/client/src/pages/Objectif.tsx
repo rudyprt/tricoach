@@ -35,6 +35,7 @@ export function Objectif() {
   const [seuilCourse, setSeuilCourse] = useState("");
   const [css, setCss] = useState("");
   const [fcSeuil, setFcSeuil] = useState("");
+  const [fcSeuilVelo, setFcSeuilVelo] = useState("");
   const [fcMax, setFcMax] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -63,6 +64,7 @@ export function Objectif() {
         setSeuilCourse(data.seuilCourseSecParKm ? secondesVersAllure(data.seuilCourseSecParKm) : "");
         setCss(data.cssSecPer100m ? secondesVersAllure(data.cssSecPer100m) : "");
         setFcSeuil(data.fcSeuil ? String(data.fcSeuil) : "");
+        setFcSeuilVelo(data.fcSeuilVelo ? String(data.fcSeuilVelo) : "");
         setFcMax(data.fcMax ? String(data.fcMax) : "");
       }
       setLoaded(true);
@@ -92,6 +94,7 @@ export function Objectif() {
         seuilCourseSecParKm: allureVersSecondes(seuilCourse),
         cssSecPer100m: allureVersSecondes(css),
         fcSeuil: fcSeuil.trim() === "" ? null : Number(fcSeuil),
+        fcSeuilVelo: fcSeuilVelo.trim() === "" ? null : Number(fcSeuilVelo),
         fcMax: fcMax.trim() === "" ? null : Number(fcMax),
       });
       setSaved(true);
@@ -213,7 +216,7 @@ export function Objectif() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-doux">FC au seuil (bpm)</label>
+              <label className="text-xs text-doux">FC au seuil en course (bpm)</label>
               <input
                 type="number"
                 min={100}
@@ -221,6 +224,22 @@ export function Objectif() {
                 placeholder="Ex : 168"
                 value={fcSeuil}
                 onChange={(e) => setFcSeuil(e.target.value)}
+                className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              />
+            </div>
+
+            {/* À vélo, le cœur bat plus bas à effort égal : assis, moins de
+                masse musculaire engagée. Sans cette valeur, les zones vélo sont
+                déduites de la course et l'athlète roule un peu trop haut. */}
+            <div className="space-y-1">
+              <label className="text-xs text-doux">FC au seuil à vélo (bpm)</label>
+              <input
+                type="number"
+                min={100}
+                max={220}
+                placeholder="Ex : 161"
+                value={fcSeuilVelo}
+                onChange={(e) => setFcSeuilVelo(e.target.value)}
                 className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
               />
             </div>

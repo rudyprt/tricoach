@@ -148,6 +148,8 @@ export interface DerivedThresholds {
   ftpWatts?: number;
   cssSecPer100m?: number;
   fcSeuil?: number;
+  /** Fréquence au seuil propre au vélo, relevée pendant le test FTP. */
+  fcSeuilVelo?: number;
   /** Phrase expliquant ce que le test a donné, montrée à l'athlète. */
   resume: string;
 }
@@ -199,7 +201,10 @@ export function deriveThresholds(kind: string, result: TestResult): DerivedThres
     const ftpWatts = Math.round(puissance * 0.95);
     return {
       ftpWatts,
-      fcSeuil,
+      /* La fréquence relevée à vélo n'est pas celle de la course : l'écrire
+         dans la même colonne abaissait les zones cardiaques de course de cinq à
+         dix battements à chaque test FTP. */
+      fcSeuilVelo: fcSeuil,
       resume: `${puissance} W sur 20 min, soit une FTP de ${ftpWatts} W.`,
     };
   }
