@@ -18,6 +18,11 @@ export interface SemaineTenue {
   seancesFaites: number;
   /** Une semaine compte comme tenue dès que les deux tiers sont réalisés. */
   tenue: boolean;
+  /**
+   * Semaine encore en cours. Elle n'est ni tenue ni manquée : la juger sur
+   * trois jours écoulés reviendrait à annoncer un échec le mardi.
+   */
+  enCours: boolean;
 }
 
 /** Seuil de réussite d'une semaine. Exiger 100 % découragerait plus qu'il ne motive. */
@@ -61,10 +66,18 @@ export async function bilanRegularite(userId: string, timezone: string): Promise
       orderBy: { date: "asc" },
       take: 500,
     }),
-    prisma.session.aggregate({
+    /*
+     * Les durées corrigées comptent ici aussi.
+     *
+     * Le total sommait `dureeMin`, la durée PRÉVUE, pendant que les barres
+     * hebdomadaires sommaient la durée réellement faite. Un athlète qui
+     * écourte ses sorties voyait donc, sur la même carte, un total supérieur
+     * à la somme de ses propres semaines — l'écart valant exactement les
+     * minutes qu'il n'avait pas faites.
+     */
+    prisma.session.findMany({
       where: { userId, status: "faite", sport: { not: "repos" } },
-      _count: { _all: true },
-      _sum: { dureeMin: true },
+      select: { dureeMin: true, dureeReelleMin: true },
     }),
   ]);
 
@@ -78,6 +91,7 @@ export async function bilanRegularite(userId: string, timezone: string): Promise
       seancesPrevues: 0,
       seancesFaites: 0,
       tenue: false,
+      enCours: false,
     });
   }
 
@@ -95,11 +109,18 @@ export async function bilanRegularite(userId: string, timezone: string): Promise
     }
   }
 
-  const semaines = [...parSemaine.values()].map((s) => ({ ...s, tenue: partRealisee(s) }));
+  const cleCourante = formatDate(semaineCourante);
+  const semaines = [...parSemaine.values()].map((s) => {
+    const enCours = s.weekStart === cleCourante;
+    // Une semaine en cours n'est pas « tenue », mais pas davantage manquée :
+    // elle est marquée comme telle pour que l'affichage ne la peigne pas en
+    // échec alors qu'il reste des jours pour la remplir.
+    return { ...s, enCours, tenue: !enCours && partRealisee(s) };
+  });
 
   // La semaine en cours est exclue du décompte : elle n'est pas finie, et la
   // voir « non tenue » un mardi serait décourageant et faux.
-  const terminees = semaines.filter((s) => s.weekStart !== formatDate(semaineCourante));
+  const terminees = semaines.filter((s) => !s.enCours);
 
   let serie = 0;
   for (let i = terminees.length - 1; i >= 0; i -= 1) {
@@ -114,8 +135,8 @@ export async function bilanRegularite(userId: string, timezone: string): Promise
     meilleureSerie = Math.max(meilleureSerie, courante);
   }
 
-  const totalSeances = total._count._all;
-  const totalHeures = Math.round((total._sum.dureeMin ?? 0) / 60);
+  const totalSeances = total.length;
+  const totalHeures = Math.round(total.reduce((somme, s) => somme + (s.dureeReelleMin ?? s.dureeMin), 0) / 60);
 
   return {
     serie,

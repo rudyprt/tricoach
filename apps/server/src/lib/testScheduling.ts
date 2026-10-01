@@ -28,12 +28,19 @@ function seuilsConnus(profile: ProfileZoneFields): Record<TestSport, boolean> {
 
 /**
  * Jour retenu pour le test dans la semaine. On vise l'avant-dernier jour
- * disponible : l'athlète arrive reposé après une semaine allégée, et il lui
+ * ENTRAÎNABLE : l'athlète arrive reposé après une semaine allégée, et il lui
  * reste un jour pour récupérer avant la semaine suivante.
+ *
+ * Les jours que l'athlète a déclarés indisponibles sont écartés d'abord. Sans
+ * cela, le test tombait mécaniquement sur l'avant-dernier jour de la semaine —
+ * le samedi — y compris quand ce jour était déclaré sans créneau. Le prompt
+ * ordonnait alors deux choses contradictoires pour la même date : un jour de
+ * repos imposé, et un effort maximal.
  */
-function chooseTestDay(allowedDates: string[]): string | null {
-  if (allowedDates.length < 2) return null;
-  return allowedDates[allowedDates.length - 2];
+function chooseTestDay(allowedDates: string[], datesRepos: ReadonlySet<string>): string | null {
+  const entrainables = allowedDates.filter((d) => !datesRepos.has(d));
+  if (entrainables.length < 2) return null;
+  return entrainables[entrainables.length - 2];
 }
 
 export interface ScheduledTest {
@@ -54,7 +61,9 @@ export async function planWeeklyTest(
   weekStart: Date,
   phase: Periodization,
   profile: ProfileZoneFields,
-  allowedDates: string[]
+  allowedDates: string[],
+  /** Jours sans créneau déclaré : aucun test ne peut y être posé. */
+  datesRepos: ReadonlySet<string> = new Set()
 ): Promise<ScheduledTest | null> {
   // Un test resté en attente depuis plus de deux semaines ne sera plus fait :
   // le laisser ouvert encombrerait l'écran de l'athlète et fausserait le
@@ -70,13 +79,14 @@ export async function planWeeklyTest(
   if (existant) {
     if (existant.status !== "planifie") return null;
     const date = existant.scheduledFor.toISOString().slice(0, 10);
-    // Le test prévu tombe sur un jour que cette génération ne produit plus :
-    // il ne servirait à rien de le décrire dans le prompt.
-    if (!allowedDates.includes(date)) return null;
+    // Le test prévu tombe sur un jour que cette génération ne produit plus, ou
+    // que l'athlète a depuis déclaré indisponible : il ne servirait à rien de
+    // le décrire dans le prompt.
+    if (!allowedDates.includes(date) || datesRepos.has(date)) return null;
     return { id: existant.id, protocol: PROTOCOLS[existant.sport as TestSport], date };
   }
 
-  const jour = chooseTestDay(allowedDates);
+  const jour = chooseTestDay(allowedDates, datesRepos);
   if (!jour) return null;
 
   /*

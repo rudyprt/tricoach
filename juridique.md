@@ -6,7 +6,7 @@
 
 Ces trois documents couvrent la bêta gratuite. Remplace les champs entre crochets, puis vérifie les points ci-dessous. Je ne suis pas juriste : fais-les relire avant de passer en payant.
 
-- [ ] Créer l'adresse de contact (ex. contact.tricoach@gmail.com) et la reporter partout où figure [EMAIL]
+- [x] Créer l'adresse de contact et la reporter partout — tricoachia@gmail.com
 - [ ] Vérifier dans le tableau de bord Render la région de ta base (Frankfurt = UE, Oregon/Ohio/Virginia/Singapore = hors UE) et adapter la section Transferts
 - [ ] Vérifier l'adresse de Render sur render.com/privacy
 - [ ] Ajouter la case de consentement sous le champ Blessures (texte en fin de document)
@@ -19,7 +19,7 @@ Ces trois documents couvrent la bêta gratuite. Remplace les champs entre croche
 
 **Éditeur.** L'application TriCoach est éditée par Rudy Perret, personne physique, à titre non professionnel pendant la phase de test gratuite.
 
-**Contact :** [EMAIL]
+**Contact :** tricoachia@gmail.com
 
 **Directeur de la publication :** Rudy Perret.
 
@@ -31,7 +31,7 @@ Ces trois documents couvrent la bêta gratuite. Remplace les champs entre croche
 
 TriCoach collecte uniquement les données utiles pour construire et ajuster ton programme d'entraînement. Elles ne sont ni vendues ni utilisées à des fins publicitaires.
 
-**Responsable du traitement :** Rudy Perret, [EMAIL].
+**Responsable du traitement :** Rudy Perret, tricoachia@gmail.com.
 
 ### Données collectées et pourquoi
 
@@ -63,7 +63,7 @@ Tes données sont conservées tant que ton compte est actif. Elles sont supprim�
 
 ### Tes droits
 
-Tu peux accéder à tes données, les corriger, les supprimer, les récupérer dans un format lisible, t'opposer à leur traitement ou retirer ton consentement. Écris à [EMAIL] : réponse sous 30 jours maximum. Si tu estimes que tes droits ne sont pas respectés, tu peux saisir la CNIL (cnil.fr).
+Tu peux accéder à tes données, les corriger, les supprimer, les récupérer dans un format lisible, t'opposer à leur traitement ou retirer ton consentement. Écris à tricoachia@gmail.com : réponse sous 30 jours maximum. Si tu estimes que tes droits ne sont pas respectés, tu peux saisir la CNIL (cnil.fr).
 
 ### Sécurité
 
@@ -110,7 +110,7 @@ Il est interdit de tenter d'accéder aux données d'autres utilisateurs, de pert
 
 ### 8. Suppression du compte
 
-Tu peux supprimer ton compte à tout moment depuis « Mon compte » ou en écrivant à [EMAIL]. L'éditeur peut suspendre un compte en cas de non-respect de ces CGU.
+Tu peux supprimer ton compte à tout moment depuis « Mon compte » ou en écrivant à tricoachia@gmail.com. L'éditeur peut suspendre un compte en cas de non-respect de ces CGU.
 
 ### 9. Modification des CGU
 
@@ -120,7 +120,7 @@ Ces CGU peuvent évoluer. Tu seras prévenu de tout changement important, notamm
 
 Ces CGU sont soumises au droit français. En cas de litige, une solution amiable sera recherchée en priorité ; à défaut, les tribunaux français seront compétents.
 
-Dernière mise à jour : [DATE].
+Dernière mise à jour : 01/10/2026.
 
 ## Textes à intégrer dans l'appli
 
@@ -132,7 +132,8 @@ Le champ ne doit pas pouvoir être enregistré rempli si la case n'est pas coch�
 
 **À l'inscription, case à cocher obligatoire :**
 
-☐ J'ai 18 ans ou plus et j'accepte les [CGU] et la [politique de confidentialité].
+☐ J'ai 18 ans ou plus et j'accepte les CGU et la politique de confidentialité.
+  (dans l'application, les deux mentions sont des liens vers /conditions et /confidentialite)
 
 **Sous le chat du coach IA, en petit :**
 

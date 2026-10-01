@@ -567,7 +567,7 @@ async function prepareAdjustment(
   const volumeSemaine = plafondCreneaux ? Math.min(volumeBrut, plafondCreneaux) : volumeBrut;
   const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
 
-  const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants);
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants, new Set(datesRepos));
 
   return {
     weekStart,
@@ -667,7 +667,7 @@ async function prepareGeneration(
       select: { date: true, sport: true, dureeMin: true, distanceKm: true, status: true, ressenti: true },
     });
 
-    const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
+    const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart), new Set(datesRepos));
 
     return {
       weekStart,
@@ -731,7 +731,7 @@ async function prepareGeneration(
   // périodisation peut encore la réduire (affûtage, semaine de course).
   const maxVolumeMin = borner(Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurContexte));
 
-  const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart));
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart), new Set(datesRepos));
 
   return {
     weekStart,

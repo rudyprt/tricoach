@@ -90,13 +90,13 @@ export function Login() {
           </Link>
         </p>
         <p className="text-center text-xs text-tres-doux">
-          <Link to="/mentions-legales" className="hover:text-doux hover:underline">
+          <a href="/mentions-legales" className="hover:text-doux hover:underline">
             Mentions légales
-          </Link>
+          </a>
           {" · "}
-          <Link to="/confidentialite" className="hover:text-doux hover:underline">
+          <a href="/confidentialite" className="hover:text-doux hover:underline">
             Confidentialité
-          </Link>
+          </a>
         </p>
       </form>
     </div>

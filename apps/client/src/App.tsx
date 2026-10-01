@@ -26,9 +26,6 @@ const StravaReturn = lazy(() => import("./pages/StravaReturn").then((m) => ({ de
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail").then((m) => ({ default: m.VerifyEmail })));
 const Desabonnement = lazy(() => import("./pages/Desabonnement").then((m) => ({ default: m.Desabonnement })));
 const SemainePartagee = lazy(() => import("./pages/SemainePartagee").then((m) => ({ default: m.SemainePartagee })));
-const Conditions = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Conditions })));
-const Confidentialite = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Confidentialite })));
-const MentionsLegales = lazy(() => import("./pages/Legal").then((m) => ({ default: m.MentionsLegales })));
 
 function AppShell() {
   const [showSplash, setShowSplash] = useState(true);
@@ -72,9 +69,6 @@ function AppShell() {
             </ProtectedRoute>
           }
         />
-        <Route path="/conditions" element={<Conditions />} />
-        <Route path="/confidentialite" element={<Confidentialite />} />
-        <Route path="/mentions-legales" element={<MentionsLegales />} />
         <Route
           path="/plans-intro"
           element={

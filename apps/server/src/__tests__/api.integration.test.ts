@@ -10,6 +10,7 @@ import type { Express } from "express";
  * Nécessite TEST_DATABASE_URL ; sinon la suite est ignorée.
  */
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
+let resetEnv: typeof import("../lib/env.js").resetEnv;
 const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 let app: Express;
@@ -22,6 +23,12 @@ describeIfDb("API", () => {
     process.env.JWT_SECRET = "secret-de-test-suffisamment-long-pour-zod";
     process.env.NODE_ENV = "test";
     process.env.BILLING_MODE = "disabled";
+    // Un serveur capable d'envoyer des e-mails : c'est la configuration de
+    // production, et le parcours de réinitialisation suppose qu'elle existe.
+    // Le cas contraire a son propre test, plus bas.
+    process.env.SMTP_HOST = "smtp.test.invalid";
+    ({ resetEnv } = await import("../lib/env.js"));
+    resetEnv();
     delete process.env.ANTHROPIC_API_KEY;
 
     ({ prisma } = await import("../lib/prisma.js"));
@@ -422,6 +429,59 @@ describeIfDb("API", () => {
   });
 
   describe("réinitialisation de mot de passe", () => {
+    it("dit clairement quand l'envoi d'e-mails n'est pas configuré", async () => {
+      /*
+       * Sans SMTP, aucun message ne part : le contenu est seulement tracé dans
+       * les journaux. Répondre « un e-mail vient d'être envoyé » envoyait
+       * l'athlète attendre un message qui n'existait pas — et c'est justement
+       * son mot de passe qu'il a perdu, donc il n'avait aucun autre recours.
+       */
+      const smtp = process.env.SMTP_HOST;
+      delete process.env.SMTP_HOST;
+      resetEnv();
+      try {
+        const res = await request(app).post("/api/auth/forgot-password").send({ email: "reset@example.com" });
+        expect(res.status).toBe(503);
+        expect(res.body.code).toBe("MAIL_UNAVAILABLE");
+        expect(res.body.error).toMatch(/n'est pas disponible/);
+      } finally {
+        process.env.SMTP_HOST = smtp;
+        resetEnv();
+      }
+    });
+
+    it("ne révèle pas pour autant si le compte existe", async () => {
+      // Le refus porte sur l'état du serveur, identique pour toute adresse.
+      const smtp = process.env.SMTP_HOST;
+      delete process.env.SMTP_HOST;
+      resetEnv();
+      try {
+        await signUp("existe@example.com");
+        const connu = await request(app).post("/api/auth/forgot-password").send({ email: "existe@example.com" });
+        const inconnu = await request(app).post("/api/auth/forgot-password").send({ email: "jamais@example.com" });
+        expect(connu.body).toEqual(inconnu.body);
+      } finally {
+        process.env.SMTP_HOST = smtp;
+        resetEnv();
+      }
+    });
+
+    it("répond pareil même quand le serveur d'e-mail est en panne", async () => {
+      /*
+       * SMTP_HOST pointe ici sur un hôte injoignable, comme pendant une panne.
+       * L'échec remontait en 500 — mais uniquement quand le compte existait,
+       * seul cas où un message part. Comparer les codes de réponse suffisait
+       * alors à savoir quelles adresses sont inscrites.
+       */
+      await signUp("panne@example.com");
+      const connu = await request(app).post("/api/auth/forgot-password").send({ email: "panne@example.com" });
+      const inconnu = await request(app).post("/api/auth/forgot-password").send({ email: "absent@example.com" });
+
+      expect(connu.status).toBe(200);
+      expect(connu.status).toBe(inconnu.status);
+      expect(connu.body).toEqual(inconnu.body);
+    });
+
     it("répond pareil que le compte existe ou non", async () => {
       await signUp("reset@example.com");
       const existing = await request(app).post("/api/auth/forgot-password").send({ email: "reset@example.com" });

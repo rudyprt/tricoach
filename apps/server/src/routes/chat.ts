@@ -4,7 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL } from "../lib/anthropic.js";
 import { recordAiCall } from "../lib/aiUsage.js";
-import { CHAT_DAILY_LIMIT, isPremium } from "../lib/subscription.js";
+import { FUSEAU_QUOTA, hasStandardAccess, quotaChatQuotidien } from "../lib/subscription.js";
+import { FENETRE_CHAT, fenetreHistorique } from "../lib/chatHistory.js";
 import { ah, HttpError } from "../lib/http.js";
 import { chatRateLimit } from "../lib/rateLimit.js";
 import { startOfLocalDay, startOfWeek } from "../lib/week.js";
@@ -24,8 +25,35 @@ import { describeActivity } from "../lib/activityMatching.js";
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
 
-/** Nombre de messages du fil renvoyés au modèle comme contexte. */
-const HISTORY_WINDOW = 20;
+/**
+ * Compte les questions posées aujourd'hui, au sens du fuseau de référence.
+ *
+ * Seuls les messages de l'athlète comptent : une réponse du coach ne doit pas
+ * amputer son quota.
+ */
+interface EtatQuota {
+  utilises: number;
+  limite: number;
+  /** Ce qui empêche d'écrire, s'il y a lieu. Deux impasses très différentes. */
+  bloque: "quota" | "abonnement" | null;
+}
+
+function etatDuQuota(user: { plan: string; createdAt: Date } | null, utilises: number): EtatQuota {
+  const compte = user ?? { plan: "free", createdAt: new Date() };
+  const limite = quotaChatQuotidien(compte);
+  const bloque = !hasStandardAccess(compte) ? "abonnement" : utilises >= limite ? "quota" : null;
+  return { utilises, limite, bloque };
+}
+
+async function messagesDuJour(userId: string): Promise<number> {
+  return prisma.chatMessage.count({
+    where: {
+      userId,
+      role: "user",
+      createdAt: { gte: startOfLocalDay(new Date(), FUSEAU_QUOTA) },
+    },
+  });
+}
 
 const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -47,14 +75,18 @@ chatRouter.get(
     }
     const { limit, before } = parsed.data;
 
-    const recent = await prisma.chatMessage.findMany({
-      where: {
-        userId: req.userId!,
-        ...(before ? { createdAt: { lt: new Date(before) } } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-    });
+    const [recent, user, utilises] = await Promise.all([
+      prisma.chatMessage.findMany({
+        where: {
+          userId: req.userId!,
+          ...(before ? { createdAt: { lt: new Date(before) } } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit + 1,
+      }),
+      prisma.user.findUnique({ where: { id: req.userId! }, select: { plan: true, createdAt: true } }),
+      messagesDuJour(req.userId!),
+    ]);
 
     const hasMore = recent.length > limit;
     const page = hasMore ? recent.slice(0, limit) : recent;
@@ -63,6 +95,11 @@ chatRouter.get(
       messages: page.reverse(),
       hasMore,
       oldestAt: page[0]?.createdAt ?? null,
+      // Le quota est calculé ici et non dans le navigateur : celui-ci ignore le
+      // fuseau de référence comme l'offre, et affichait un reste que le serveur
+      // refusait. Le motif du blocage vient d'ici pour la même raison : attendre
+      // minuit ne débloque pas un essai terminé, et l'inverse non plus.
+      quota: etatDuQuota(user, utilises),
     });
   })
 );
@@ -96,36 +133,46 @@ chatRouter.post(
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
-      select: { plan: true, timezone: true },
+      select: { plan: true, timezone: true, createdAt: true },
     });
     if (!user) {
       throw new HttpError(404, "Utilisateur introuvable.");
     }
 
-    if (!isPremium(user)) {
-      // Le quota se compte sur la journée de l'athlète, pas sur celle du serveur.
-      const startOfDay = startOfLocalDay(new Date(), user.timezone);
-      const todayCount = await prisma.chatMessage.count({
-        where: { userId: req.userId!, role: "user", createdAt: { gte: startOfDay } },
-      });
-      if (todayCount >= CHAT_DAILY_LIMIT) {
-        throw new HttpError(
-          402,
-          `Vous avez atteint votre quota de ${CHAT_DAILY_LIMIT} messages aujourd'hui. Passez à l'offre Premium pour des réponses illimitées.`,
-          "SUBSCRIPTION_REQUIRED"
-        );
-      }
+    // Le chat se payait tout seul : la génération de programme refusait un essai
+    // expiré, mais pas lui. Un compte abandonné après l'essai pouvait donc
+    // continuer à appeler le modèle indéfiniment, sans rien payer.
+    if (!hasStandardAccess(user)) {
+      throw new HttpError(
+        402,
+        "Votre période d'essai gratuite est terminée. Choisissez une offre pour continuer à échanger avec le coach.",
+        "SUBSCRIPTION_REQUIRED"
+      );
+    }
+
+    // Le plafond est vérifié ici, et pas seulement dans l'interface : un bouton
+    // grisé n'empêche personne d'appeler la route directement, et c'est bien
+    // l'appel au modèle qui coûte.
+    const limite = quotaChatQuotidien(user);
+    if ((await messagesDuJour(req.userId!)) >= limite) {
+      throw new HttpError(
+        429,
+        "Vous avez atteint votre limite de messages pour aujourd'hui. Elle se réinitialise à minuit, heure de Paris.",
+        "CHAT_QUOTA_REACHED"
+      );
     }
 
     const [profile, recentSessions, recentMessages, recentActivities] = await Promise.all([
       prisma.athleteProfile.findUnique({ where: { userId: req.userId! } }),
       prisma.session.findMany({ where: { userId: req.userId! }, orderBy: { date: "desc" }, take: 10 }),
       // Les DERNIERS messages, pas les premiers : trié en ascendant, `take` renvoyait
-      // les 20 plus anciens et le coach perdait le fil au bout de 20 échanges.
+      // les plus anciens et le coach perdait le fil au bout de quelques échanges.
+      // On en lit un de moins que la fenêtre : la question qu'on vient de poser
+      // occupe la dernière place.
       prisma.chatMessage.findMany({
         where: { userId: req.userId! },
         orderBy: { createdAt: "desc" },
-        take: HISTORY_WINDOW,
+        take: FENETRE_CHAT - 1,
       }),
       prisma.activity.findMany({
         where: { userId: req.userId!, startedAt: { gte: new Date(Date.now() - 21 * 24 * 3600 * 1000) } },
@@ -193,10 +240,10 @@ chatRouter.post(
     try {
       const response = await askClaude({
         system,
-        messages: [
+        messages: fenetreHistorique([
           ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
           { role: "user", content },
-        ],
+        ]),
         maxTokens: 1000,
       });
       reply = response.text;

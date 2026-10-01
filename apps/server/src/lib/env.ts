@@ -92,6 +92,18 @@ export function env(): Env {
   return cached;
 }
 
+/**
+ * Oublie la configuration lue au premier appel (usage : tests).
+ *
+ * La mise en cache est voulue — relire et valider l'environnement à chaque
+ * appel serait du gaspillage — mais elle rend intestable tout comportement qui
+ * dépend d'une variable, puisque la modifier après coup n'a plus d'effet. Même
+ * raison d'être que `resetMailer()`.
+ */
+export function resetEnv(): void {
+  cached = null;
+}
+
 export function isProduction(): boolean {
   return env().NODE_ENV === "production";
 }
