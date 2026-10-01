@@ -187,13 +187,13 @@ export function Register() {
                 {/* L'âge est une condition des CGU : la case doit le porter,
                     sinon rien n'atteste que l'athlète l'a déclaré. */}
                 J'ai 18 ans ou plus et j'accepte les{" "}
-                <Link to="/conditions" target="_blank" className="text-rose-400 hover:underline">
+                <a href="/conditions" target="_blank" rel="noopener" className="text-rose-400 hover:underline">
                   conditions d'utilisation
-                </Link>{" "}
+                </a>{" "}
                 et la{" "}
-                <Link to="/confidentialite" target="_blank" className="text-rose-400 hover:underline">
+                <a href="/confidentialite" target="_blank" rel="noopener" className="text-rose-400 hover:underline">
                   politique de confidentialité
-                </Link>
+                </a>
                 . TriCoach enregistre mes données d'entraînement, y compris mes blessures et ressentis, pour
                 construire mes programmes.
               </span>

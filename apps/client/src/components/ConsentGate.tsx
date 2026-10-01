@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "./Spinner";
@@ -33,13 +32,13 @@ export function ConsentGate() {
     <div className="mb-4 rounded-2xl border border-amber-900/50 bg-amber-950/20 p-3.5">
       <p className="text-sm text-amber-200">
         Nos{" "}
-        <Link to="/conditions" className="underline underline-offset-2">
+        <a href="/conditions" className="underline underline-offset-2">
           conditions d'utilisation
-        </Link>{" "}
+        </a>{" "}
         et notre{" "}
-        <Link to="/confidentialite" className="underline underline-offset-2">
+        <a href="/confidentialite" className="underline underline-offset-2">
           politique de confidentialité
-        </Link>{" "}
+        </a>{" "}
         ont évolué.
       </p>
       {error && <p className="mt-1.5 text-xs text-red-400">{error}</p>}
