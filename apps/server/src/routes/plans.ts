@@ -61,7 +61,8 @@ const aiPlanSchema = z.object({
 
 type AiPlanResponse = z.infer<typeof aiPlanSchema>;
 
-interface ProfileForPrompt {
+/** Exporté pour le banc d'essai : il doit construire le prompt de production. */
+export interface ProfileForPrompt {
   objectif: string;
   objectifDate: Date;
   tempsNatation: string;
@@ -79,7 +80,7 @@ interface ProfileForPrompt {
   materiel: unknown;
 }
 
-function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): string {
+export function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): string {
   const lines = [
     "Tu es un coach de triathlon expérimenté et bienveillant.",
     "Tu conçois des programmes d'entraînement hebdomadaires personnalisés en natation, vélo, course à pied et renforcement.",
@@ -161,7 +162,7 @@ function profileLines(
   ];
 }
 
-function buildFirstWeekPrompt(
+export function buildFirstWeekPrompt(
   profile: ProfileForPrompt,
   weekStart: Date,
   phase: Periodization,

@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
-    "admin": "tsx src/scripts/admin.ts"
+    "admin": "tsx src/scripts/admin.ts",
+    "eval-coach": "tsx src/eval/lancer.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

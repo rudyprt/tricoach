@@ -310,6 +310,37 @@ sur un service Postgres.
 npm run prisma:studio
 ```
 
+## Mesurer la qualité du coach
+
+Modifier le prompt sans mesure, c'est parier : on regarde une semaine générée,
+elle paraît correcte, on garde. Un changement qui dégrade les programmes ne se
+découvre alors que par la plainte d'un athlète.
+
+```bash
+ANTHROPIC_API_KEY="sk-ant-..." npm run eval-coach
+```
+
+Huit athlètes fictifs — une débutante à quatre heures par semaine, un cadre sur
+Ironman, un athlète sans capteur, un genou blessé, une piscine fermée le
+week-end — passent par **le prompt de production**, puis le programme obtenu est
+confronté à dix règles qu'un coach n'enfreindrait pas : volume respecté, unités
+exécutables, pas deux séances dures d'affilée, contraintes tenues.
+
+Le banc sort un score et la liste des manquements, et rend un code non nul sous
+80 % : il s'utilise tel quel dans une intégration continue.
+
+```bash
+npm run eval-coach -w apps/server -- genou   # un seul profil
+```
+
+Un passage appelle le modèle une fois par profil, soit quelques dizaines de
+centimes. **Un score ne vaut que comparé à un autre** : relancez après chaque
+modification du prompt, pas une fois pour voir.
+
+Les règles elles-mêmes sont testées (`evalRegles.test.ts`) et ne coûtent rien :
+une règle qui ne détecte rien afficherait cent pour cent, une règle trop stricte
+condamnerait un programme correct.
+
 ## Sauvegarder la base
 
 Rien ne protège les données tant que personne ne lance ceci. Une base perdue,
