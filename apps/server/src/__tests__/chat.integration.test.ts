@@ -94,7 +94,7 @@ describeIfDb("chat", () => {
   it("transmet au modèle les messages les plus récents, pas les plus anciens", async () => {
     const { agent, user } = await signUp("fenetre@example.com");
 
-    // 30 échanges déjà enregistrés : au-delà de la fenêtre de 20 messages.
+    // 30 échanges déjà enregistrés : bien au-delà de la fenêtre d'envoi.
     // Datés de l'avant-veille, pour ne pas consommer le quota du jour.
     const base = Date.now() - 2 * 24 * 60 * 60 * 1000;
     await prisma.chatMessage.createMany({
@@ -109,12 +109,42 @@ describeIfDb("chat", () => {
     askClaude.mockResolvedValue(claudeReply("Réponse."));
     expect((await agent.post("/api/chat").send({ content: "Nouvelle question" })).status).toBe(201);
 
-    const history = askClaude.mock.calls[0][0].messages as { content: string }[];
-    // 20 messages d'historique + la question courante
-    expect(history).toHaveLength(21);
-    expect(history[0].content).toBe("message-10");
-    expect(history[19].content).toBe("message-29");
-    expect(history[20].content).toBe("Nouvelle question");
+    const history = askClaude.mock.calls[0][0].messages as { role: string; content: string }[];
+    // La fenêtre vaut douze messages, question courante comprise. Ici elle
+    // tomberait sur une réponse du coach (message-19) : ce tour est écarté, car
+    // l'API refuse une conversation qui ne commence pas par l'athlète. Onze
+    // messages partent donc, et non douze.
+    expect(history).toHaveLength(11);
+    expect(history[0].role).toBe("user");
+    expect(history[0].content).toBe("message-20");
+    expect(history[9].content).toBe("message-29");
+    expect(history[10].content).toBe("Nouvelle question");
+    // L'historique complet reste en base : seul l'envoi est tronqué.
+    expect(await prisma.chatMessage.count({ where: { userId: user.id } })).toBe(32);
+  });
+
+  it("ne renvoie jamais plus que la fenêtre, quelle que soit l'ancienneté du fil", async () => {
+    const { agent, user } = await signUp("fenetre-longue@example.com");
+
+    // Deux cents messages : sans plafond, c'est tout cela qui partirait à chaque
+    // question, et la facture croîtrait avec l'ancienneté du compte.
+    const base = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    await prisma.chatMessage.createMany({
+      data: Array.from({ length: 200 }, (_, i) => ({
+        userId: user.id,
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: `vieux-${i}`,
+        createdAt: new Date(base + i * 1000),
+      })),
+    });
+
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+    await agent.post("/api/chat").send({ content: "Question" });
+
+    const { FENETRE_CHAT } = await import("../lib/chatHistory.js");
+    const history = askClaude.mock.calls[0][0].messages as { role: string }[];
+    expect(history.length).toBeLessThanOrEqual(FENETRE_CHAT);
+    expect(history[0].role).toBe("user");
   });
 
   it("garde l'historique dans l'ordre chronologique", async () => {
@@ -135,39 +165,85 @@ describeIfDb("chat", () => {
     expect(history.map((m) => m.content)).toEqual(["premier", "deuxieme", "troisieme", "quatrieme"]);
   });
 
-  it("applique le quota quotidien aux comptes non premium", async () => {
-    const { agent, user } = await signUp("quota@example.com");
-    const { CHAT_DAILY_LIMIT } = await import("../lib/subscription.js");
-
+  /** Sème des questions déjà posées aujourd'hui, sans passer par la route. */
+  async function questionsDuJour(userId: string, nombre: number) {
     await prisma.chatMessage.createMany({
-      data: Array.from({ length: CHAT_DAILY_LIMIT }, (_, i) => ({
-        userId: user.id,
+      data: Array.from({ length: nombre }, (_, i) => ({
+        userId,
         role: "user",
         content: `q${i}`,
       })),
     });
+  }
+
+  it("refuse au-delà du quota Standard, sans appeler le modèle", async () => {
+    const { agent, user } = await signUp("quota@example.com");
+    const { QUOTA_CHAT_STANDARD } = await import("../lib/subscription.js");
+    await questionsDuJour(user.id, QUOTA_CHAT_STANDARD);
 
     askClaude.mockResolvedValue(claudeReply("Réponse."));
     const res = await agent.post("/api/chat").send({ content: "Un de trop" });
-    expect(res.status).toBe(402);
-    expect(res.body.code).toBe("SUBSCRIPTION_REQUIRED");
+
+    expect(res.status).toBe(429);
+    expect(res.body.code).toBe("CHAT_QUOTA_REACHED");
+    expect(res.body.error).toContain("se réinitialise à minuit");
+    // Le point du plafond : l'appel payant n'a pas lieu.
     expect(askClaude).not.toHaveBeenCalled();
   });
 
-  it("ne limite pas les comptes premium", async () => {
+  it("laisse un compte Premium dépasser le quota Standard", async () => {
     const { agent, user } = await signUp("premium-chat@example.com");
-    const { CHAT_DAILY_LIMIT } = await import("../lib/subscription.js");
+    const { QUOTA_CHAT_STANDARD } = await import("../lib/subscription.js");
     await prisma.user.update({ where: { id: user.id }, data: { plan: "premium" } });
+    await questionsDuJour(user.id, QUOTA_CHAT_STANDARD + 5);
+
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+    expect((await agent.post("/api/chat").send({ content: "Encore une" })).status).toBe(201);
+  });
+
+  it("refuse aussi un compte Premium à son propre plafond", async () => {
+    // Sans cela, « Premium » voudrait dire « sans limite de coût ».
+    const { agent, user } = await signUp("premium-plafond@example.com");
+    const { QUOTA_CHAT_PREMIUM } = await import("../lib/subscription.js");
+    await prisma.user.update({ where: { id: user.id }, data: { plan: "premium" } });
+    await questionsDuJour(user.id, QUOTA_CHAT_PREMIUM);
+
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+    const res = await agent.post("/api/chat").send({ content: "Un de trop" });
+
+    expect(res.status).toBe(429);
+    expect(askClaude).not.toHaveBeenCalled();
+  });
+
+  it("ne compte pas les messages de la veille", async () => {
+    // Le compteur est une requête datée, pas un champ remis à zéro par une
+    // tâche : rien ne doit tourner à minuit pour que le quota se libère.
+    const { agent, user } = await signUp("quota-veille@example.com");
+    const { QUOTA_CHAT_PREMIUM } = await import("../lib/subscription.js");
+    const hier = new Date(Date.now() - 36 * 60 * 60 * 1000);
     await prisma.chatMessage.createMany({
-      data: Array.from({ length: CHAT_DAILY_LIMIT + 5 }, (_, i) => ({
+      data: Array.from({ length: QUOTA_CHAT_PREMIUM + 10 }, (_, i) => ({
         userId: user.id,
         role: "user",
-        content: `q${i}`,
+        content: `hier-${i}`,
+        createdAt: new Date(hier.getTime() + i * 1000),
       })),
     });
 
     askClaude.mockResolvedValue(claudeReply("Réponse."));
-    expect((await agent.post("/api/chat").send({ content: "Encore une" })).status).toBe(201);
+    expect((await agent.post("/api/chat").send({ content: "Aujourd'hui" })).status).toBe(201);
+  });
+
+  it("annonce le quota restant avec le fil", async () => {
+    // L'interface le lisait dans le navigateur, qui ignore le fuseau de
+    // référence et l'offre : elle annonçait un reste que le serveur refusait.
+    const { agent, user } = await signUp("quota-affiche@example.com");
+    const { QUOTA_CHAT_STANDARD } = await import("../lib/subscription.js");
+    await questionsDuJour(user.id, 3);
+
+    const res = await agent.get("/api/chat");
+    expect(res.status).toBe(200);
+    expect(res.body.quota).toEqual({ utilises: 3, limite: QUOTA_CHAT_STANDARD });
   });
 
   it("permet d'effacer la conversation", async () => {

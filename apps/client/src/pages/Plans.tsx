@@ -15,7 +15,7 @@ const PREMIUM_FEATURES = [
   "Tout ce qui est inclus dans Standard",
   "Répartition de votre temps par zone d'intensité",
   "Détection de surentraînement",
-  "Réponses illimitées au chat coach IA",
+  "30 messages par jour avec le coach IA (10 en Standard)",
 ];
 
 // Annoncées comme à venir, et non comme incluses : la connexion aux montres

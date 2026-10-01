@@ -230,7 +230,17 @@ export interface CurrentUser {
   profile: AthleteProfile | null;
 }
 
-export const CHAT_DAILY_LIMIT = 15;
+/**
+ * Quota du chat, tel que le serveur le calcule.
+ *
+ * La limite n'est pas répliquée ici : le navigateur ignore le fuseau de
+ * référence et l'offre de l'athlète, et deux valeurs à maintenir finissent par
+ * diverger — l'interface annonçait un reste que le serveur refusait.
+ */
+export interface ChatQuota {
+  utilises: number;
+  limite: number;
+}
 
 export function apiErrorMessage(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err) && err.response?.data && typeof err.response.data === "object") {
@@ -250,6 +260,11 @@ function hasErrorCode(err: unknown, code: string): boolean {
 
 export function isSubscriptionRequiredError(err: unknown): boolean {
   return hasErrorCode(err, "SUBSCRIPTION_REQUIRED");
+}
+
+/** Quota quotidien de messages épuisé : rien à acheter, il faut attendre minuit. */
+export function isChatQuotaError(err: unknown): boolean {
+  return hasErrorCode(err, "CHAT_QUOTA_REACHED");
 }
 
 export function isBillingUnavailableError(err: unknown): boolean {
@@ -303,6 +318,7 @@ export interface ChatPage {
   messages: ChatMessage[];
   hasMore: boolean;
   oldestAt: string | null;
+  quota: ChatQuota;
 }
 
 export interface AdminOverview {

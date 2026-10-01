@@ -156,7 +156,7 @@ model AiCall {
   id               String   @id @default(cuid())
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// "plan_generation" | "plan_progression" | "chat"
+  /// "plan_generation" | "plan_progression" (débrief compris) | "chat" | "plan_course"
   kind             String
   model            String
   inputTokens      Int      @default(0)

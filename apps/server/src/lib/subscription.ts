@@ -31,7 +31,36 @@ export function isPremium(user: { plan: string }): boolean {
   return user.plan === "premium";
 }
 
-export const CHAT_DAILY_LIMIT = 15;
+/**
+ * Quotas quotidiens du chat coach, par offre.
+ *
+ * Ils ne protègent pas l'athlète mais la facture : chaque message part à l'API
+ * avec le prompt système, les zones, la charge et l'historique, donc un échange
+ * coûte bien plus que sa longueur apparente. Sans plafond, un seul compte peut
+ * consommer en une soirée le revenu mensuel de son abonnement.
+ *
+ * Les valeurs sont volontairement supérieures à ce qu'un athlète utilise un
+ * jour normal : le plafond doit arrêter la dérive, pas gêner l'usage.
+ */
+export const QUOTA_CHAT_STANDARD = 10;
+export const QUOTA_CHAT_PREMIUM = 30;
+
+/**
+ * Le quota applicable à cet athlète.
+ *
+ * Un compte en essai, ou dont l'essai a expiré, relève du quota Standard : le
+ * laisser sans plafond ferait du compte gratuit le plus coûteux de tous.
+ */
+export function quotaChatQuotidien(user: { plan: string }): number {
+  return isPremium(user) ? QUOTA_CHAT_PREMIUM : QUOTA_CHAT_STANDARD;
+}
+
+/**
+ * Fuseau de référence du quota. Fixe, et non celui de l'athlète : « remis à
+ * zéro à minuit » doit désigner le même instant pour tout le monde, sans quoi
+ * changer son fuseau dans son profil rouvrirait un quota déjà consommé.
+ */
+export const FUSEAU_QUOTA = "Europe/Paris";
 
 export function planLabel(plan: string): string {
   if (plan === "premium") return "Premium";
