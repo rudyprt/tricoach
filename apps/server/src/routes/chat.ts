@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL } from "../lib/anthropic.js";
 import { recordAiCall } from "../lib/aiUsage.js";
-import { FUSEAU_QUOTA, quotaChatQuotidien } from "../lib/subscription.js";
+import { FUSEAU_QUOTA, hasStandardAccess, quotaChatQuotidien } from "../lib/subscription.js";
 import { FENETRE_CHAT, fenetreHistorique } from "../lib/chatHistory.js";
 import { ah, HttpError } from "../lib/http.js";
 import { chatRateLimit } from "../lib/rateLimit.js";
@@ -31,6 +31,20 @@ chatRouter.use(requireAuth);
  * Seuls les messages de l'athlète comptent : une réponse du coach ne doit pas
  * amputer son quota.
  */
+interface EtatQuota {
+  utilises: number;
+  limite: number;
+  /** Ce qui empêche d'écrire, s'il y a lieu. Deux impasses très différentes. */
+  bloque: "quota" | "abonnement" | null;
+}
+
+function etatDuQuota(user: { plan: string; createdAt: Date } | null, utilises: number): EtatQuota {
+  const compte = user ?? { plan: "free", createdAt: new Date() };
+  const limite = quotaChatQuotidien(compte);
+  const bloque = !hasStandardAccess(compte) ? "abonnement" : utilises >= limite ? "quota" : null;
+  return { utilises, limite, bloque };
+}
+
 async function messagesDuJour(userId: string): Promise<number> {
   return prisma.chatMessage.count({
     where: {
@@ -70,7 +84,7 @@ chatRouter.get(
         orderBy: { createdAt: "desc" },
         take: limit + 1,
       }),
-      prisma.user.findUnique({ where: { id: req.userId! }, select: { plan: true } }),
+      prisma.user.findUnique({ where: { id: req.userId! }, select: { plan: true, createdAt: true } }),
       messagesDuJour(req.userId!),
     ]);
 
@@ -82,9 +96,10 @@ chatRouter.get(
       hasMore,
       oldestAt: page[0]?.createdAt ?? null,
       // Le quota est calculé ici et non dans le navigateur : celui-ci ignore le
-      // fuseau de référence, et affichait un reste faux à l'étranger comme
-      // après minuit heure locale.
-      quota: { utilises, limite: quotaChatQuotidien(user ?? { plan: "free" }) },
+      // fuseau de référence comme l'offre, et affichait un reste que le serveur
+      // refusait. Le motif du blocage vient d'ici pour la même raison : attendre
+      // minuit ne débloque pas un essai terminé, et l'inverse non plus.
+      quota: etatDuQuota(user, utilises),
     });
   })
 );
@@ -118,10 +133,21 @@ chatRouter.post(
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
-      select: { plan: true, timezone: true },
+      select: { plan: true, timezone: true, createdAt: true },
     });
     if (!user) {
       throw new HttpError(404, "Utilisateur introuvable.");
+    }
+
+    // Le chat se payait tout seul : la génération de programme refusait un essai
+    // expiré, mais pas lui. Un compte abandonné après l'essai pouvait donc
+    // continuer à appeler le modèle indéfiniment, sans rien payer.
+    if (!hasStandardAccess(user)) {
+      throw new HttpError(
+        402,
+        "Votre période d'essai gratuite est terminée. Choisissez une offre pour continuer à échanger avec le coach.",
+        "SUBSCRIPTION_REQUIRED"
+      );
     }
 
     // Le plafond est vérifié ici, et pas seulement dans l'interface : un bouton
@@ -131,7 +157,7 @@ chatRouter.post(
     if ((await messagesDuJour(req.userId!)) >= limite) {
       throw new HttpError(
         429,
-        "Tu as atteint ta limite de messages pour aujourd'hui. Elle se réinitialise à minuit.",
+        "Vous avez atteint votre limite de messages pour aujourd'hui. Elle se réinitialise à minuit, heure de Paris.",
         "CHAT_QUOTA_REACHED"
       );
     }

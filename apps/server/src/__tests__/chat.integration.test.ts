@@ -186,7 +186,7 @@ describeIfDb("chat", () => {
 
     expect(res.status).toBe(429);
     expect(res.body.code).toBe("CHAT_QUOTA_REACHED");
-    expect(res.body.error).toContain("se réinitialise à minuit");
+    expect(res.body.error).toContain("se réinitialise à minuit, heure de Paris");
     // Le point du plafond : l'appel payant n'a pas lieu.
     expect(askClaude).not.toHaveBeenCalled();
   });
@@ -243,7 +243,58 @@ describeIfDb("chat", () => {
 
     const res = await agent.get("/api/chat");
     expect(res.status).toBe(200);
-    expect(res.body.quota).toEqual({ utilises: 3, limite: QUOTA_CHAT_STANDARD });
+    expect(res.body.quota).toEqual({ utilises: 3, limite: QUOTA_CHAT_STANDARD, bloque: null });
+  });
+
+  it("distingue le mur du quota de celui de l'abonnement", async () => {
+    // Les annoncer pareil enverrait l'athlète attendre minuit pour rien : un
+    // essai terminé ne se débloque pas en patientant.
+    const { agent, user } = await signUp("deux-murs@example.com");
+    const { QUOTA_CHAT_STANDARD, TRIAL_DAYS } = await import("../lib/subscription.js");
+
+    await questionsDuJour(user.id, QUOTA_CHAT_STANDARD);
+    expect((await agent.get("/api/chat")).body.quota.bloque).toBe("quota");
+
+    // Essai expiré : le compte est antidaté au-delà de la période d'essai.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { createdAt: new Date(Date.now() - (TRIAL_DAYS + 1) * 24 * 60 * 60 * 1000) },
+    });
+    expect((await agent.get("/api/chat")).body.quota.bloque).toBe("abonnement");
+  });
+
+  it("refuse le chat à un essai expiré, comme la génération de programme", async () => {
+    // Le chat se payait tout seul : un compte abandonné après l'essai pouvait
+    // appeler le modèle indéfiniment sans rien payer.
+    const { agent, user } = await signUp("essai-fini@example.com");
+    const { TRIAL_DAYS } = await import("../lib/subscription.js");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { createdAt: new Date(Date.now() - (TRIAL_DAYS + 1) * 24 * 60 * 60 * 1000) },
+    });
+
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+    const res = await agent.post("/api/chat").send({ content: "Une question" });
+
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe("SUBSCRIPTION_REQUIRED");
+    expect(askClaude).not.toHaveBeenCalled();
+  });
+
+  it("laisse écrire un compte payant dont l'essai est depuis longtemps fini", async () => {
+    // Le garde-fou doit viser les comptes qui ne paient pas, pas les clients.
+    const { agent, user } = await signUp("payant-ancien@example.com");
+    const { TRIAL_DAYS } = await import("../lib/subscription.js");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        plan: "standard",
+        createdAt: new Date(Date.now() - (TRIAL_DAYS + 90) * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+    expect((await agent.post("/api/chat").send({ content: "Une question" })).status).toBe(201);
   });
 
   it("permet d'effacer la conversation", async () => {

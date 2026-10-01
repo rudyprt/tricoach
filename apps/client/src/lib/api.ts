@@ -240,6 +240,11 @@ export interface CurrentUser {
 export interface ChatQuota {
   utilises: number;
   limite: number;
+  /**
+   * Ce qui empêche d'écrire. « quota » se lève à minuit, « abonnement » non :
+   * les annoncer de la même façon enverrait l'athlète attendre pour rien.
+   */
+  bloque: "quota" | "abonnement" | null;
 }
 
 export function apiErrorMessage(err: unknown, fallback: string): string {

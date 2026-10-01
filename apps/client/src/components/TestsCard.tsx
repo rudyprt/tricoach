@@ -54,7 +54,7 @@ function FormulaireResultat({ test, onDone }: { test: FitnessTest; onDone: () =>
       // Le test ne sert à rien si l'athlète ne voit pas ce qu'il change : ses
       // zones viennent de bouger, et ses séances à venir avec elles.
       afficher(
-        `${data.progression ?? data.resume} — tes séances à venir sont recalées sur tes nouvelles zones.`,
+        `${data.progression ?? data.resume} — vos séances à venir sont recalées sur vos nouvelles zones.`,
         { ton: "succes", dureeMs: 7000 }
       );
       onDone();
