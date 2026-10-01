@@ -202,6 +202,13 @@ obligatoire manque, les pages affichent un avertissement nommant précisément c
 qui reste à compléter — cet avertissement est visible par vos utilisateurs, et
 disparaît de lui-même une fois le fichier rempli.
 
+Ces trois pages sont servies en **HTML statique**, sans JavaScript : un robot
+d'indexation, un vérificateur ou un navigateur dont l'application ne charge pas
+y trouve le texte. Leur contenu vit dans `apps/client/src/legal/pagesLegales.ts`,
+écrit dans `dist/` à la compilation (`conditions.html`, `confidentialite.html`,
+`mentions-legales.html`) et servi par Express sous `/conditions`,
+`/confidentialite` et `/mentions-legales`.
+
 Ces mentions sont obligatoires pour tout site professionnel accessible en France
 (article 6 III de la LCEN). Elles supposent une structure déclarée : facturer un
 abonnement sans immatriculation n'est pas possible légalement. Le mode de

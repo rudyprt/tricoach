@@ -116,6 +116,9 @@ export function createApp() {
   const clientDist = path.join(__dirname, "../../client/dist");
   app.use(
     express.static(clientDist, {
+      // /conditions sert conditions.html : les pages légales sont du HTML
+      // statique, lisible sans JavaScript, et non des routes de l'application.
+      extensions: ["html"],
       setHeaders(res, filePath) {
         // Les fichiers de /assets portent un hachage : leur contenu ne change
         // jamais, ils peuvent être gardés un an.
@@ -125,11 +128,12 @@ export function createApp() {
         }
         // Le service worker, lui, doit être revalidé à chaque visite : un
         // exemplaire figé en cache empêcherait toute mise à jour de
-        // l'application installée.
+        // l'application installée. Idem pour les pages HTML, dont les pages
+        // légales : une version périmée serait une version opposable.
         if (
           filePath.endsWith("sw.js") ||
           filePath.endsWith("manifest.webmanifest") ||
-          filePath.endsWith("index.html")
+          filePath.endsWith(".html")
         ) {
           res.setHeader("Cache-Control", "no-cache");
         }

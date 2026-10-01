@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { FaDownload, FaEnvelopeCircleCheck, FaLock, FaTriangleExclamation } from "react-icons/fa6";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
@@ -287,17 +287,17 @@ export function Compte() {
       </Card>
 
       <p className="pb-2 text-center text-xs text-tres-doux">
-        <Link to="/conditions" className="hover:text-doux hover:underline">
+        <a href="/conditions" className="hover:text-doux hover:underline">
           Conditions d'utilisation
-        </Link>
+        </a>
         {" · "}
-        <Link to="/confidentialite" className="hover:text-doux hover:underline">
+        <a href="/confidentialite" className="hover:text-doux hover:underline">
           Politique de confidentialité
-        </Link>
+        </a>
         {" · "}
-        <Link to="/mentions-legales" className="hover:text-doux hover:underline">
+        <a href="/mentions-legales" className="hover:text-doux hover:underline">
           Mentions légales
-        </Link>
+        </a>
       </p>
     </div>
   );

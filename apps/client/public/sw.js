@@ -22,6 +22,11 @@ const LECTURES_HORS_LIGNE = ["/api/plans/current", "/api/profile", "/api/profile
 
 const COQUILLE_FICHIERS = ["/", "/manifest.webmanifest", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
 
+/* Pages légales : du HTML statique, servi tel quel par le serveur. Le service
+ * worker ne s'en mêle pas — les mettre en cache sous « / » remplacerait la
+ * coquille de l'application par une page de mentions légales. */
+const PAGES_STATIQUES = ["/conditions", "/confidentialite", "/mentions-legales"];
+
 self.addEventListener("install", (event) => {
   /* Pas de skipWaiting automatique : remplacer le code sous les pieds de
      quelqu'un en pleine saisie lui ferait perdre ce qu'il écrit. La nouvelle
@@ -102,6 +107,7 @@ self.addEventListener("fetch", (event) => {
   /* Navigation : l'application est une SPA, toute URL sert la même coquille.
    * Hors ligne, on la ressort du cache pour que le routeur prenne la main. */
   if (request.mode === "navigate") {
+    if (PAGES_STATIQUES.includes(url.pathname)) return;
     event.respondWith(
       (async () => {
         try {
