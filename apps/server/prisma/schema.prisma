@@ -23,6 +23,9 @@ model User {
   timezone          String    @default("Europe/Paris")
   /// Dernière requête authentifiée : base du calcul de fréquentation.
   lastSeenAt        DateTime?
+  /// Date de l'avertissement envoyé avant suppression pour inactivité. Évite
+  /// de le renvoyer à chaque passage, et prouve qu'il a bien été envoyé.
+  purgeAvertieLe    DateTime?
   /// Tentatives de connexion infructueuses consécutives, et blocage temporaire.
   /// Contrairement à la limitation par adresse IP, ce compteur est partagé
   /// entre toutes les instances du serveur.
@@ -185,16 +188,22 @@ model AdminAction {
 }
 
 model AthleteProfile {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   objectif            String
   objectifDate        DateTime
-  tempsNatation       String   @default("")
-  tempsVelo           String   @default("")
-  tempsCourse         String   @default("")
+  tempsNatation       String    @default("")
+  tempsVelo           String    @default("")
+  tempsCourse         String    @default("")
   heuresSemaine       Float
-  contraintes         String   @default("")
+  /// Blessures et contraintes déclarées. Donnée de santé : ne peut être
+  /// enregistrée que si `consentSanteAt` porte une date.
+  contraintes         String    @default("")
+  /// Date du consentement explicite au traitement des données de santé.
+  /// Null signifie refus ou consentement retiré, et interdit alors toute
+  /// valeur dans `contraintes` : c'est ce qui rend le consentement opposable.
+  consentSanteAt      DateTime?
   /// Zones de puissance vélo si l'athlète connaît sa FTP (sinon estimation par la vitesse).
   ftpWatts            Int?
   /// Allure au seuil en course, en secondes par kilomètre, si l'athlète la connaît.
@@ -215,7 +224,7 @@ model AthleteProfile {
   /// Matériel et accès : home-trainer, piscine, vélo, capteurs.
   /// Une séance que l'athlète ne peut pas réaliser ne sert à rien.
   materiel            Json?
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime  @updatedAt
 }
 
 model TrainingPlan {

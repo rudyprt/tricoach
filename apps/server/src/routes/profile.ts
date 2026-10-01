@@ -24,6 +24,8 @@ const profileSchema = z.object({
   tempsCourse: z.string().max(100).optional().default(""),
   heuresSemaine: z.number().positive("Indiquez un nombre d'heures positif.").max(40, "40 heures maximum par semaine."),
   contraintes: z.string().max(1000).optional().default(""),
+  /** Case cochée sous le champ des blessures. Absente vaut refus. */
+  consentSante: z.boolean().optional().default(false),
   ftpWatts: z.number().int().min(50).max(600).nullable().optional(),
   // Bornes larges mais physiologiquement plausibles : elles écartent les fautes
   // de frappe sans contraindre les extrêmes réels.
@@ -51,10 +53,39 @@ profileRouter.put(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Données invalides." });
       return;
     }
-    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcMax, disponibilites, materiel, ...rest } =
+    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcMax, disponibilites, materiel, consentSante, ...rest } =
       parsed.data;
+
+    /*
+     * Les blessures et douleurs sont des données de santé : sans consentement
+     * explicite, elles ne peuvent pas être enregistrées. Le contrôle est ici et
+     * pas seulement dans le formulaire — une case cochée côté navigateur ne
+     * prouve rien, et un appel direct à l'API la contournerait.
+     */
+    const contraintes = rest.contraintes.trim();
+    if (contraintes && !consentSante) {
+      res.status(400).json({
+        error:
+          "Cochez la case de consentement sous le champ des blessures pour que ces informations puissent être enregistrées.",
+      });
+      return;
+    }
+
+    const profilActuel = await prisma.athleteProfile.findUnique({
+      where: { userId: req.userId! },
+      select: { consentSanteAt: true },
+    });
+
+    /*
+     * La date du premier consentement est conservée tant qu'il n'est pas
+     * retiré : c'est elle qui prouve quand l'athlète a accepté. Vider le champ
+     * ou décocher la case retire le consentement, et l'horodatage avec.
+     */
+    const consentSanteAt = contraintes && consentSante ? (profilActuel?.consentSanteAt ?? new Date()) : null;
     const data = {
       ...rest,
+      contraintes,
+      consentSanteAt,
       // Prisma distingue « absent » de « null » sur une colonne JSON : sans
       // DbNull, effacer ses créneaux écrirait le littéral JSON null.
       disponibilites: disponibilites ?? Prisma.DbNull,

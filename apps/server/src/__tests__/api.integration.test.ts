@@ -221,6 +221,67 @@ describeIfDb("API", () => {
   });
 
   describe("profil et zones", () => {
+    const profilDeBase = {
+      objectif: "Half Ironman de Nice",
+      objectifDate: "2027-06-01",
+      tempsNatation: "1500m en 30min",
+      tempsVelo: "40km en 1h15",
+      tempsCourse: "10km en 45min",
+      heuresSemaine: 8,
+    };
+
+    describe("consentement aux données de santé", () => {
+      it("refuse d'enregistrer des blessures sans consentement", async () => {
+        // Une case cochée dans un navigateur ne prouve rien : c'est ce contrôle
+        // qui rend le consentement opposable, pas le formulaire.
+        const { agent } = await signUp("sanssante@example.com");
+
+        const put = await agent
+          .put("/api/profile")
+          .send({ ...profilDeBase, contraintes: "douleur au genou droit" });
+
+        expect(put.status).toBe(400);
+        expect(put.body.error).toContain("consentement");
+        const profil = await prisma.athleteProfile.findFirst({ where: { user: { email: "sanssante@example.com" } } });
+        expect(profil?.contraintes ?? "").toBe("");
+      });
+
+      it("les enregistre et horodate le consentement quand la case est cochée", async () => {
+        const { agent } = await signUp("avecsante@example.com");
+
+        const put = await agent
+          .put("/api/profile")
+          .send({ ...profilDeBase, contraintes: "douleur au genou droit", consentSante: true });
+
+        expect(put.status).toBe(200);
+        expect(put.body.contraintes).toBe("douleur au genou droit");
+        expect(put.body.consentSanteAt).not.toBeNull();
+      });
+
+      it("efface le consentement quand l'athlète vide le champ", async () => {
+        // C'est le retrait annoncé dans la politique : vider le champ suffit.
+        const { agent } = await signUp("retrait@example.com");
+        await agent
+          .put("/api/profile")
+          .send({ ...profilDeBase, contraintes: "lombalgie", consentSante: true });
+
+        const apres = await agent.put("/api/profile").send({ ...profilDeBase, contraintes: "" });
+
+        expect(apres.status).toBe(200);
+        expect(apres.body.contraintes).toBe("");
+        expect(apres.body.consentSanteAt).toBeNull();
+      });
+
+      it("accepte un profil sans blessures, sans rien demander", async () => {
+        const { agent } = await signUp("riendutout@example.com");
+
+        const put = await agent.put("/api/profile").send({ ...profilDeBase, contraintes: "" });
+
+        expect(put.status).toBe(200);
+        expect(put.body.consentSanteAt).toBeNull();
+      });
+    });
+
     it("enregistre le profil et calcule les zones", async () => {
       const { agent } = await signUp("zones@example.com");
 

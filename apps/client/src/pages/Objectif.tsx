@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { ConsentementSante } from "../components/ConsentementSante";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage, type AthleteProfile, type Disponibilites, type Materiel } from "../lib/api";
 import { allureVersSecondes, secondesVersAllure } from "../lib/formats";
@@ -28,6 +29,7 @@ export function Objectif() {
   const [disponibilites, setDisponibilites] = useState<Disponibilites>({});
   const [materiel, setMateriel] = useState<Materiel>(MATERIEL_PAR_DEFAUT);
   const [contraintes, setContraintes] = useState("");
+  const [consentSante, setConsentSante] = useState(false);
   const [ftpWatts, setFtpWatts] = useState("");
   // Valeurs de seuil : saisies en texte lisible, converties en secondes pour l'API.
   const [seuilCourse, setSeuilCourse] = useState("");
@@ -54,6 +56,9 @@ export function Objectif() {
         setDisponibilites(data.disponibilites ?? {});
         setMateriel(data.materiel ?? MATERIEL_PAR_DEFAUT);
         setContraintes(data.contraintes);
+        // Un consentement déjà donné reste coché : le redemander à chaque
+        // visite reviendrait à le faire redonner sans raison.
+        setConsentSante(Boolean(data.consentSanteAt));
         setFtpWatts(data.ftpWatts ? String(data.ftpWatts) : "");
         setSeuilCourse(data.seuilCourseSecParKm ? secondesVersAllure(data.seuilCourseSecParKm) : "");
         setCss(data.cssSecPer100m ? secondesVersAllure(data.cssSecPer100m) : "");
@@ -80,6 +85,7 @@ export function Objectif() {
         ...temps,
         heuresSemaine,
         contraintes,
+        consentSante,
         disponibilites: Object.keys(disponibilites).length > 0 ? disponibilites : null,
         materiel,
         ftpWatts: ftpWatts.trim() === "" ? null : Number(ftpWatts),
@@ -279,6 +285,7 @@ export function Objectif() {
             rows={3}
             className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
           />
+          <ConsentementSante coche={consentSante} onChange={setConsentSante} />
         </div>
 
         <div className="flex gap-2">
