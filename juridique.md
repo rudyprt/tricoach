@@ -120,7 +120,7 @@ Ces CGU peuvent évoluer. Tu seras prévenu de tout changement important, notamm
 
 Ces CGU sont soumises au droit français. En cas de litige, une solution amiable sera recherchée en priorité ; à défaut, les tribunaux français seront compétents.
 
-Dernière mise à jour : [DATE].
+Dernière mise à jour : 01/10/2026.
 
 ## Textes à intégrer dans l'appli
 
@@ -132,7 +132,8 @@ Le champ ne doit pas pouvoir être enregistré rempli si la case n'est pas coch�
 
 **À l'inscription, case à cocher obligatoire :**
 
-☐ J'ai 18 ans ou plus et j'accepte les [CGU] et la [politique de confidentialité].
+☐ J'ai 18 ans ou plus et j'accepte les CGU et la politique de confidentialité.
+  (dans l'application, les deux mentions sont des liens vers /conditions et /confidentialite)
 
 **Sous le chat du coach IA, en petit :**
 

@@ -167,7 +167,14 @@ function confidentialite(e: Editeur = EDITEUR): string {
     [
       section(
         "Responsable du traitement",
-        `<p>${champ(e.nom, "L'éditeur du service")}, ${champ(e.adresse, "adresse à préciser")}. Contact : ${champ(e.email, "adresse e-mail à préciser")}.</p>`
+        // L'adresse n'est affichée que lorsqu'elle existe ou qu'elle est due.
+        // Un « [adresse à préciser] » en travers de la politique ressemble à
+        // une page inachevée, là où le règlement demande surtout un
+        // responsable identifiable et joignable — ce que le nom et l'adresse
+        // de contact suffisent à établir.
+        `<p>${champ(e.nom, "L'éditeur du service")}${
+          e.adresse || e.professionnel ? `, ${champ(e.adresse, "adresse à préciser")}` : ""
+        }. Contact : ${champ(e.email, "adresse e-mail à préciser")}.</p>`
       ),
       section(
         "Données collectées",
@@ -230,17 +237,32 @@ function ligne(label: string, valeur: string | null): string {
   return `<div><dt>${label} :</dt><dd>${champ(valeur, "à compléter")}</dd></div>`;
 }
 
+/**
+ * Ligne d'une mention qui n'est due qu'à un éditeur professionnel.
+ *
+ * Tant que le service est gratuit et édité à titre non professionnel, il n'y a
+ * ni numéro ni téléphone à publier : afficher « [à compléter] » donnerait à
+ * l'athlète une page qui paraît inachevée, pour un renseignement que la loi ne
+ * réclame pas encore. La ligne apparaît dès que la valeur existe, et dès que
+ * l'activité devient professionnelle — où le vide redevient un manquement.
+ */
+function ligneSiDue(label: string, valeur: string | null, professionnel: boolean): string {
+  if (!valeur && !professionnel) return "";
+  return ligne(label, valeur);
+}
+
 function mentionsLegales(e: Editeur = EDITEUR): string {
   const societe = e.forme === "societe";
   const lignes = [
     ligne(societe ? "Dénomination" : "Nom", e.nom),
+    e.nomCommercial ? ligne("Nom commercial", e.nomCommercial) : "",
     societe ? ligne("Forme juridique", e.formeSociale) : "",
     societe ? ligne("Capital social", e.capital) : "",
-    ligne("Adresse", e.adresse),
-    ligne(societe ? "RCS" : "SIREN", e.immatriculation),
+    ligneSiDue("Adresse", e.adresse, e.professionnel),
+    ligneSiDue(societe ? "RCS" : "SIREN", e.immatriculation, e.professionnel),
     e.tva ? ligne("TVA intracommunautaire", e.tva) : "",
     ligne("E-mail", e.email),
-    ligne("Téléphone", e.telephone),
+    ligneSiDue("Téléphone", e.telephone, e.professionnel),
     ligne("Directeur de la publication", e.directeurPublication),
   ].join("");
 
@@ -249,7 +271,14 @@ function mentionsLegales(e: Editeur = EDITEUR): string {
     e,
     [
       section("Éditeur du service", `<dl>${lignes}</dl>`),
-      section("Hébergement", `<p>${champ(e.hebergeur, "hébergeur à préciser")}</p>`),
+      section(
+        "Hébergement",
+        `<p>${champ(e.hebergeur, "hébergeur à préciser")}</p>${
+          e.professionnel
+            ? ""
+            : `<p>Le service est actuellement édité à titre non professionnel et mis à disposition gratuitement : il ne donne lieu ni à immatriculation, ni à numéro de TVA. L'identité de l'éditeur a été communiquée à l'hébergeur ci-dessus.</p>`
+        }`
+      ),
       section(
         "Propriété intellectuelle",
         `<p>Les contenus du service (interface, textes, identité visuelle) sont protégés. Les programmes générés pour votre compte vous sont destinés et vous pouvez les exporter librement depuis « Mon compte ».</p>`

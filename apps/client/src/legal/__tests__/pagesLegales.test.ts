@@ -10,6 +10,10 @@ import sw from "../../../public/sw.js?raw";
 const complet: Editeur = {
   forme: "micro-entreprise",
   nom: "Rudy Exemple",
+  nomCommercial: "Exemple",
+  // Jeu d'essai d'un éditeur professionnel : c'est le cas le plus exigeant,
+  // celui où numéro, adresse et téléphone sont tous obligatoires.
+  professionnel: true,
   formeSociale: null,
   capital: null,
   adresse: "1 rue du Stade, 03700 Bellerive-sur-Allier",
@@ -48,6 +52,53 @@ describe("pages légales statiques", () => {
     expect(html).toContain("Document incomplet");
     expect(html).toContain("Adresse e-mail de contact, Téléphone");
     expect(html).toContain("[adresse e-mail à préciser]");
+  });
+
+  it("tait les mentions non dues plutôt que d'afficher des crochets vides", () => {
+    /*
+     * Un éditeur non professionnel n'a ni SIREN, ni téléphone, ni adresse à
+     * publier. Les afficher en « [à compléter] » donnait à l'athlète une page
+     * qui semblait inachevée, pour des renseignements que la loi ne réclame
+     * pas encore à ce stade.
+     */
+    const amateur: Editeur = {
+      ...complet,
+      professionnel: false,
+      adresse: null,
+      immatriculation: null,
+      telephone: null,
+    };
+
+    const mentions = page("mentions-legales").html(amateur);
+    expect(mentions).not.toContain("à compléter");
+    expect(mentions).not.toContain("SIREN");
+    expect(mentions).not.toContain("Téléphone");
+    // Ce qui reste doit suffire à identifier et joindre l'éditeur.
+    expect(mentions).toContain("Rudy Exemple");
+    expect(mentions).toContain("contact@exemple.fr");
+    expect(mentions).toContain("non professionnel");
+
+    const confidentialite = page("confidentialite").html(amateur);
+    expect(confidentialite).not.toContain("adresse à préciser");
+    expect(confidentialite).toContain("contact@exemple.fr");
+  });
+
+  it("réclame de nouveau ces mentions dès le passage au professionnel", () => {
+    // C'est le moment du premier paiement : le vide redevient un manquement.
+    const pro: Editeur = { ...complet, professionnel: true, immatriculation: null, telephone: null };
+    const mentions = page("mentions-legales").html(pro);
+
+    expect(mentions).toContain("SIREN");
+    expect(mentions).toContain("Téléphone");
+    expect(mentions).toContain("Document incomplet");
+  });
+
+  it("affiche le nom commercial à côté de celui de l'éditeur", () => {
+    // « TriCoach » est le service ; l'éditeur est une personne. Les deux
+    // doivent être lisibles, sans que l'un se fasse passer pour l'autre.
+    const mentions = page("mentions-legales").html(complet);
+    expect(mentions).toContain("Nom commercial");
+    expect(mentions).toContain("Exemple");
   });
 
   it("échappe les valeurs saisies", () => {

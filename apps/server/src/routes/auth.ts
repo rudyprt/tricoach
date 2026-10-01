@@ -11,7 +11,7 @@ import { env, isProduction } from "../lib/env.js";
 import { ah, HttpError } from "../lib/http.js";
 import { loginRateLimit, passwordResetRateLimit, registerRateLimit } from "../lib/rateLimit.js";
 import { isValidTimeZone, safeTimeZone } from "../lib/week.js";
-import { passwordResetMail, sendMail } from "../lib/mailer.js";
+import { isMailConfigured, passwordResetMail, sendMail } from "../lib/mailer.js";
 import { syncBootstrapAdmin } from "../lib/adminBootstrap.js";
 import { CONSENT_VERSION, hasCurrentConsent } from "../lib/consent.js";
 import { clearFailedLogins, isLocked, minutesUntilUnlock, recordFailedLogin } from "../lib/loginProtection.js";
@@ -429,6 +429,24 @@ authRouter.post(
   "/forgot-password",
   passwordResetRateLimit,
   ah(async (req, res) => {
+    /*
+     * Sans SMTP, aucun message ne part : le contenu est seulement tracé dans
+     * les journaux du serveur. Répondre « un e-mail vient d'être envoyé »
+     * serait alors faux, et l'athlète attendrait indéfiniment un message qui
+     * n'existe pas — sans autre recours, puisque c'est justement son mot de
+     * passe qu'il a perdu.
+     *
+     * Le dire ne révèle rien : c'est un état du serveur, identique pour toutes
+     * les adresses, qui ne dit pas si ce compte-là existe.
+     */
+    if (!isMailConfigured()) {
+      throw new HttpError(
+        503,
+        "La réinitialisation par e-mail n'est pas disponible sur ce serveur. Contactez l'éditeur du service pour récupérer votre compte.",
+        "MAIL_UNAVAILABLE"
+      );
+    }
+
     const parsed = forgotSchema.safeParse(req.body);
     // Réponse volontairement identique dans tous les cas : l'endpoint ne doit
     // pas permettre de découvrir quels e-mails ont un compte.
@@ -459,7 +477,22 @@ authRouter.post(
       }),
     ]);
 
-    await sendMail(passwordResetMail(user.email, token));
+    /*
+     * Un échec d'envoi ne doit pas changer la réponse.
+     *
+     * Il remontait jusqu'au gestionnaire d'erreurs, qui répondait 500 — mais
+     * seulement lorsque le compte existait, puisque c'est le seul cas où un
+     * message part. Le temps d'une panne SMTP, comparer les codes de réponse
+     * suffisait donc à dresser la liste des adresses inscrites : exactement ce
+     * que la réponse générique ci-dessus existe pour empêcher.
+     *
+     * La panne est tracée côté serveur, où elle doit être vue et corrigée.
+     */
+    try {
+      await sendMail(passwordResetMail(user.email, token));
+    } catch (err) {
+      console.error("Envoi du lien de réinitialisation impossible :", err);
+    }
     res.json(genericResponse);
   })
 );
