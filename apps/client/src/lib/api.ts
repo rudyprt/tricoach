@@ -37,6 +37,8 @@ export interface AthleteProfile {
   tempsCourse: string;
   heuresSemaine: number;
   contraintes: string;
+  /** Date du consentement au traitement des données de santé, null si retiré. */
+  consentSanteAt?: string | null;
   ftpWatts: number | null;
   seuilCourseSecParKm: number | null;
   cssSecPer100m: number | null;

@@ -157,6 +157,13 @@ export function Chat() {
           {sending ? "..." : "Envoyer"}
         </button>
       </form>
+
+      {/* La nature des réponses doit être lisible là où on les lit, pas
+          seulement dans les conditions d'utilisation. */}
+      <p className="mt-2 text-center text-[11px] leading-relaxed text-doux">
+        Réponses générées par une IA, sans valeur médicale. En cas de douleur ou de malaise, consulte un
+        professionnel de santé.
+      </p>
     </div>
   );
 }

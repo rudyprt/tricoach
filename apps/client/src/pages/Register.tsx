@@ -184,7 +184,9 @@ export function Register() {
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-rose-500"
               />
               <span>
-                J'accepte les{" "}
+                {/* L'âge est une condition des CGU : la case doit le porter,
+                    sinon rien n'atteste que l'athlète l'a déclaré. */}
+                J'ai 18 ans ou plus et j'accepte les{" "}
                 <Link to="/conditions" target="_blank" className="text-rose-400 hover:underline">
                   conditions d'utilisation
                 </Link>{" "}

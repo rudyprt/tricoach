@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { ConsentementSante } from "../components/ConsentementSante";
 import { useNavigate } from "react-router-dom";
 import { api, apiErrorMessage, type Disponibilites, type Materiel } from "../lib/api";
 import { CreneauxForm } from "../components/CreneauxForm";
@@ -26,6 +27,7 @@ export function Onboarding() {
   const [disponibilites, setDisponibilites] = useState<Disponibilites>({});
   const [materiel, setMateriel] = useState<Materiel>(MATERIEL_PAR_DEFAUT);
   const [contraintes, setContraintes] = useState("");
+  const [consentSante, setConsentSante] = useState(false);
   const [ftpWatts, setFtpWatts] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,7 @@ export function Onboarding() {
         contraintes: debutant
           ? [contraintes, "Débutant : aucune course ni entraînement structuré à ce jour."].filter(Boolean).join(" — ")
           : contraintes,
+        consentSante,
         ftpWatts: ftpWatts.trim() === "" ? null : Number(ftpWatts),
         disponibilites: Object.keys(disponibilites).length > 0 ? disponibilites : null,
         materiel,
@@ -185,6 +188,7 @@ export function Onboarding() {
               rows={3}
               className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
+            <ConsentementSante coche={consentSante} onChange={setConsentSante} />
           </div>
 
           <button

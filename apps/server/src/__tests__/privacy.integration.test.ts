@@ -128,6 +128,9 @@ describeIfDb("données personnelles", () => {
         objectifDate: "2027-06-01",
         tempsCourse: "10km en 45min",
         contraintes: "douleur au genou droit",
+        // Ces informations sont des données de santé : le serveur refuse de les
+        // enregistrer sans consentement explicite, ici comme pour un athlète.
+        consentSante: true,
         heuresSemaine: 8,
       });
       await prisma.chatMessage.create({ data: { userId: user.id, role: "user", content: "Bonjour coach" } });
