@@ -84,9 +84,14 @@ export function RegulariteCard() {
                       style={{ height: `${Math.max(6, hauteurPrevu)}%` }}
                       className="flex w-full flex-col justify-end rounded-sm border border-bordure-forte bg-fond"
                     >
+                      {/* La semaine en cours n'est pas peinte en échec : elle
+                          n'est pas finie, et l'annoncer manquée un mardi est
+                          faux autant que décourageant. */}
                       <span
                         style={{ height: `${Math.min(100, part * 100)}%` }}
-                        className={`w-full rounded-sm ${semaine.tenue ? "bg-succes" : "bg-attention"}`}
+                        className={`w-full rounded-sm ${
+                          semaine.enCours ? "bg-accent" : semaine.tenue ? "bg-succes" : "bg-attention"
+                        }`}
                       />
                     </span>
                   </span>
@@ -94,7 +99,8 @@ export function RegulariteCard() {
                     {jourEtMois(semaine.weekStart)}
                   </span>
                   <span className="sr-only">
-                    Semaine du {moisCourt(semaine.weekStart)} : {formatDuree(semaine.realiseMin)} réalisés sur{" "}
+                    Semaine du {moisCourt(semaine.weekStart)}
+                    {semaine.enCours ? " (en cours)" : ""} : {formatDuree(semaine.realiseMin)} réalisés sur{" "}
                     {formatDuree(semaine.prevuMin)} prévus.
                   </span>
                 </li>
@@ -109,6 +115,10 @@ export function RegulariteCard() {
             <span className="flex items-center gap-1.5">
               <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-attention" />
               incomplète
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm bg-accent" />
+              en cours
             </span>
             <span className="flex items-center gap-1.5">
               <span aria-hidden="true" className="h-2.5 w-2.5 rounded-sm border border-bordure-forte" />

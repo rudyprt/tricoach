@@ -552,6 +552,8 @@ export interface SemaineTenue {
   seancesPrevues: number;
   seancesFaites: number;
   tenue: boolean;
+  /** Semaine encore en cours : ni tenue, ni manquée. */
+  enCours: boolean;
 }
 
 export interface Jalon {

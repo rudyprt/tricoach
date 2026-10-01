@@ -9,6 +9,8 @@ import { champsManquants, editeurComplet, type Editeur } from "../editeur";
 const base: Editeur = {
   forme: "micro-entreprise",
   nom: "Rudy Exemple",
+  nomCommercial: "Exemple",
+  professionnel: true,
   formeSociale: null,
   capital: null,
   adresse: "1 rue du Stade, 69000 Lyon",
@@ -44,10 +46,40 @@ describe("identité de l'éditeur", () => {
     expect(champsManquants({ ...base, tva: null })).toEqual([]);
   });
 
-  it("signale la configuration livrée comme incomplète", async () => {
-    // Tant que l'éditeur n'a pas rempli ses informations, les pages légales
-    // doivent afficher l'avertissement : c'est le comportement attendu.
+  it("n'exige ni numéro ni adresse tant que l'activité n'est pas professionnelle", () => {
+    /*
+     * Un particulier qui édite un service gratuit n'a pas de numéro à donner.
+     * Lui en réclamer un laisserait l'avertissement allumé pour toujours,
+     * sans aucun moyen de l'éteindre.
+     */
+    const amateur: Editeur = {
+      ...base,
+      professionnel: false,
+      adresse: null,
+      immatriculation: null,
+      telephone: null,
+    };
+    expect(champsManquants(amateur)).toEqual([]);
+    expect(editeurComplet(amateur)).toBe(true);
+  });
+
+  it("réclame les trois dès le passage au professionnel", () => {
+    // C'est le moment du premier paiement : l'avertissement doit le rappeler.
+    const devenuPro: Editeur = {
+      ...base,
+      professionnel: true,
+      adresse: null,
+      immatriculation: null,
+      telephone: null,
+    };
+    expect(champsManquants(devenuPro)).toEqual(["adresse", "immatriculation", "telephone"]);
+  });
+
+  it("tient la configuration livrée pour complète", async () => {
+    // L'éditeur a renseigné ce que la phase gratuite exige : les pages légales
+    // ne doivent plus afficher d'avertissement aux athlètes.
     const { EDITEUR } = await import("../editeur");
-    expect(editeurComplet(EDITEUR)).toBe(false);
+    expect(champsManquants(EDITEUR)).toEqual([]);
+    expect(editeurComplet(EDITEUR)).toBe(true);
   });
 });

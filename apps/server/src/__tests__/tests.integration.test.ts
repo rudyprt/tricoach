@@ -92,6 +92,38 @@ describeIfDb("tests de terrain", () => {
     expect(await prisma.fitnessTest.count({ where: { userId: user.id } })).toBe(1);
   });
 
+  it("ne pose pas le test un jour déclaré sans créneau", async () => {
+    /*
+     * Le jour était choisi par sa position — l'avant-dernier des sept — sans
+     * regarder les disponibilités. Le test tombait donc sur le samedi même
+     * quand l'athlète l'avait déclaré indisponible, et le prompt ordonnait
+     * pour la même date deux choses incompatibles : un repos imposé et un
+     * effort maximal.
+     */
+    const { user } = await athlete("sans-creneau@example.com");
+    const profil = await profilPour(user.id);
+
+    // Samedi (2026-03-07) et dimanche indisponibles.
+    const indisponibles = new Set(["2026-03-07", "2026-03-08"]);
+    const test = await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS, indisponibles);
+
+    expect(test).not.toBeNull();
+    expect(indisponibles.has(test!.date)).toBe(false);
+    // L'avant-dernier jour ENTRAÎNABLE : le jeudi, vendredi étant le dernier.
+    expect(test!.date).toBe("2026-03-05");
+  });
+
+  it("ne programme rien s'il ne reste pas deux jours entraînables", async () => {
+    // Un test demande un jour pour l'effort et un pour récupérer.
+    const { user } = await athlete("semaine-pleine@example.com");
+    const profil = await profilPour(user.id);
+
+    const test = await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS, new Set(JOURS.slice(1)));
+
+    expect(test).toBeNull();
+    expect(await prisma.fitnessTest.count({ where: { userId: user.id } })).toBe(0);
+  });
+
   it("n'en programme pas un second la même semaine", async () => {
     const { user } = await athlete("unseul@example.com");
     const profil = await profilPour(user.id);

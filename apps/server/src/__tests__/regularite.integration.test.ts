@@ -89,6 +89,61 @@ describeIfDb("régularité et jalons", () => {
     expect((await agent.get("/api/insights/regularite")).body.serie).toBe(1);
   });
 
+  it("compte les heures sur ce qui a été fait, pas sur ce qui était prévu", async () => {
+    /*
+     * Le total sommait la durée PRÉVUE pendant que les barres hebdomadaires
+     * sommaient la durée réellement faite : la même carte affichait deux
+     * chiffres qui ne pouvaient pas coïncider dès que l'athlète écourtait une
+     * sortie. L'écart valait exactement les minutes qu'il n'avait pas faites.
+     */
+    const { agent, user } = await athlete("heures@example.com");
+    const debut = addDays(startOfWeek(new Date(), "UTC"), -7);
+    const plan = await prisma.trainingPlan.create({
+      data: { userId: user.id, weekStart: debut, rawAiJson: "{}" },
+    });
+    // Six heures prévues, quatre réellement faites.
+    await prisma.session.createMany({
+      data: Array.from({ length: 6 }, (_, i) => ({
+        planId: plan.id,
+        userId: user.id,
+        date: addDays(debut, i),
+        sport: "course",
+        titre: `Séance ${i}`,
+        dureeMin: 60,
+        dureeReelleMin: 40,
+        status: "faite",
+      })),
+    });
+
+    const { body } = await agent.get("/api/insights/regularite");
+
+    expect(body.totalSeances).toBe(6);
+    expect(body.totalHeures).toBe(4);
+
+    // Et le total doit s'accorder avec la somme des semaines affichées.
+    const sommeBarres = body.semaines.reduce(
+      (t: number, s: { realiseMin: number }) => t + s.realiseMin,
+      0
+    );
+    expect(Math.round(sommeBarres / 60)).toBe(body.totalHeures);
+  });
+
+  it("marque la semaine en cours plutôt que de la déclarer manquée", async () => {
+    // Peinte comme une semaine ratée, elle annonçait un échec le mardi.
+    const { agent, user } = await athlete("marquage@example.com");
+    await semaine(user.id, 0, 5, 1);
+    await semaine(user.id, 1, 5, 5);
+
+    const { body } = await agent.get("/api/insights/regularite");
+    const courante = body.semaines.find((s: { enCours: boolean }) => s.enCours);
+    const precedente = body.semaines.filter((s: { seancesPrevues: number }) => s.seancesPrevues > 0).at(-2);
+
+    expect(courante).toBeDefined();
+    expect(courante.tenue).toBe(false);
+    expect(precedente.enCours).toBe(false);
+    expect(precedente.tenue).toBe(true);
+  });
+
   it("casse la série sur une semaine manquée", async () => {
     const { agent, user } = await athlete("cassure@example.com");
     await semaine(user.id, 1, 3, 0);
