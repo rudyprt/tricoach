@@ -310,6 +310,36 @@ sur un service Postgres.
 npm run prisma:studio
 ```
 
+## Sauvegarder la base
+
+Rien ne protège les données tant que personne ne lance ceci. Une base perdue,
+c'est la totalité des comptes, des programmes et des historiques — et, s'agissant
+de données de santé, un incident à notifier à la CNIL.
+
+```bash
+DATABASE_URL="postgresql://..." ./scripts/sauvegarde.sh
+```
+
+Le script écrit une archive compressée dans `sauvegardes/`, refuse une copie
+vide ou illisible plutôt que de la croire bonne, et efface celles de plus de
+trente jours (`RETENTION_JOURS` pour changer ce délai).
+
+Restauration :
+
+```bash
+gunzip -c sauvegardes/tricoach-AAAAMMJJ-HHMMSS.sql.gz | psql "$DATABASE_URL"
+```
+
+**Faites l'essai au moins une fois, sur une base de test.** Une sauvegarde
+jamais restaurée n'est pas une sauvegarde : on découvre qu'elle était vide le
+jour où l'on en a besoin.
+
+Deux points propres à l'hébergement gratuit de Render : la base PostgreSQL y est
+supprimée au bout de trente jours, et `DATABASE_URL` n'est pas déclarée dans
+`render.yaml` — elle se renseigne à la main dans le tableau de bord, et se perd
+donc à la moindre re-synchronisation du blueprint. Une sauvegarde régulière,
+conservée ailleurs que chez l'hébergeur, est la seule parade.
+
 ## Déploiement (Render)
 
 Le fichier `render.yaml` à la racine décrit un déploiement en un seul service web
