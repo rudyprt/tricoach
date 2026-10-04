@@ -54,11 +54,14 @@ export interface AthleteProfile {
 export const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"] as const;
 export type Jour = (typeof JOURS)[number];
 export type Moment = "matin" | "midi" | "soir" | "libre";
+/** Discipline imposée sur un créneau. « libre » laisse le coach choisir. */
+export type Discipline = "libre" | "natation" | "velo" | "course" | "renfo";
 
 export interface JourDisponible {
   disponible: boolean;
   dureeMaxMin?: number | null;
   moment?: Moment;
+  discipline?: Discipline;
 }
 
 export type Disponibilites = Partial<Record<Jour, JourDisponible>>;

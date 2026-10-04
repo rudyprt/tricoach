@@ -124,6 +124,36 @@ describeIfDb("tests de terrain", () => {
     expect(await prisma.fitnessTest.count({ where: { userId: user.id } })).toBe(0);
   });
 
+  it("évite les jours dont l'athlète a réservé la discipline", async () => {
+    /*
+     * La discipline du test n'est choisie qu'APRÈS le jour. Sans cette garde,
+     * un test de course pouvait tomber sur la date que l'athlète a réservée à
+     * la natation — et il se retrouvait avec deux séances incompatibles le
+     * même jour, ou un test qu'il ne peut pas faire.
+     */
+    const { user } = await athlete("discipline-reservee@example.com");
+    const profil = await profilPour(user.id);
+
+    // Samedi et vendredi réservés : le choix doit remonter plus tôt.
+    const reservees = new Set(["2026-03-06", "2026-03-07"]);
+    const test = await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS, new Set(), reservees);
+
+    expect(test).not.toBeNull();
+    expect(reservees.has(test!.date)).toBe(false);
+  });
+
+  it("retombe sur le choix ordinaire si l'athlète a tout réservé", async () => {
+    // Il a contraint sa semaine entière : un test au mauvais endroit vaut
+    // mieux que pas de test du tout.
+    const { user } = await athlete("tout-reserve@example.com");
+    const profil = await profilPour(user.id);
+
+    const test = await planWeeklyTest(user.id, LUNDI, phase(), profil, JOURS, new Set(), new Set(JOURS));
+
+    expect(test).not.toBeNull();
+    expect(test!.date).toBe("2026-03-07");
+  });
+
   it("n'en programme pas un second la même semaine", async () => {
     const { user } = await athlete("unseul@example.com");
     const profil = await profilPour(user.id);

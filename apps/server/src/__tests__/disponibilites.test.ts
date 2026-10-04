@@ -6,8 +6,10 @@ import {
   parseDisponibilites,
   parseMateriel,
   volumeAtteignableMin,
+  disciplinesImposees,
   type Disponibilites,
 } from "../lib/disponibilites.js";
+import { joursDeRepos, jourDeLaDate } from "../lib/reposDeclare.js";
 
 /** Lundi 2 mars 2026. */
 const LUNDI = new Date("2026-03-02T00:00:00.000Z");
@@ -82,5 +84,86 @@ describe("matériel", () => {
 
   it("ne dit rien quand le matériel n'est pas renseigné", () => {
     expect(materielPromptLines(null)).toEqual([]);
+  });
+})
+
+describe("discipline imposée sur un créneau", () => {
+  /*
+   * Un athlète n'a pas toujours le choix : la piscine n'ouvre que le mardi
+   * soir, le club court le samedi. Sans cette contrainte, le coach plaçait la
+   * natation le jour où l'athlète ne peut pas nager.
+   */
+  it("laisse le coach choisir par défaut", () => {
+    const lignes = disponibilitesPromptLines({ mardi: { disponible: true } }, LUNDI);
+    expect(lignes.join("\n")).not.toContain("DOIT être une séance");
+  });
+
+  it("impose la discipline quand elle est choisie", () => {
+    const lignes = disponibilitesPromptLines(
+      { mardi: { disponible: true, discipline: "natation" } },
+      LUNDI
+    ).join("\n");
+
+    expect(lignes).toContain("2026-03-03");
+    expect(lignes).toContain("DOIT être une séance de natation");
+    expect(lignes).toContain('sport: "natation"');
+  });
+
+  it("dit au modèle que ce n'est pas une préférence", () => {
+    // Formulé comme un goût, le modèle s'en écarte dès que ça l'arrange.
+    const lignes = disponibilitesPromptLines(
+      { jeudi: { disponible: true, discipline: "velo" } },
+      LUNDI
+    ).join("\n");
+    expect(lignes).toContain("n'est pas négociable");
+  });
+
+  it("n'impose rien sur un jour indisponible", () => {
+    const lignes = disponibilitesPromptLines(
+      { dimanche: { disponible: false, discipline: "course" } },
+      LUNDI
+    ).join("\n");
+    expect(lignes).toContain("INDISPONIBLE");
+    expect(lignes).not.toContain("DOIT être une séance");
+  });
+
+  it("relit une discipline stockée, et écarte une valeur inconnue", () => {
+    expect(parseDisponibilites({ mardi: { disponible: true, discipline: "velo" } })?.mardi?.discipline).toBe("velo");
+    expect(parseDisponibilites({ mardi: { disponible: true, discipline: "escalade" } })).toBeNull();
+  });
+
+  it("recense les dates réservées, et seulement celles-là", () => {
+    const imposees = disciplinesImposees(
+      {
+        lundi: { disponible: true, discipline: "natation" },
+        mardi: { disponible: true, discipline: "libre" },
+        mercredi: { disponible: true },
+        dimanche: { disponible: false, discipline: "course" },
+      },
+      LUNDI
+    );
+
+    expect([...imposees.entries()]).toEqual([["2026-03-02", "natation"]]);
+  });
+});
+
+describe("jour de repos déclaré après coup", () => {
+  /*
+   * Le bug signalé par les athlètes : la génération respectait bien le jour
+   * indisponible, mais le déclarer ENSUITE ne touchait pas la séance déjà
+   * posée. Ces deux fonctions sont ce sur quoi repose la correction.
+   */
+  it("retrouve le jour de la semaine d'une date de séance", () => {
+    expect(jourDeLaDate(new Date("2026-03-02T00:00:00.000Z"))).toBe("lundi");
+    // Le dimanche : le cas même du bug, et celui que `getUTCDay` place en tête.
+    expect(jourDeLaDate(new Date("2026-03-08T00:00:00.000Z"))).toBe("dimanche");
+    expect(jourDeLaDate(new Date("2026-03-07T00:00:00.000Z"))).toBe("samedi");
+  });
+
+  it("ne retient que les jours explicitement déclarés indisponibles", () => {
+    expect([...joursDeRepos(SEMAINE)]).toEqual(["lundi", "jeudi"]);
+    // Un jour absent du formulaire n'est pas un jour de repos : rien n'a été dit.
+    expect([...joursDeRepos({ mardi: { disponible: true } })]).toEqual([]);
+    expect([...joursDeRepos(null)]).toEqual([]);
   });
 });

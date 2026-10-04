@@ -24,6 +24,19 @@ import { REGLES, evaluer, type ResultatProfil, type SeanceGeneree } from "./regl
  * améliore ou dégrade ? ».
  */
 
+/*
+ * Le banc n'ouvre aucune base et ne signe aucun jeton : il construit des
+ * prompts et lit des réponses. Mais la configuration du serveur est validée
+ * d'un bloc au premier accès, si bien que lancer le banc réclamait une
+ * DATABASE_URL et un JWT_SECRET sans rapport — et l'erreur accusait le
+ * fichier .env, ce qui envoyait chercher au mauvais endroit.
+ *
+ * On renseigne donc ici des valeurs inertes pour ce que le banc n'utilise pas,
+ * afin que la seule variable réellement exigée soit la clé du modèle.
+ */
+process.env.DATABASE_URL ||= "postgresql://inutilise:inutilise@127.0.0.1:1/banc-dessai";
+process.env.JWT_SECRET ||= "banc-d-essai-aucun-jeton-n-est-signe-ici";
+
 const VERT = "\u001b[32m";
 const ROUGE = "\u001b[31m";
 const JAUNE = "\u001b[33m";

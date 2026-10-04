@@ -29,6 +29,7 @@ import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../
 import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
 import { corrigerCibles, rafraichirCibles } from "../lib/cibles.js";
 import {
+  disciplinesImposees,
   disponibilitesPromptLines,
   joursIndisponibles,
   materielPromptLines,
@@ -36,6 +37,7 @@ import {
   parseMateriel,
   volumeAtteignableMin,
 } from "../lib/disponibilites.js";
+import { DESCRIPTION_REPOS_DECLARE } from "../lib/reposDeclare.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -313,7 +315,7 @@ export function parseAiPlan(
             titre: "Repos",
             dureeMin: 0,
             distanceKm: null,
-            description: "Jour indisponible déclaré dans vos créneaux.",
+            description: DESCRIPTION_REPOS_DECLARE,
             objectif: null,
             structure: null,
           }
@@ -535,6 +537,8 @@ async function prepareAdjustment(
   facteurContexte: number,
   lignesContexte: string[],
   datesRepos: string[],
+  /** Dates dont l'athlète a réservé la discipline, pour le choix du jour de test. */
+  datesImposees: string[],
   plafondCreneaux: number | null
 ): Promise<PreparedGeneration> {
   const aujourdHui = localCalendarDate(new Date(), timezone);
@@ -567,7 +571,7 @@ async function prepareAdjustment(
   const volumeSemaine = plafondCreneaux ? Math.min(volumeBrut, plafondCreneaux) : volumeBrut;
   const maxVolumeMin = Math.max(30, volumeSemaine - volumeRealise);
 
-  const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants, new Set(datesRepos));
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, joursRestants, new Set(datesRepos), new Set(datesImposees));
 
   return {
     weekStart,
@@ -667,7 +671,7 @@ async function prepareGeneration(
       select: { date: true, sport: true, dureeMin: true, distanceKm: true, status: true, ressenti: true },
     });
 
-    const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart), new Set(datesRepos));
+    const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart), new Set(datesRepos), new Set(disciplinesImposees(disponibilites, weekStart).keys()));
 
     return {
       weekStart,
@@ -702,6 +706,7 @@ async function prepareGeneration(
       facteurContexte,
       lignesContexte,
       datesRepos,
+      [...disciplinesImposees(disponibilites, weekStart).keys()],
       plafondCreneaux
     );
   }
@@ -731,7 +736,7 @@ async function prepareGeneration(
   // périodisation peut encore la réduire (affûtage, semaine de course).
   const maxVolumeMin = borner(Math.round(baseVolumeMin * VOLUME_INCREASE_CAP * phase.volumeFactor * facteurContexte));
 
-  const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart), new Set(datesRepos));
+  const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart), new Set(datesRepos), new Set(disciplinesImposees(disponibilites, weekStart).keys()));
 
   return {
     weekStart,

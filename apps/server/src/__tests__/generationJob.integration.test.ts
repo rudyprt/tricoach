@@ -49,6 +49,22 @@ function planReply(dates: string[]) {
   };
 }
 
+/** Réponse d'un modèle qui ignore la consigne : une séance chaque jour. */
+function planSansRepos(dates: string[]) {
+  return {
+    text: JSON.stringify({
+      sessions: dates.map((date, i) => ({
+        date,
+        sport: "course",
+        titre: `Séance ${i}`,
+        dureeMin: 60,
+      })),
+    }),
+    model: "claude-sonnet-5",
+    usage: { inputTokens: 1500, outputTokens: 2000, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  };
+}
+
 /** Attend qu'une génération se termine, sans jamais boucler indéfiniment. */
 async function waitForJob(agent: ReturnType<typeof request.agent>, jobId: string) {
   for (let i = 0; i < 100; i++) {
@@ -217,5 +233,66 @@ describeIfDb("génération en tâche de fond", () => {
     expect((await bob.get(`/api/plans/jobs/${job.body.id}`)).status).toBe(404);
     expect((await bob.get("/api/plans/jobs/latest")).body).toBeNull();
     expect(await prisma.generationJob.count({ where: { userId: user.id } })).toBe(1);
+  });
+
+  it("impose le repos un jour déclaré indisponible, même si le modèle en propose une séance", async () => {
+    /*
+     * Des athlètes ont signalé une séance le dimanche alors qu'ils l'avaient
+     * déclaré indisponible. La consigne du prompt ne suffit pas : le modèle
+     * s'en écarte, et c'est au serveur de trancher.
+     */
+    const { agent, user } = await athlete("repos-impose@example.com");
+    await agent.put("/api/profile").send({
+      objectif: "Marathon",
+      objectifDate: "2027-06-01",
+      tempsCourse: "10km en 45min",
+      heuresSemaine: 6,
+      disponibilites: { dimanche: { disponible: false } },
+    });
+
+    const dates = WEEK();
+    askClaude.mockResolvedValue(planSansRepos(dates));
+
+    const lancement = await agent.post("/api/plans/generate");
+    await waitForJob(agent, lancement.body.id);
+
+    const dimanche = await prisma.session.findFirstOrThrow({
+      where: { userId: user.id, date: new Date(`${dates[6]}T00:00:00.000Z`) },
+    });
+
+    expect(dimanche.sport).toBe("repos");
+    expect(dimanche.dureeMin).toBe(0);
+  });
+
+  it("libère le jour quand l'athlète le déclare indisponible APRÈS la génération", async () => {
+    /*
+     * Le cas réellement signalé. La semaine est produite, l'athlète corrige
+     * ensuite ses créneaux — et la séance du dimanche restait en place, parce
+     * qu'enregistrer le profil ne touchait à aucune séance déjà planifiée.
+     */
+    const { agent, user } = await athlete("repos-apres@example.com");
+    const dates = WEEK();
+    askClaude.mockResolvedValue(planSansRepos(dates));
+
+    const lancement = await agent.post("/api/plans/generate");
+    await waitForJob(agent, lancement.body.id);
+
+    // Avant : le dimanche porte bien une séance.
+    const avant = await prisma.session.findFirstOrThrow({
+      where: { userId: user.id, date: new Date(`${dates[6]}T00:00:00.000Z`) },
+    });
+    expect(avant.sport).toBe("course");
+
+    await agent.put("/api/profile").send({
+      objectif: "Marathon",
+      objectifDate: "2027-06-01",
+      tempsCourse: "10km en 45min",
+      heuresSemaine: 6,
+      disponibilites: { dimanche: { disponible: false } },
+    });
+
+    const apres = await prisma.session.findFirstOrThrow({ where: { id: avant.id } });
+    expect(apres.sport).toBe("repos");
+    expect(apres.dureeMin).toBe(0);
   });
 });

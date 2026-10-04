@@ -37,10 +37,27 @@ function seuilsConnus(profile: ProfileZoneFields): Record<TestSport, boolean> {
  * ordonnait alors deux choses contradictoires pour la même date : un jour de
  * repos imposé, et un effort maximal.
  */
-function chooseTestDay(allowedDates: string[], datesRepos: ReadonlySet<string>): string | null {
+function chooseTestDay(
+  allowedDates: string[],
+  datesRepos: ReadonlySet<string>,
+  datesImposees: ReadonlySet<string>
+): string | null {
   const entrainables = allowedDates.filter((d) => !datesRepos.has(d));
   if (entrainables.length < 2) return null;
-  return entrainables[entrainables.length - 2];
+
+  /*
+   * La discipline du test n'est choisie qu'après le jour. Poser le test sur une
+   * date dont l'athlète a réservé la discipline reviendrait donc, une fois sur
+   * trois, à lui demander un test de course un jour de piscine.
+   *
+   * On préfère les dates laissées libres. S'il n'en reste pas assez — un
+   * athlète qui impose une discipline tous les jours — on retombe sur le choix
+   * ordinaire : un test au mauvais endroit vaut mieux que pas de test du tout,
+   * et c'est lui qui a contraint sa semaine.
+   */
+  const libres = entrainables.filter((d) => !datesImposees.has(d));
+  const candidats = libres.length >= 2 ? libres : entrainables;
+  return candidats[candidats.length - 2];
 }
 
 export interface ScheduledTest {
@@ -63,7 +80,9 @@ export async function planWeeklyTest(
   profile: ProfileZoneFields,
   allowedDates: string[],
   /** Jours sans créneau déclaré : aucun test ne peut y être posé. */
-  datesRepos: ReadonlySet<string> = new Set()
+  datesRepos: ReadonlySet<string> = new Set(),
+  /** Jours dont l'athlète a réservé la discipline : évités si possible. */
+  datesImposees: ReadonlySet<string> = new Set()
 ): Promise<ScheduledTest | null> {
   // Un test resté en attente depuis plus de deux semaines ne sera plus fait :
   // le laisser ouvert encombrerait l'écran de l'athlète et fausserait le
@@ -86,7 +105,7 @@ export async function planWeeklyTest(
     return { id: existant.id, protocol: PROTOCOLS[existant.sport as TestSport], date };
   }
 
-  const jour = chooseTestDay(allowedDates, datesRepos);
+  const jour = chooseTestDay(allowedDates, datesRepos, datesImposees);
   if (!jour) return null;
 
   /*

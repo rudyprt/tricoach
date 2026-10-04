@@ -17,6 +17,25 @@ export type Jour = (typeof JOURS)[number];
 export const MOMENTS = ["matin", "midi", "soir", "libre"] as const;
 export type Moment = (typeof MOMENTS)[number];
 
+/**
+ * Discipline imposée sur un créneau.
+ *
+ * L'athlète ne choisit pas toujours librement : la piscine n'ouvre que le
+ * mardi soir, le home-trainer est au bureau le jeudi, le club court le samedi.
+ * « libre » laisse le coach décider, et reste la valeur par défaut — imposer
+ * partout rendrait la semaine impossible à construire.
+ */
+export const DISCIPLINES = ["libre", "natation", "velo", "course", "renfo"] as const;
+export type Discipline = (typeof DISCIPLINES)[number];
+
+export const LIBELLES_DISCIPLINE: Record<Discipline, string> = {
+  libre: "n'importe quelle discipline",
+  natation: "natation",
+  velo: "vélo",
+  course: "course à pied",
+  renfo: "renforcement musculaire",
+};
+
 export const LIBELLES_MOMENT: Record<Moment, string> = {
   matin: "le matin",
   midi: "le midi",
@@ -29,6 +48,8 @@ export const jourSchema = z.object({
   /** Durée maximale réaliste ce jour-là, en minutes. */
   dureeMaxMin: z.number().int().min(15).max(600).nullable().optional(),
   moment: z.enum(MOMENTS).optional().default("libre"),
+  /** Discipline imposée ce jour-là. « libre » laisse le coach choisir. */
+  discipline: z.enum(DISCIPLINES).optional().default("libre"),
 });
 
 export const disponibilitesSchema = z.record(z.enum(JOURS), jourSchema).nullable().optional();
@@ -102,6 +123,30 @@ export function volumeAtteignableMin(disponibilites: Disponibilites | null): num
   return renseignes > 0 && total > 0 ? total : null;
 }
 
+/**
+ * Les disciplines imposées de la semaine, par date.
+ *
+ * Sert au reste du code — la planification des tests notamment — pour éviter
+ * de poser une séance d'une discipline sur une date réservée à une autre.
+ */
+export function disciplinesImposees(
+  disponibilites: Disponibilites | null,
+  weekStart: Date
+): Map<string, Discipline> {
+  const imposees = new Map<string, Discipline>();
+  if (!disponibilites) return imposees;
+
+  const dates = weekDays(weekStart);
+  for (const [index, jour] of JOURS.entries()) {
+    const creneau = disponibilites[jour];
+    const discipline = creneau?.discipline;
+    if (creneau?.disponible && discipline && discipline !== "libre") {
+      imposees.set(dates[index], discipline);
+    }
+  }
+  return imposees;
+}
+
 export function disponibilitesPromptLines(
   disponibilites: Disponibilites | null,
   weekStart: Date
@@ -121,11 +166,19 @@ export function disponibilitesPromptLines(
     }
 
     const duree = creneau.dureeMaxMin ? `${creneau.dureeMaxMin} min maximum` : "durée libre";
-    lignes.push(`- ${dates[index]} (${jour}) : disponible ${LIBELLES_MOMENT[creneau.moment ?? "libre"]}, ${duree}.`);
+    const discipline = creneau.discipline ?? "libre";
+    const impose =
+      discipline === "libre"
+        ? ""
+        : ` La séance de cette date DOIT être une séance de ${LIBELLES_DISCIPLINE[discipline]} (sport: "${discipline}").`;
+    lignes.push(
+      `- ${dates[index]} (${jour}) : disponible ${LIBELLES_MOMENT[creneau.moment ?? "libre"]}, ${duree}.${impose}`
+    );
   }
 
   lignes.push(
     "Ne dépasse JAMAIS la durée indiquée pour un jour donné, et ne programme aucune séance un jour marqué indisponible. Une séance qu'il ne peut pas faire vaut moins que pas de séance du tout.",
+    "Quand une discipline est imposée sur une date, elle n'est pas négociable : c'est un accès — une piscine, un home-trainer, un créneau de club — et non une préférence.",
     "Place la sortie longue sur le créneau le plus large de la semaine."
   );
 

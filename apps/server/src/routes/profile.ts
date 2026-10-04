@@ -7,8 +7,9 @@ import { ah, HttpError } from "../lib/http.js";
 import { computeTrainingZones, periodization } from "../lib/training.js";
 import { parseZoneOverrides, zoneOverridesSchema } from "../lib/zoneOverrides.js";
 import { buildZoneInputs, suggestFtp } from "../lib/zoneInputs.js";
-import { startOfWeek } from "../lib/week.js";
-import { disponibilitesSchema, materielSchema } from "../lib/disponibilites.js";
+import { startOfWeek, safeTimeZone } from "../lib/week.js";
+import { disponibilitesSchema, materielSchema, parseDisponibilites } from "../lib/disponibilites.js";
+import { libererJoursIndisponibles } from "../lib/reposDeclare.js";
 
 export const profileRouter = Router();
 profileRouter.use(requireAuth);
@@ -73,10 +74,13 @@ profileRouter.put(
       return;
     }
 
-    const profilActuel = await prisma.athleteProfile.findUnique({
-      where: { userId: req.userId! },
-      select: { consentSanteAt: true },
-    });
+    const [profilActuel, utilisateur] = await Promise.all([
+      prisma.athleteProfile.findUnique({
+        where: { userId: req.userId! },
+        select: { consentSanteAt: true },
+      }),
+      prisma.user.findUnique({ where: { id: req.userId! }, select: { timezone: true } }),
+    ]);
 
     /*
      * La date du premier consentement est conservée tant qu'il n'est pas
@@ -106,7 +110,20 @@ profileRouter.put(
       create: { ...data, userId: req.userId! },
       update: data,
     });
-    res.json(profile);
+
+    /*
+     * Déclarer un jour indisponible doit libérer la séance déjà posée ce
+     * jour-là, pas seulement les prochaines générations : sinon l'athlète
+     * corrige ses créneaux et garde sous les yeux la séance qu'il vient
+     * d'interdire.
+     */
+    const liberees = await libererJoursIndisponibles(
+      req.userId!,
+      parseDisponibilites(disponibilites ?? null),
+      safeTimeZone(utilisateur?.timezone)
+    );
+
+    res.json({ ...profile, seancesLiberees: liberees });
   })
 );
 
