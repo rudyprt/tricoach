@@ -37,6 +37,7 @@ import {
   parseMateriel,
   volumeAtteignableMin,
 } from "../lib/disponibilites.js";
+import { DESCRIPTION_REPOS_DECLARE } from "../lib/reposDeclare.js";
 import { describeActivity } from "../lib/activityMatching.js";
 
 export const plansRouter = Router();
@@ -314,7 +315,7 @@ export function parseAiPlan(
             titre: "Repos",
             dureeMin: 0,
             distanceKm: null,
-            description: "Jour indisponible déclaré dans vos créneaux.",
+            description: DESCRIPTION_REPOS_DECLARE,
             objectif: null,
             structure: null,
           }

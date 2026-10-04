@@ -39,6 +39,8 @@ export function Objectif() {
   const [fcMax, setFcMax] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /** Séances déjà planifiées libérées par un jour passé en indisponible. */
+  const [liberees, setLiberees] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // Extraite de l'effet : le calendrier de courses pilote l'objectif du profil,
@@ -79,9 +81,10 @@ export function Objectif() {
     e.preventDefault();
     setError(null);
     setSaved(false);
+    setLiberees(0);
     setLoading(true);
     try {
-      await api.put("/profile", {
+      const { data } = await api.put<{ seancesLiberees?: number }>("/profile", {
         objectif,
         objectifDate,
         ...temps,
@@ -98,6 +101,7 @@ export function Objectif() {
         fcMax: fcMax.trim() === "" ? null : Number(fcMax),
       });
       setSaved(true);
+      setLiberees(data?.seancesLiberees ?? 0);
     } catch (err) {
       setError(apiErrorMessage(err, "Impossible d'enregistrer votre profil."));
     } finally {
@@ -131,6 +135,14 @@ export function Objectif() {
           <p className="rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
             ✓ Profil mis à jour. Générez ou régénérez votre programme depuis l'onglet Programme pour qu'il tienne
             compte du changement.
+            {liberees > 0 && (
+              <>
+                {" "}
+                {liberees === 1
+                  ? "La séance déjà prévue sur un jour que vous venez de déclarer indisponible est passée en repos."
+                  : `Les ${liberees} séances déjà prévues sur des jours que vous venez de déclarer indisponibles sont passées en repos.`}
+              </>
+            )}
           </p>
         )}
 

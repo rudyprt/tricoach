@@ -9,6 +9,7 @@ import {
   disciplinesImposees,
   type Disponibilites,
 } from "../lib/disponibilites.js";
+import { joursDeRepos, jourDeLaDate } from "../lib/reposDeclare.js";
 
 /** Lundi 2 mars 2026. */
 const LUNDI = new Date("2026-03-02T00:00:00.000Z");
@@ -143,5 +144,26 @@ describe("discipline imposée sur un créneau", () => {
     );
 
     expect([...imposees.entries()]).toEqual([["2026-03-02", "natation"]]);
+  });
+});
+
+describe("jour de repos déclaré après coup", () => {
+  /*
+   * Le bug signalé par les athlètes : la génération respectait bien le jour
+   * indisponible, mais le déclarer ENSUITE ne touchait pas la séance déjà
+   * posée. Ces deux fonctions sont ce sur quoi repose la correction.
+   */
+  it("retrouve le jour de la semaine d'une date de séance", () => {
+    expect(jourDeLaDate(new Date("2026-03-02T00:00:00.000Z"))).toBe("lundi");
+    // Le dimanche : le cas même du bug, et celui que `getUTCDay` place en tête.
+    expect(jourDeLaDate(new Date("2026-03-08T00:00:00.000Z"))).toBe("dimanche");
+    expect(jourDeLaDate(new Date("2026-03-07T00:00:00.000Z"))).toBe("samedi");
+  });
+
+  it("ne retient que les jours explicitement déclarés indisponibles", () => {
+    expect([...joursDeRepos(SEMAINE)]).toEqual(["lundi", "jeudi"]);
+    // Un jour absent du formulaire n'est pas un jour de repos : rien n'a été dit.
+    expect([...joursDeRepos({ mardi: { disponible: true } })]).toEqual([]);
+    expect([...joursDeRepos(null)]).toEqual([]);
   });
 });
