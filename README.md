@@ -372,11 +372,69 @@ gunzip -c sauvegardes/tricoach-AAAAMMJJ-HHMMSS.sql.gz | psql "$DATABASE_URL"
 jamais restaurée n'est pas une sauvegarde : on découvre qu'elle était vide le
 jour où l'on en a besoin.
 
-Deux points propres à l'hébergement gratuit de Render : la base PostgreSQL y est
-supprimée au bout de trente jours, et `DATABASE_URL` n'est pas déclarée dans
-`render.yaml` — elle se renseigne à la main dans le tableau de bord, et se perd
-donc à la moindre re-synchronisation du blueprint. Une sauvegarde régulière,
-conservée ailleurs que chez l'hébergeur, est la seule parade.
+`DATABASE_URL` n'est pas déclarée dans `render.yaml` : elle se renseigne à la
+main dans le tableau de bord, et se perd donc à la moindre re-synchronisation du
+blueprint. Une sauvegarde régulière, conservée ailleurs que chez l'hébergeur, est
+la seule parade.
+
+## Changer la base de région, ou d'hébergeur
+
+La base vit chez [Neon](https://neon.tech), pas chez l'hébergeur du serveur web.
+Ce qui compte pour les données, c'est donc la région du projet Neon, et non celle
+du service Render.
+
+**Cette région se fixe à la création du projet et ne se change plus ensuite.**
+Un projet créé hors d'Europe — `us-east-2` et consorts — place les données
+d'entraînement, et les blessures déclarées avec elles, hors de l'Union
+européenne : des données de santé qui demandent alors des garanties de transfert
+qu'un projet de cette taille n'a pas envie d'écrire. La seule sortie est de
+créer un second projet à Francfort (`eu-central-1`) et d'y recopier la base.
+
+Pour lire la région actuelle, regardez le nom d'hôte de `DATABASE_URL` :
+
+```
+postgresql://...@ep-nom-du-point-123456.eu-central-1.aws.neon.tech/...
+                                        ^^^^^^^^^^^^ la région
+```
+
+### Par le navigateur, sans terminal
+
+La console Neon propose un *Import Data Assistant* : on lui donne la chaîne de
+connexion de la base d'origine, il vérifie la version et les extensions, puis
+génère et exécute la copie. Prévu pour les bases de moins de 10 Go, ce qui laisse
+de la marge ici. C'est la voie à prendre depuis un téléphone — voir la
+documentation Neon sur [l'import](https://neon.com/docs/import/migrate-intro) et
+sur le [changement de région](https://neon.com/docs/import/migrate-neon-to-another-region).
+
+### Par le script
+
+```bash
+SOURCE_DATABASE_URL="postgresql://...us-east-2.aws.neon.tech/neondb?sslmode=require" \
+CIBLE_DATABASE_URL="postgresql://...eu-central-1.aws.neon.tech/neondb?sslmode=require" \
+./scripts/migrer-base.sh
+```
+
+Le script copie la base, la restaure, puis **compare le nombre de lignes table
+par table** : une restauration qui finit sans erreur peut très bien n'avoir rien
+inséré, et c'est ce décompte qui le révèle. Il refuse une base cible non vide
+plutôt que d'écraser des données, laisse la base d'origine intacte, et conserve
+la copie dans `sauvegardes/`.
+
+### Laquelle des deux chaînes de connexion
+
+Neon en donne deux. Prenez la **directe**, celle dont le nom d'hôte ne contient
+pas `-pooler`, et ajoutez `?sslmode=require`.
+
+La raison : `npm run start` lance `prisma migrate deploy` à chaque démarrage, qui
+pose un verrou de session. Un pooler en mode transaction ne peut pas le tenir, et
+le serveur refuserait de démarrer. La chaîne mutualisée n'aurait d'intérêt qu'avec
+plusieurs instances — ce n'est pas le cas ici.
+
+### Bascule
+
+1. Chez Render, remplacez `DATABASE_URL` par la nouvelle chaîne, puis redéployez.
+2. Connectez-vous avec un compte existant : c'est la vérification qui compte.
+3. Ne supprimez l'ancien projet qu'après quelques jours sans incident.
 
 ## Déploiement (Render)
 
@@ -387,7 +445,8 @@ Le fichier `render.yaml` à la racine décrit un déploiement en un seul service
 2. Sur [render.com](https://render.com), "New +" → "Blueprint", connectez le dépôt.
 3. Render détecte `render.yaml` et crée le service. Renseignez les variables
    marquées `sync: false` dans l'onglet *Environment* du service :
-   - `DATABASE_URL` (chaîne de connexion Postgres, ex. Neon)
+   - `DATABASE_URL` (chaîne de connexion Postgres directe, ex. Neon à Francfort —
+     voir *Migrer la base vers un autre hébergeur*)
    - `ANTHROPIC_API_KEY`
    - `ADMIN_EMAILS` (facultatif, voir *Administration* plus bas)
 4. Premier déploiement : quelques minutes. L'URL fournie par Render
