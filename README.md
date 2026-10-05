@@ -377,32 +377,40 @@ main dans le tableau de bord, et se perd donc à la moindre re-synchronisation d
 blueprint. Une sauvegarde régulière, conservée ailleurs que chez l'hébergeur, est
 la seule parade.
 
-## Migrer la base vers un autre hébergeur
+## Changer la base de région, ou d'hébergeur
 
-Deux raisons de ne pas laisser la base chez Render : sur le plan gratuit, elle
-est **supprimée au bout de trente jours**, et sa région se choisit à la création
-sans pouvoir changer ensuite. Des données d'entraînement — a fortiori des
-blessures déclarées — hébergées hors de l'Union européenne demandent des
-garanties de transfert qu'un projet de cette taille n'a pas envie d'écrire.
-[Neon](https://neon.tech) offre une base permanente sur le palier gratuit et une
-région à Francfort.
+La base vit chez [Neon](https://neon.tech), pas chez l'hébergeur du serveur web.
+Ce qui compte pour les données, c'est donc la région du projet Neon, et non celle
+du service Render.
 
-**Choisissez la région au moment de créer le projet.** C'est le seul paramètre
-irréversible : la changer ensuite demande une seconde migration.
+**Cette région se fixe à la création du projet et ne se change plus ensuite.**
+Un projet créé hors d'Europe — `us-east-2` et consorts — place les données
+d'entraînement, et les blessures déclarées avec elles, hors de l'Union
+européenne : des données de santé qui demandent alors des garanties de transfert
+qu'un projet de cette taille n'a pas envie d'écrire. La seule sortie est de
+créer un second projet à Francfort (`eu-central-1`) et d'y recopier la base.
+
+Pour lire la région actuelle, regardez le nom d'hôte de `DATABASE_URL` :
+
+```
+postgresql://...@ep-nom-du-point-123456.eu-central-1.aws.neon.tech/...
+                                        ^^^^^^^^^^^^ la région
+```
 
 ### Par le navigateur, sans terminal
 
 La console Neon propose un *Import Data Assistant* : on lui donne la chaîne de
 connexion de la base d'origine, il vérifie la version et les extensions, puis
 génère et exécute la copie. Prévu pour les bases de moins de 10 Go, ce qui laisse
-de la marge ici. C'est la voie à prendre si vous n'avez pas de machine sous la
-main — voir [la documentation Neon](https://neon.com/docs/import/migrate-intro).
+de la marge ici. C'est la voie à prendre depuis un téléphone — voir la
+documentation Neon sur [l'import](https://neon.com/docs/import/migrate-intro) et
+sur le [changement de région](https://neon.com/docs/import/migrate-neon-to-another-region).
 
 ### Par le script
 
 ```bash
-SOURCE_DATABASE_URL="postgresql://...render.com/tricoach" \
-CIBLE_DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require" \
+SOURCE_DATABASE_URL="postgresql://...us-east-2.aws.neon.tech/neondb?sslmode=require" \
+CIBLE_DATABASE_URL="postgresql://...eu-central-1.aws.neon.tech/neondb?sslmode=require" \
 ./scripts/migrer-base.sh
 ```
 
@@ -426,7 +434,7 @@ plusieurs instances — ce n'est pas le cas ici.
 
 1. Chez Render, remplacez `DATABASE_URL` par la nouvelle chaîne, puis redéployez.
 2. Connectez-vous avec un compte existant : c'est la vérification qui compte.
-3. Ne supprimez l'ancienne base qu'après quelques jours sans incident.
+3. Ne supprimez l'ancien projet qu'après quelques jours sans incident.
 
 ## Déploiement (Render)
 

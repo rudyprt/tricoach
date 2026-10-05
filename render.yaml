@@ -12,7 +12,7 @@ services:
         generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false
-      # Chaîne de connexion Postgres. Prenez la chaîne DIRECTE (sans « -pooler »
+      # Chaîne de connexion Postgres (Neon, région eu-central-1). Prenez la chaîne DIRECTE (sans « -pooler »
       # dans le nom d'hôte) et ajoutez ?sslmode=require : le démarrage lance
       # « prisma migrate deploy », qui pose un verrou de session qu'un pooler en
       # mode transaction ne peut pas tenir.
