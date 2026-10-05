@@ -12,6 +12,10 @@ services:
         generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Chaîne de connexion Postgres. Prenez la chaîne DIRECTE (sans « -pooler »
+      # dans le nom d'hôte) et ajoutez ?sslmode=require : le démarrage lance
+      # « prisma migrate deploy », qui pose un verrou de session qu'un pooler en
+      # mode transaction ne peut pas tenir.
       - key: DATABASE_URL
         sync: false
       # Votre email, pour obtenir le rôle administrateur sans ligne de commande.

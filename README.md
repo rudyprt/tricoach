@@ -372,11 +372,61 @@ gunzip -c sauvegardes/tricoach-AAAAMMJJ-HHMMSS.sql.gz | psql "$DATABASE_URL"
 jamais restaurée n'est pas une sauvegarde : on découvre qu'elle était vide le
 jour où l'on en a besoin.
 
-Deux points propres à l'hébergement gratuit de Render : la base PostgreSQL y est
-supprimée au bout de trente jours, et `DATABASE_URL` n'est pas déclarée dans
-`render.yaml` — elle se renseigne à la main dans le tableau de bord, et se perd
-donc à la moindre re-synchronisation du blueprint. Une sauvegarde régulière,
-conservée ailleurs que chez l'hébergeur, est la seule parade.
+`DATABASE_URL` n'est pas déclarée dans `render.yaml` : elle se renseigne à la
+main dans le tableau de bord, et se perd donc à la moindre re-synchronisation du
+blueprint. Une sauvegarde régulière, conservée ailleurs que chez l'hébergeur, est
+la seule parade.
+
+## Migrer la base vers un autre hébergeur
+
+Deux raisons de ne pas laisser la base chez Render : sur le plan gratuit, elle
+est **supprimée au bout de trente jours**, et sa région se choisit à la création
+sans pouvoir changer ensuite. Des données d'entraînement — a fortiori des
+blessures déclarées — hébergées hors de l'Union européenne demandent des
+garanties de transfert qu'un projet de cette taille n'a pas envie d'écrire.
+[Neon](https://neon.tech) offre une base permanente sur le palier gratuit et une
+région à Francfort.
+
+**Choisissez la région au moment de créer le projet.** C'est le seul paramètre
+irréversible : la changer ensuite demande une seconde migration.
+
+### Par le navigateur, sans terminal
+
+La console Neon propose un *Import Data Assistant* : on lui donne la chaîne de
+connexion de la base d'origine, il vérifie la version et les extensions, puis
+génère et exécute la copie. Prévu pour les bases de moins de 10 Go, ce qui laisse
+de la marge ici. C'est la voie à prendre si vous n'avez pas de machine sous la
+main — voir [la documentation Neon](https://neon.com/docs/import/migrate-intro).
+
+### Par le script
+
+```bash
+SOURCE_DATABASE_URL="postgresql://...render.com/tricoach" \
+CIBLE_DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require" \
+./scripts/migrer-base.sh
+```
+
+Le script copie la base, la restaure, puis **compare le nombre de lignes table
+par table** : une restauration qui finit sans erreur peut très bien n'avoir rien
+inséré, et c'est ce décompte qui le révèle. Il refuse une base cible non vide
+plutôt que d'écraser des données, laisse la base d'origine intacte, et conserve
+la copie dans `sauvegardes/`.
+
+### Laquelle des deux chaînes de connexion
+
+Neon en donne deux. Prenez la **directe**, celle dont le nom d'hôte ne contient
+pas `-pooler`, et ajoutez `?sslmode=require`.
+
+La raison : `npm run start` lance `prisma migrate deploy` à chaque démarrage, qui
+pose un verrou de session. Un pooler en mode transaction ne peut pas le tenir, et
+le serveur refuserait de démarrer. La chaîne mutualisée n'aurait d'intérêt qu'avec
+plusieurs instances — ce n'est pas le cas ici.
+
+### Bascule
+
+1. Chez Render, remplacez `DATABASE_URL` par la nouvelle chaîne, puis redéployez.
+2. Connectez-vous avec un compte existant : c'est la vérification qui compte.
+3. Ne supprimez l'ancienne base qu'après quelques jours sans incident.
 
 ## Déploiement (Render)
 
@@ -387,7 +437,8 @@ Le fichier `render.yaml` à la racine décrit un déploiement en un seul service
 2. Sur [render.com](https://render.com), "New +" → "Blueprint", connectez le dépôt.
 3. Render détecte `render.yaml` et crée le service. Renseignez les variables
    marquées `sync: false` dans l'onglet *Environment* du service :
-   - `DATABASE_URL` (chaîne de connexion Postgres, ex. Neon)
+   - `DATABASE_URL` (chaîne de connexion Postgres directe, ex. Neon à Francfort —
+     voir *Migrer la base vers un autre hébergeur*)
    - `ANTHROPIC_API_KEY`
    - `ADMIN_EMAILS` (facultatif, voir *Administration* plus bas)
 4. Premier déploiement : quelques minutes. L'URL fournie par Render
