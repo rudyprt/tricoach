@@ -119,7 +119,16 @@ authRouter.post(
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      res.status(409).json({ error: "Un compte existe déjà avec cet email." });
+      /*
+       * Un athlète qui réessaie de s'inscrire a presque toujours oublié son
+       * mot de passe, ou n'a jamais reçu l'e-mail de vérification. Lui répondre
+       * que l'adresse est prise, sans plus, le laisse sans issue : il ne peut
+       * ni entrer ni recommencer. Le message dit donc la sortie.
+       */
+      res.status(409).json({
+        error:
+          "Un compte existe déjà avec cet e-mail. Connectez-vous, ou réinitialisez votre mot de passe si vous l'avez oublié.",
+      });
       return;
     }
 

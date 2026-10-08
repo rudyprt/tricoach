@@ -332,4 +332,108 @@ describeIfDb("administration", () => {
       expect(res.body.actions[0].targetUser.email).toBe("audite@example.com");
     });
   });
+
+  describe("athlètes assidus", () => {
+    /*
+     * La question posée en phase de test n'est pas « combien d'inscrits » mais
+     * « lesquels reviennent ». Ces tests vérifient que la mesure compte des
+     * JOURS distincts, et non des actions : dix messages le même soir ne font
+     * pas d'un athlète quelqu'un d'assidu.
+     */
+    const JOUR_MS = 24 * 60 * 60 * 1000;
+
+    async function appel(userId: string, ilYAJours: number, kind = "chat") {
+      await prisma.aiCall.create({
+        data: {
+          userId,
+          kind,
+          model: "claude-sonnet-5",
+          createdAt: new Date(Date.now() - ilYAJours * JOUR_MS),
+        },
+      });
+    }
+
+    it("classe les comptes par nombre de jours distincts, pas par volume", async () => {
+      const { agent: admin } = await signUpAdmin("assidus-admin@example.com");
+      await resetAllRateLimits();
+      const { user: regulier } = await signUp("revient@example.com");
+      await resetAllRateLimits();
+      const { user: bavard } = await signUp("une-seule-fois@example.com");
+
+      // Trois jours différents, une action chacun.
+      await appel(regulier.id, 1);
+      await appel(regulier.id, 3);
+      await appel(regulier.id, 5);
+      // Cinq actions, toutes le même jour : une seule journée de présence.
+      for (let i = 0; i < 5; i++) await appel(bavard.id, 2);
+
+      const res = await admin.get("/api/admin/assidus");
+      expect(res.status).toBe(200);
+
+      const [premier, second] = res.body.comptes;
+      expect(premier.email).toBe("revient@example.com");
+      expect(premier.joursActifs).toBe(3);
+      expect(second.email).toBe("une-seule-fois@example.com");
+      expect(second.joursActifs).toBe(1);
+      expect(second.messagesCoach).toBe(5);
+    });
+
+    it("compte une séance renseignée comme un retour", async () => {
+      const { agent: admin } = await signUpAdmin("assidus-seance@example.com");
+      await resetAllRateLimits();
+      const { user } = await signUp("athlete-seance@example.com");
+
+      const plan = await prisma.trainingPlan.create({
+        data: { userId: user.id, weekStart: new Date(), rawAiJson: "{}" },
+      });
+      await prisma.session.create({
+        data: {
+          planId: plan.id,
+          userId: user.id,
+          date: new Date(),
+          sport: "course",
+          titre: "Endurance",
+          dureeMin: 45,
+          status: "faite",
+          completedAt: new Date(Date.now() - JOUR_MS),
+        },
+      });
+
+      const res = await admin.get("/api/admin/assidus");
+      const compte = res.body.comptes.find((c: { id: string }) => c.id === user.id);
+      expect(compte.joursActifs).toBe(1);
+      expect(compte.seancesRenseignees).toBe(1);
+    });
+
+    it("compte à part ceux qui ne sont jamais revenus", async () => {
+      const { agent: admin } = await signUpAdmin("assidus-inactifs@example.com");
+      await resetAllRateLimits();
+      await signUp("fantome@example.com");
+
+      const res = await admin.get("/api/admin/assidus");
+      // L'admin et le fantôme n'ont aucune action datée : les deux sont inactifs.
+      expect(res.body.total).toBe(0);
+      expect(res.body.inactifs).toBe(2);
+    });
+
+    it("ignore ce qui est plus ancien que la période demandée", async () => {
+      const { agent: admin } = await signUpAdmin("assidus-fenetre@example.com");
+      await resetAllRateLimits();
+      const { user } = await signUp("ancien@example.com");
+
+      await appel(user.id, 40); // Hors fenêtre de 30 jours.
+      expect((await admin.get("/api/admin/assidus")).body.total).toBe(0);
+
+      // La même donnée réapparaît si l'on élargit la fenêtre.
+      const large = await admin.get("/api/admin/assidus?jours=90");
+      expect(large.body.comptes[0].email).toBe("ancien@example.com");
+    });
+
+    it("reste invisible pour un athlète", async () => {
+      // 404 et non 403 : l'espace d'administration ne révèle pas son existence.
+      const { agent } = await signUp("curieux@example.com");
+      expect((await agent.get("/api/admin/assidus")).status).toBe(404);
+    });
+  });
+
 });

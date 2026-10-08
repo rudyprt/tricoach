@@ -1,9 +1,10 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaUser, FaEnvelope, FaLock, FaEye, FaEyeSlash, FaCheck } from "react-icons/fa6";
-import { api, apiErrorMessage, browserTimeZone } from "../lib/api";
+import { api, apiErrorMessage, browserTimeZone, isHttpStatus } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "../components/Spinner";
+import { useAttenteLongue } from "../lib/attenteLongue";
 import { AthletesBackdrop } from "../components/AthletesBackdrop";
 
 function isValidEmail(value: string): boolean {
@@ -18,7 +19,10 @@ export function Register() {
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
   const [acceptConditions, setAcceptConditions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Adresse déjà prise : l'athlète a besoin d'une sortie, pas d'un refus. */
+  const [compteExistant, setCompteExistant] = useState(false);
   const [loading, setLoading] = useState(false);
+  const attenteLongue = useAttenteLongue(loading);
   const { refresh } = useAuth();
   const navigate = useNavigate();
 
@@ -38,6 +42,7 @@ export function Register() {
     if (!canSubmit) return;
     setError(null);
     setLoading(true);
+    setCompteExistant(false);
     try {
       await api.post("/auth/register", {
         name,
@@ -49,7 +54,30 @@ export function Register() {
       await refresh();
       navigate("/plans-intro");
     } catch (err) {
+      /*
+       * Adresse déjà prise : dans la très grande majorité des cas, c'est une
+       * inscription que l'athlète croit avoir ratée. Le serveur dort après
+       * quinze minutes sans visite, son réveil prend parfois une minute, et
+       * celui qui n'attend pas recommence — alors que son compte existe déjà.
+       * On tente donc de le connecter avec ce qu'il vient de saisir : si le
+       * mot de passe correspond, c'est bien son compte, et il entre.
+       *
+       * La tentative passe par la route de connexion habituelle, avec son
+       * comptage d'échecs et son verrouillage : l'inscription ne devient pas
+       * un moyen de deviner un mot de passe à l'abri de ces protections.
+       */
+      if (isHttpStatus(err, 409)) {
+        try {
+          await api.post("/auth/login", { email, password, timezone: browserTimeZone() });
+          await refresh();
+          navigate("/plans-intro");
+          return;
+        } catch {
+          // Le mot de passe ne correspond pas : on en reste au message.
+        }
+      }
       setError(apiErrorMessage(err, "Impossible de créer le compte."));
+      setCompteExistant(isHttpStatus(err, 409));
     } finally {
       setLoading(false);
     }
@@ -89,7 +117,22 @@ export function Register() {
             className="animate-fade-in-up space-y-2.5 rounded-2xl border border-bordure bg-zinc-950/80 p-4 shadow-2xl shadow-black/50 backdrop-blur-sm sm:p-5"
           >
             {error && (
-              <p className="rounded-md border border-red-900 bg-red-950/50 px-3 py-1.5 text-xs text-red-400">{error}</p>
+              <div
+                role="alert"
+                className="rounded-md border border-red-900 bg-red-950/50 px-3 py-1.5 text-xs text-red-400"
+              >
+                <p>{error}</p>
+                {compteExistant && (
+                  <p className="mt-1.5 flex gap-3">
+                    <Link to="/login" className="font-semibold text-rose-300 underline">
+                      Se connecter
+                    </Link>
+                    <Link to="/mot-de-passe-oublie" className="font-semibold text-rose-300 underline">
+                      Mot de passe oublié
+                    </Link>
+                  </p>
+                )}
+              </div>
             )}
 
             <div className="space-y-1">
@@ -207,6 +250,12 @@ export function Register() {
               {loading && <Spinner className="border-black/30 border-t-black" />}
               {loading ? "Création..." : "Créer mon compte"}
             </button>
+            {attenteLongue && (
+              <p className="text-center text-xs text-doux">
+                Le serveur se réveille, cela peut prendre une minute. Inutile de recommencer : votre inscription
+                est déjà partie.
+              </p>
+            )}
 
             <p className="text-center text-xs text-doux">
               Déjà un compte ?{" "}
