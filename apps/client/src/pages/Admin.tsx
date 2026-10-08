@@ -4,6 +4,8 @@ import {
   apiErrorMessage,
   formatUsd,
   type AdminActivityDay,
+  type AdminAssidu,
+  type AdminAssidus,
   type AdminAuditEntry,
   type AdminOverview,
   type AdminUserList,
@@ -168,7 +170,83 @@ function ConfigurationAlerts({ configuration }: { configuration: AdminOverview["
   );
 }
 
-function Overview({ overview, activity }: { overview: AdminOverview; activity: AdminActivityDay[] }) {
+/**
+ * Les athlètes qui reviennent.
+ *
+ * Un total d'inscrits ne dit pas si le produit est utilisé. Cette liste répond
+ * à la seule question qui compte en phase de test : lesquels reviennent, et
+ * lesquels ne sont jamais revenus après leur inscription.
+ */
+function Assidus({ donnees }: { donnees: AdminAssidus }) {
+  if (donnees.comptes.length === 0) {
+    return (
+      <section>
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-doux">Athlètes assidus</h2>
+        <p className="rounded-xl border border-bordure bg-zinc-950/80 p-3 text-sm text-doux">
+          Aucune activité sur les {donnees.periodeJours} derniers jours.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-doux">Athlètes assidus</h2>
+      <div className="grid grid-cols-2 gap-2">
+        <Stat
+          label={`Actifs (${donnees.periodeJours} j)`}
+          value={String(donnees.total)}
+          hint="au moins une action"
+        />
+        <Stat label="Jamais revenus" value={String(donnees.inactifs)} hint="aucune trace sur la période" />
+      </div>
+
+      <ul className="mt-2 space-y-1.5">
+        {donnees.comptes.map((c: AdminAssidu) => (
+          <li key={c.id} className="rounded-xl border border-bordure bg-zinc-950/80 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{c.name}</p>
+                <p className="truncate text-xs text-tres-doux">{c.email}</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-lg font-bold text-white">
+                  {c.joursActifs}
+                  <span className="ml-1 text-xs font-normal text-doux">
+                    jour{c.joursActifs > 1 ? "s" : ""}
+                  </span>
+                </p>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] ${PLAN_BADGE[c.plan]}`}>
+                  {PLAN_LABELS[c.plan]}
+                </span>
+              </div>
+            </div>
+            <p className="mt-1.5 text-xs text-doux">
+              {c.semainesGenerees} programme(s) · {c.seancesRenseignees} séance(s) renseignée(s) ·{" "}
+              {c.messagesCoach} message(s)
+            </p>
+            <p className="text-xs text-tres-doux">Dernière activité : {formatDate(c.derniereActivite)}</p>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-1.5 text-xs text-tres-doux">
+        Compte les jours distincts où le compte a fait quelque chose : générer un programme, renseigner une séance,
+        écrire au coach. Consulter sa semaine sans rien faire ne laisse pas de trace et n'est donc pas compté.
+      </p>
+    </section>
+  );
+}
+
+function Overview({
+  overview,
+  activity,
+  assidus,
+}: {
+  overview: AdminOverview;
+  activity: AdminActivityDay[];
+  assidus: AdminAssidus | null;
+}) {
   const { comptes, frequentation, activite, coutIa } = overview;
   return (
     <div className="space-y-5">
@@ -223,6 +301,8 @@ function Overview({ overview, activity }: { overview: AdminOverview; activity: A
           <Stat label="Objectifs à venir" value={String(activite.athletesAvecObjectifAVenir)} />
         </div>
       </section>
+
+      {assidus && <Assidus donnees={assidus} />}
 
       <section>
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-doux">Coût du coach IA</h2>
@@ -524,16 +604,19 @@ export function Admin() {
   const [tab, setTab] = useState<Tab>("vue");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [activity, setActivity] = useState<AdminActivityDay[]>([]);
+  const [assidus, setAssidus] = useState<AdminAssidus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       api.get<AdminOverview>("/admin/overview"),
       api.get<{ jours: AdminActivityDay[] }>("/admin/activity"),
+      api.get<AdminAssidus>("/admin/assidus"),
     ])
-      .then(([o, a]) => {
+      .then(([o, a, f]) => {
         setOverview(o.data);
         setActivity(a.data.jours);
+        setAssidus(f.data);
       })
       .catch((err) => setError(apiErrorMessage(err, "Impossible de charger les statistiques.")));
   }, []);
@@ -581,7 +664,7 @@ export function Admin() {
 
       {tab === "vue" &&
         (overview ? (
-          <Overview overview={overview} activity={activity} />
+          <Overview overview={overview} activity={activity} assidus={assidus} />
         ) : (
           !error && (
             <div className="flex justify-center py-8">

@@ -258,6 +258,11 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Le code HTTP d'une erreur, quand l'interface doit y réagir et pas seulement l'afficher. */
+export function isHttpStatus(err: unknown, status: number): boolean {
+  return axios.isAxiosError(err) && err.response?.status === status;
+}
+
 function hasErrorCode(err: unknown, code: string): boolean {
   return (
     axios.isAxiosError(err) &&
@@ -375,6 +380,28 @@ export interface AdminActivityDay {
   inscriptions: number;
   actifs: number;
   coutMicroUsd: number;
+}
+
+/** Un athlète et son assiduité sur la période observée. */
+export interface AdminAssidu {
+  id: string;
+  email: string;
+  name: string;
+  plan: Plan;
+  createdAt: string;
+  lastSeenAt: string | null;
+  joursActifs: number;
+  semainesGenerees: number;
+  seancesRenseignees: number;
+  messagesCoach: number;
+  derniereActivite: string | null;
+}
+
+export interface AdminAssidus {
+  periodeJours: number;
+  inactifs: number;
+  total: number;
+  comptes: AdminAssidu[];
 }
 
 export interface AdminUserRow {

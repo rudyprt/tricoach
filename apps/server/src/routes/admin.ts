@@ -202,6 +202,129 @@ adminRouter.get(
 );
 
 /* ------------------------------------------------------------------ */
+/* Athlètes assidus                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Qui revient, et à quelle fréquence.
+ *
+ * Le nombre d'inscrits ne dit rien : ce qui compte en phase de test, c'est
+ * savoir lesquels reviennent vraiment. Un athlète actif douze jours sur trente
+ * et un autre venu une seule fois pèsent pareil dans un total, et c'est le
+ * second qu'il faut rappeler.
+ *
+ * La mesure compte les jours DISTINCTS où le compte a fait quelque chose, et
+ * non les visites : générer une semaine, renseigner une séance, écrire au
+ * coach. Ouvrir l'application pour regarder sa semaine ne laisse pas de trace
+ * datée — `lastSeenAt` ne garde que le dernier passage — et reste donc invisible
+ * ici. Mieux vaut sous-estimer l'assiduité que l'inventer.
+ */
+const assidusQuerySchema = z.object({
+  jours: z.coerce.number().int().min(7).max(90).default(30),
+  limite: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+adminRouter.get(
+  "/assidus",
+  ah(async (req: AuthedRequest, res) => {
+    const parsed = assidusQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Paramètres invalides." });
+      return;
+    }
+    const { jours, limite } = parsed.data;
+    const since = daysAgo(jours);
+
+    const [appels, seances, utilisateurs] = await Promise.all([
+      prisma.aiCall.findMany({
+        where: { createdAt: { gte: since } },
+        select: { userId: true, createdAt: true, kind: true },
+      }),
+      // Une séance renseignée est le geste le plus engageant de l'application :
+      // il demande de revenir APRÈS l'entraînement.
+      prisma.session.findMany({
+        where: { completedAt: { gte: since } },
+        select: { userId: true, completedAt: true },
+      }),
+      prisma.user.findMany({
+        select: { id: true, email: true, name: true, plan: true, createdAt: true, lastSeenAt: true },
+      }),
+    ]);
+
+    interface Compteur {
+      jours: Set<string>;
+      semaines: number;
+      seances: number;
+      messages: number;
+      derniere: Date | null;
+    }
+    const parCompte = new Map<string, Compteur>();
+    const compteur = (userId: string): Compteur => {
+      let c = parCompte.get(userId);
+      if (!c) {
+        c = { jours: new Set(), semaines: 0, seances: 0, messages: 0, derniere: null };
+        parCompte.set(userId, c);
+      }
+      return c;
+    };
+    const marquer = (c: Compteur, at: Date) => {
+      c.jours.add(at.toISOString().slice(0, 10));
+      if (!c.derniere || at > c.derniere) c.derniere = at;
+    };
+
+    for (const appel of appels) {
+      const c = compteur(appel.userId);
+      marquer(c, appel.createdAt);
+      if (appel.kind === "chat") c.messages += 1;
+      else c.semaines += 1;
+    }
+    for (const seance of seances) {
+      if (!seance.completedAt) continue;
+      const c = compteur(seance.userId);
+      marquer(c, seance.completedAt);
+      c.seances += 1;
+    }
+
+    const parId = new Map(utilisateurs.map((u) => [u.id, u]));
+    const comptes = [...parCompte.entries()]
+      .map(([userId, c]) => {
+        const u = parId.get(userId);
+        if (!u) return null; // Compte supprimé depuis.
+        return {
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          plan: u.plan,
+          createdAt: u.createdAt,
+          lastSeenAt: u.lastSeenAt,
+          joursActifs: c.jours.size,
+          semainesGenerees: c.semaines,
+          seancesRenseignees: c.seances,
+          messagesCoach: c.messages,
+          derniereActivite: c.derniere,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      // À nombre de jours égal, celui qui est revenu le plus récemment d'abord :
+      // un athlète assidu le mois dernier mais absent depuis n'est pas la même
+      // histoire qu'un athlète assidu cette semaine.
+      .sort((a, b) =>
+        b.joursActifs - a.joursActifs ||
+        (b.derniereActivite?.getTime() ?? 0) - (a.derniereActivite?.getTime() ?? 0)
+      );
+
+    res.json({
+      periodeJours: jours,
+      // Comptes sans la moindre trace sur la période : l'inverse utile de la
+      // liste, et souvent le chiffre le plus parlant.
+      inactifs: utilisateurs.length - comptes.length,
+      total: comptes.length,
+      comptes: comptes.slice(0, limite),
+    });
+  })
+);
+
+/* ------------------------------------------------------------------ */
 /* Comptes                                                             */
 /* ------------------------------------------------------------------ */
 
