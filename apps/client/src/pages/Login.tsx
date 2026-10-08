@@ -4,6 +4,7 @@ import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from "react-icons/fa6";
 import { api, apiErrorMessage, browserTimeZone } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "../components/Spinner";
+import { useAttenteLongue } from "../lib/attenteLongue";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const attenteLongue = useAttenteLongue(loading);
   const { refresh } = useAuth();
   const navigate = useNavigate();
 
@@ -78,6 +80,11 @@ export function Login() {
           {loading && <Spinner className="border-black/30 border-t-black" />}
           {loading ? "Connexion..." : "Se connecter"}
         </button>
+        {attenteLongue && (
+          <p className="text-center text-xs text-doux">
+            Le serveur se réveille, cela peut prendre une minute. Inutile de recommencer.
+          </p>
+        )}
         <p className="text-center text-sm">
           <Link to="/mot-de-passe-oublie" className="text-doux underline-offset-4 hover:text-zinc-300 hover:underline">
             Mot de passe oublié ?
