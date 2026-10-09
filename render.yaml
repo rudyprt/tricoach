@@ -55,3 +55,24 @@ services:
         sync: false
       - key: STRAVA_CLIENT_SECRET
         sync: false
+
+  # Outil de gestion (apps/gestion) : CA, charges, URSSAF, utilisateurs.
+  # Service séparé, à sa propre adresse : une panne de l'un n'emporte pas
+  # l'autre, et l'application ne porte aucune page de gestion.
+  # Il lit la MÊME base : les migrations sont appliquées par le service
+  # « tricoach » au démarrage, celui-ci n'en lance aucune.
+  - type: web
+    name: tricoach-gestion
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build:gestion
+    startCommand: npm run start:gestion
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Même valeur que pour le service « tricoach ».
+      - key: DATABASE_URL
+        sync: false
+      # Secret propre à cet outil, distinct de JWT_SECRET.
+      - key: GESTION_SECRET
+        generateValue: true
