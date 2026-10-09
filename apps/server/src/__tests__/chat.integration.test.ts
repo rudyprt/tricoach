@@ -17,8 +17,24 @@ vi.mock("../lib/anthropic.js", () => ({
 function claudeReply(text: string) {
   return {
     text,
+    toolUses: [],
+    content: [{ type: "text", text }],
+    stopReason: "end_turn",
     model: "claude-sonnet-5",
     usage: { inputTokens: 1200, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  };
+}
+
+/** Réponse où le modèle demande d'enregistrer une séance. */
+function claudeOutilSeance(input: Record<string, unknown>) {
+  const bloc = { type: "tool_use", id: "toolu_test", name: "enregistrer_seance", input };
+  return {
+    text: "",
+    toolUses: [{ id: bloc.id, name: bloc.name, input }],
+    content: [bloc],
+    stopReason: "tool_use",
+    model: "claude-sonnet-5",
+    usage: { inputTokens: 1200, outputTokens: 120, cacheReadTokens: 0, cacheWriteTokens: 0 },
   };
 }
 
@@ -337,4 +353,122 @@ describeIfDb("chat", () => {
     expect((await agent.post("/api/chat").send({ content: "x".repeat(5000) })).status).toBe(400);
     expect(askClaude).not.toHaveBeenCalled();
   });
+
+  describe("séance racontée au coach", () => {
+    /*
+     * « J'ai fait ma sortie longue hier, 1h40 » se perdait dans le fil : ni
+     * dans l'historique, ni dans la charge, ni dans la semaine suivante — qui
+     * se construit pourtant sur ce qui a été réalisé.
+     */
+    const hier = () => {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    };
+
+    async function avecProgramme(userId: string) {
+      const lundi = new Date();
+      lundi.setUTCHours(0, 0, 0, 0);
+      lundi.setUTCDate(lundi.getUTCDate() - ((lundi.getUTCDay() + 6) % 7));
+      return prisma.trainingPlan.create({
+        data: { userId, weekStart: lundi, rawAiJson: "{}" },
+      });
+    }
+
+    it("marque faite la séance déjà au programme ce jour-là", async () => {
+      const { agent, user } = await signUp("declare-planifiee@example.com");
+      const plan = await avecProgramme(user.id);
+      const seance = await prisma.session.create({
+        data: {
+          planId: plan.id,
+          userId: user.id,
+          date: new Date(`${hier()}T00:00:00.000Z`),
+          sport: "course",
+          titre: "Sortie longue",
+          dureeMin: 90,
+        },
+      });
+
+      askClaude
+        .mockResolvedValueOnce(claudeOutilSeance({ date: hier(), sport: "course", dureeMin: 100, ressenti: "bien" }))
+        .mockResolvedValueOnce(claudeReply("C'est noté dans ton historique."));
+
+      const res = await agent.post("/api/chat").send({ content: "J'ai fait ma sortie longue hier, 1h40, j'étais bien." });
+      expect(res.status).toBe(201);
+      expect(res.body.seancesEnregistrees).toBe(1);
+      expect(res.body.content).toBe("C'est noté dans ton historique.");
+
+      const apres = await prisma.session.findUniqueOrThrow({ where: { id: seance.id } });
+      expect(apres.status).toBe("faite");
+      expect(apres.dureeReelleMin).toBe(100);
+      expect(apres.ressenti).toBe("bien");
+      // Pas de doublon : l'athlète raconte ce que son coach lui avait demandé.
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(1);
+    });
+
+    it("ajoute une séance qui n'était pas au programme", async () => {
+      const { agent, user } = await signUp("declare-libre@example.com");
+      await avecProgramme(user.id);
+
+      askClaude
+        .mockResolvedValueOnce(
+          claudeOutilSeance({ date: hier(), sport: "velo", dureeMin: 75, titre: "Sortie imprévue" })
+        )
+        .mockResolvedValueOnce(claudeReply("Ajoutée."));
+
+      await agent.post("/api/chat").send({ content: "Sortie vélo hier, 1h15, pas prévue." });
+
+      const seance = await prisma.session.findFirstOrThrow({ where: { userId: user.id } });
+      expect(seance).toMatchObject({ sport: "velo", status: "faite", dureeMin: 75, dureeReelleMin: 75 });
+      expect(seance.titre).toBe("Sortie imprévue");
+    });
+
+    it("refuse une date future et le dit au modèle", async () => {
+      const { agent, user } = await signUp("declare-futur@example.com");
+      await avecProgramme(user.id);
+      const demain = new Date();
+      demain.setUTCDate(demain.getUTCDate() + 1);
+
+      askClaude
+        .mockResolvedValueOnce(
+          claudeOutilSeance({ date: demain.toISOString().slice(0, 10), sport: "course", dureeMin: 40 })
+        )
+        .mockResolvedValueOnce(claudeReply("Elle n'est pas encore faite."));
+
+      const res = await agent.post("/api/chat").send({ content: "Je cours demain 40 min" });
+      expect(res.body.seancesEnregistrees).toBe(0);
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+
+      // Le modèle reçoit la raison du refus, pour pouvoir l'expliquer.
+      const resultat = askClaude.mock.calls[1][0].messages.at(-1).content[0];
+      expect(resultat.content).toContain("futur");
+    });
+
+    it("ne perd pas le message quand aucun programme ne couvre la date", async () => {
+      const { agent, user } = await signUp("declare-sans-plan@example.com");
+
+      askClaude
+        .mockResolvedValueOnce(claudeOutilSeance({ date: hier(), sport: "natation", dureeMin: 45 }))
+        .mockResolvedValueOnce(claudeReply("Je n'ai pas pu l'enregistrer."));
+
+      const res = await agent.post("/api/chat").send({ content: "J'ai nagé 45 min hier" });
+      expect(res.status).toBe(201);
+      expect(res.body.seancesEnregistrees).toBe(0);
+      // La conversation continue normalement : l'échec d'enregistrement ne
+      // doit pas faire perdre la question ni la réponse.
+      const fil = await agent.get("/api/chat");
+      expect(fil.body.messages).toHaveLength(2);
+    });
+
+    it("ne fait qu'un seul appel quand rien n'est déclaré", async () => {
+      const { agent } = await signUp("declare-rien@example.com");
+      askClaude.mockResolvedValue(claudeReply("Bonne question."));
+
+      await agent.post("/api/chat").send({ content: "Comment gérer ma semaine ?" });
+      // Le second appel n'a lieu que si une séance est réellement déclarée :
+      // le coût ne double pas à chaque message.
+      expect(askClaude).toHaveBeenCalledTimes(1);
+    });
+  });
+
 });

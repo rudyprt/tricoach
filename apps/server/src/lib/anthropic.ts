@@ -34,12 +34,28 @@ export interface ClaudeResponse {
   text: string;
   model: string;
   usage: TokenUsage;
+  /** Outils que le modèle demande d'exécuter. Vide quand il répond directement. */
+  toolUses: { id: string; name: string; input: unknown }[];
+  /** Le tour de l'assistant tel quel, à renvoyer avec les résultats d'outils. */
+  content: Anthropic.ContentBlock[];
+  stopReason: string | null;
 }
+
+/**
+ * Un tour de conversation. Le contenu peut être un simple texte, ou les blocs
+ * bruts du format — nécessaires pour renvoyer un résultat d'outil, qui n'est
+ * pas du texte.
+ */
+export type ClaudeMessage = {
+  role: "user" | "assistant";
+  content: Anthropic.MessageParam["content"];
+};
 
 export async function askClaude(params: {
   system: string;
-  messages: { role: "user" | "assistant"; content: string }[];
+  messages: ClaudeMessage[];
   maxTokens?: number;
+  tools?: Anthropic.Tool[];
 }): Promise<ClaudeResponse> {
   const anthropic = getClient();
   // Cette version du SDK ne type pas encore "thinking", mais l'API l'accepte : on le
@@ -50,11 +66,17 @@ export async function askClaude(params: {
     max_tokens: params.maxTokens ?? 2000,
     system: params.system,
     messages: params.messages,
+    ...(params.tools?.length ? { tools: params.tools } : {}),
     thinking: { type: "disabled" },
   } as any)) as Anthropic.Message;
   const textBlock = response.content.find((block) => block.type === "text");
   const text = textBlock && textBlock.type === "text" ? textBlock.text : "";
-  if (!text) {
+  const toolUses = response.content
+    .filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use")
+    .map((block) => ({ id: block.id, name: block.name, input: block.input }));
+  // Un tour qui ne contient qu'un appel d'outil n'a pas de texte, et c'est
+  // normal : ce n'est pas la réponse finale.
+  if (!text && toolUses.length === 0) {
     console.error(
       "Réponse Claude sans contenu texte. stop_reason:",
       response.stop_reason,
@@ -78,6 +100,9 @@ export async function askClaude(params: {
 
   return {
     text,
+    toolUses,
+    content: response.content,
+    stopReason: response.stop_reason ?? null,
     model: response.model ?? MODEL,
     usage: {
       inputTokens: usage.input_tokens ?? 0,
