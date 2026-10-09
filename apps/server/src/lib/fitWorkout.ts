@@ -44,7 +44,16 @@ export type Bassin = "aucune" | "25m" | "50m" | "eau_libre";
 function longueurBassinM(bassin: Bassin | null): number | null {
   if (bassin === "25m") return 25;
   if (bassin === "50m") return 50;
-  return null;
+  if (bassin === "eau_libre") return null;
+  /*
+   * Bassin inconnu — matériel jamais renseigné, ou déclaré sans accès. Le
+   * coach ne prescrit de la natation qu'à qui peut nager : si une séance en
+   * bassin existe malgré tout, mieux vaut 25 m, la taille de loin la plus
+   * répandue, qu'un fichier en minutes que la montre refusera. Une longueur
+   * inexacte décale les distances ; pas de longueur du tout rend la séance
+   * inimportable.
+   */
+  return 25;
 }
 
 /** Allure de nage la plus lente connue, en secondes aux 100 m. */

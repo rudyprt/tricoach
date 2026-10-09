@@ -232,6 +232,22 @@ describe("natation", () => {
     expect(messages.workoutStepMesgs![0].durationType).toBe("time");
   });
 
+  it("retombe sur 25 m quand le matériel n'a jamais été renseigné", () => {
+    /*
+     * Le trou du premier correctif : un athlète qui n'a pas rempli son
+     * matériel n'a pas de bassin déclaré, et sa séance repartait en minutes —
+     * donc toujours refusée par la montre.
+     */
+    const octets = construireFitWorkout(seanceNage(), zonesAvec(), null)!;
+    const { messages } = relire(octets);
+
+    expect(messages.workoutMesgs?.[0]).toMatchObject({ subSport: "lapSwimming", poolLength: 25 });
+    for (const etape of messages.workoutStepMesgs!) {
+      if (etape.intensity === "rest") continue; // La récupération reste un temps.
+      expect(etape.durationType).toBe("distance");
+    }
+  });
+
   it("laisse la course en minutes, bassin déclaré ou non", () => {
     const etapes = relire(
       construireFitWorkout({ sport: "course", titre: "Endurance", structure: structure() }, zonesAvec(), "25m")!
