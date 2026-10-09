@@ -2,6 +2,7 @@ import type { Tableau } from "../api";
 import { CATEGORIES, dateFr, euros, eurosRonds, moisLong } from "../format";
 import { EntreesSorties, Inscriptions, Repartition } from "../graphiques";
 import { Carte, Stat, tonDe } from "../ui";
+import { Installer } from "../Installer";
 
 type Bilan = Tableau["ceMois"];
 type Totaux = Tableau["cumul"]["totaux"];
@@ -50,6 +51,7 @@ export function VueEnsemble({ t }: { t: Tableau }) {
 
   return (
     <div className="space-y-6">
+      <Installer />
       {t.alertes.length > 0 && (
         <ul className="space-y-2">
           {t.alertes.map((a) => (
