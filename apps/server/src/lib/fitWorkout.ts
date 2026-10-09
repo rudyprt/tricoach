@@ -28,6 +28,51 @@ const SPORTS_FIT: Record<string, { sport: string; subSport: string }> = {
   renfo: { sport: "training", subSport: "strengthTraining" },
 };
 
+/**
+ * La natation ne s'encode pas comme la course.
+ *
+ * Une montre compte des longueurs, pas des minutes : une séance en bassin dont
+ * les blocs sont exprimés en temps est refusée à l'import, ou démarre sans
+ * jamais changer d'étape. Il lui faut des distances, et la longueur du bassin
+ * sur l'en-tête du fichier — sans elle, la montre ne sait pas convertir.
+ *
+ * En eau libre il n'y a pas de longueurs à compter : le temps redevient la
+ * bonne unité, et c'est un autre sous-sport.
+ */
+export type Bassin = "aucune" | "25m" | "50m" | "eau_libre";
+
+function longueurBassinM(bassin: Bassin | null): number | null {
+  if (bassin === "25m") return 25;
+  if (bassin === "50m") return 50;
+  return null;
+}
+
+/** Allure de nage la plus lente connue, en secondes aux 100 m. */
+function allureNage(zones: TrainingZones, texte: string): number | null {
+  const zone = zoneCitee(texte);
+  const valeur =
+    (zone ? zones.natation?.find((r) => r.zone === zone)?.value : null) ??
+    zones.natation?.find((r) => r.zone === "Z2")?.value ??
+    zones.natation?.[0]?.value ??
+    null;
+  const bornes = valeur ? bornesNumeriques(valeur) : null;
+  // La borne haute : mieux vaut une distance un peu courte qu'une séance
+  // interminable pour qui nage plus lentement que prévu.
+  return bornes ? bornes[1] : null;
+}
+
+/**
+ * Convertit une durée en distance nageable, arrondie à un nombre entier de
+ * longueurs. Une étape qui ne tombe pas juste laisse la montre au milieu du
+ * bassin, et l'athlète ne sait plus où il en est.
+ */
+function distanceNage(dureeMin: number, secondesPar100m: number | null, longueur: number): number {
+  const allure = secondesPar100m ?? 120; // 2:00/100m : repère prudent faute de mieux.
+  const metres = (dureeMin * 60 * 100) / allure;
+  const longueurs = Math.max(1, Math.round(metres / longueur));
+  return longueurs * longueur;
+}
+
 interface Etape {
   wktStepName: string;
   intensity: string;
@@ -135,10 +180,28 @@ export function lireRecuperation(texte: string | undefined): number | null {
   return total > 0 ? total * 1000 : null;
 }
 
+/** Durée d'un bloc, en minutes ou en mètres selon qu'on nage en bassin. */
+function dureeOuDistance(
+  dureeMin: number,
+  cible: string,
+  zones: TrainingZones,
+  longueurBassin: number | null
+): Pick<Etape, "durationType" | "durationValue"> {
+  if (!longueurBassin) {
+    return { durationType: "time", durationValue: dureeMin * 60 * 1000 };
+  }
+  // Les distances du format sont en centimètres.
+  return {
+    durationType: "distance",
+    durationValue: distanceNage(dureeMin, allureNage(zones, cible), longueurBassin) * 100,
+  };
+}
+
 function etapesDuCorps(
   sport: string,
   corps: SessionStructure["corps"],
-  zones: TrainingZones
+  zones: TrainingZones,
+  longueurBassin: number | null
 ): { etapes: Etape[]; repetition: { fois: number } | null } {
   const exercice = corps.exercices?.[0];
   const serie = exercice ? lireRepetitions(exercice.repetitions) : null;
@@ -150,8 +213,7 @@ function etapesDuCorps(
         {
           wktStepName: "Corps de séance",
           intensity: "active",
-          durationType: "time",
-          durationValue: Math.max(1, corps.dureeMin) * 60 * 1000,
+          ...dureeOuDistance(Math.max(1, corps.dureeMin), corps.cible, zones, longueurBassin),
           ...cibleFit(sport, corps.cible, zones),
         },
       ],
@@ -159,12 +221,28 @@ function etapesDuCorps(
     };
   }
 
+  /* En bassin, une répétition annoncée en minutes doit elle aussi devenir une
+   * distance : « 6 × 3 min » n'est pas exécutable par une montre qui compte
+   * des longueurs. Une série déjà exprimée en mètres passe telle quelle. */
+  const enTemps = serie.durationType === "time";
+  const duree: Pick<Etape, "durationType" | "durationValue"> =
+    longueurBassin && enTemps
+      ? {
+          durationType: "distance",
+          durationValue:
+            distanceNage(
+              serie.durationValue / 60000,
+              allureNage(zones, exercice.allure || corps.cible),
+              longueurBassin
+            ) * 100,
+        }
+      : { durationType: serie.durationType, durationValue: serie.durationValue };
+
   const etapes: Etape[] = [
     {
       wktStepName: exercice.repetitions.slice(0, 15),
       intensity: "interval",
-      durationType: serie.durationType,
-      durationValue: serie.durationValue,
+      ...duree,
       ...cibleFit(sport, exercice.allure || corps.cible, zones),
     },
   ];
@@ -193,10 +271,19 @@ export interface SeanceAExporter {
  * Construit le fichier. Renvoie null si la séance n'a pas de structure : un
  * fichier vide sur une montre est pire que pas de fichier du tout.
  */
-export function construireFitWorkout(seance: SeanceAExporter, zones: TrainingZones): Uint8Array | null {
+export function construireFitWorkout(
+  seance: SeanceAExporter,
+  zones: TrainingZones,
+  bassin: Bassin | null = null
+): Uint8Array | null {
   if (!seance.structure) return null;
   const { echauffement, corps, retourCalme } = seance.structure;
-  const fit = SPORTS_FIT[seance.sport] ?? { sport: "generic", subSport: "generic" };
+  const fit = { ...(SPORTS_FIT[seance.sport] ?? { sport: "generic", subSport: "generic" }) };
+
+  /* En eau libre, rien à compter : la séance reste en temps, et le sous-sport
+   * change — une montre réglée sur « bassin » attendrait des longueurs. */
+  const longueurBassin = seance.sport === "natation" ? longueurBassinM(bassin) : null;
+  if (seance.sport === "natation" && bassin === "eau_libre") fit.subSport = "openWater";
 
   const etapes: Etape[] = [];
 
@@ -204,14 +291,13 @@ export function construireFitWorkout(seance: SeanceAExporter, zones: TrainingZon
     etapes.push({
       wktStepName: "Échauffement",
       intensity: "warmup",
-      durationType: "time",
-      durationValue: echauffement.dureeMin * 60 * 1000,
+      ...dureeOuDistance(echauffement.dureeMin, echauffement.cible, zones, longueurBassin),
       ...cibleFit(seance.sport, echauffement.cible, zones),
     });
   }
 
   const debutCorps = etapes.length;
-  const { etapes: etapesCorps, repetition } = etapesDuCorps(seance.sport, corps, zones);
+  const { etapes: etapesCorps, repetition } = etapesDuCorps(seance.sport, corps, zones, longueurBassin);
   etapes.push(...etapesCorps);
 
   if (repetition) {
@@ -231,8 +317,7 @@ export function construireFitWorkout(seance: SeanceAExporter, zones: TrainingZon
     etapes.push({
       wktStepName: "Retour au calme",
       intensity: "cooldown",
-      durationType: "time",
-      durationValue: retourCalme.dureeMin * 60 * 1000,
+      ...dureeOuDistance(retourCalme.dureeMin, retourCalme.cible, zones, longueurBassin),
       ...cibleFit(seance.sport, retourCalme.cible, zones),
     });
   }
@@ -254,6 +339,9 @@ export function construireFitWorkout(seance: SeanceAExporter, zones: TrainingZon
     sport: fit.sport,
     subSport: fit.subSport,
     numValidSteps: etapes.length,
+    // Sans la longueur du bassin, la montre ne sait pas convertir les
+    // distances en longueurs, et refuse la séance.
+    ...(longueurBassin ? { poolLength: longueurBassin, poolLengthUnit: "metric" } : {}),
   });
 
   etapes.forEach((etape, index) => {

@@ -134,3 +134,110 @@ describe("fichier d'entraînement", () => {
     );
   });
 });
+
+/**
+ * La natation ne s'encode pas comme la course.
+ *
+ * Un testeur a signalé que ses séances de natation ne s'importaient pas sur sa
+ * montre. La cause : les blocs étaient exprimés en minutes, alors qu'une montre
+ * en bassin compte des longueurs — et la longueur du bassin manquait à
+ * l'en-tête, sans quoi elle ne peut rien convertir.
+ */
+describe("natation", () => {
+  const seanceNage = (exercices?: SessionStructure["corps"]["exercices"]) => ({
+    sport: "natation",
+    titre: "Seuil en bassin",
+    structure: {
+      echauffement: { dureeMin: 10, cible: "Z2 endurance", description: "" },
+      corps: { dureeMin: 20, cible: "Z4 seuil", description: "", exercices },
+      retourCalme: { dureeMin: 5, cible: "Z2 endurance", description: "" },
+    } as SessionStructure,
+  });
+
+  it("inscrit la longueur du bassin, sans quoi la montre refuse le fichier", () => {
+    const octets = construireFitWorkout(seanceNage(), zonesAvec(), "25m")!;
+    const { valide, erreurs, messages } = relire(octets);
+
+    expect(valide).toBe(true);
+    expect(erreurs).toBe(0);
+    expect(messages.workoutMesgs?.[0]).toMatchObject({
+      sport: "swimming",
+      subSport: "lapSwimming",
+      poolLength: 25,
+      poolLengthUnit: "metric",
+    });
+  });
+
+  it("exprime les blocs en distance, et non en minutes", () => {
+    const etapes = relire(construireFitWorkout(seanceNage(), zonesAvec(), "25m")!).messages.workoutStepMesgs!;
+
+    for (const etape of etapes) {
+      expect(etape.durationType).toBe("distance");
+    }
+  });
+
+  it("tombe sur un nombre entier de longueurs", () => {
+    // Une étape qui s'arrête au milieu du bassin laisse l'athlète sans repère.
+    for (const [bassin, longueur] of [["25m", 25], ["50m", 50]] as const) {
+      const etapes = relire(construireFitWorkout(seanceNage(), zonesAvec(), bassin)!).messages.workoutStepMesgs!;
+      for (const etape of etapes) {
+        // Les distances du format sont en centimètres.
+        expect((etape.durationValue as number) / 100 % longueur).toBe(0);
+      }
+    }
+  });
+
+  it("convertit la durée avec l'allure de nage de l'athlète", () => {
+    // CSS à 1:44/100m : la borne lente de Z2 tourne autour de 2 min/100 m,
+    // donc dix minutes d'échauffement valent quelques centaines de mètres.
+    const etapes = relire(construireFitWorkout(seanceNage(), zonesAvec(), "25m")!).messages.workoutStepMesgs!;
+    const echauffement = (etapes[0].durationValue as number) / 100;
+    expect(echauffement).toBeGreaterThan(300);
+    expect(echauffement).toBeLessThan(800);
+  });
+
+  it("garde en distance une série déjà annoncée en mètres", () => {
+    const etapes = relire(
+      construireFitWorkout(
+        seanceNage([{ repetitions: "8 × 100 m", allure: "Z4 seuil", recuperation: "20 s" }]),
+        zonesAvec(),
+        "25m"
+      )!
+    ).messages.workoutStepMesgs!;
+
+    expect(etapes[1]).toMatchObject({ durationType: "distance", durationValue: 100 * 100 });
+    // La récupération reste un temps : on attend au mur, on ne nage pas.
+    expect(etapes[2]).toMatchObject({ durationType: "time", durationValue: 20 * 1000 });
+  });
+
+  it("convertit aussi une série annoncée en minutes", () => {
+    const etapes = relire(
+      construireFitWorkout(
+        seanceNage([{ repetitions: "6 × 3 min", allure: "Z4 seuil", recuperation: "20 s" }]),
+        zonesAvec(),
+        "25m"
+      )!
+    ).messages.workoutStepMesgs!;
+
+    expect(etapes[1].durationType).toBe("distance");
+    expect((etapes[1].durationValue as number) / 100 % 25).toBe(0);
+  });
+
+  it("reste en temps en eau libre, où il n'y a pas de longueurs à compter", () => {
+    const octets = construireFitWorkout(seanceNage(), zonesAvec(), "eau_libre")!;
+    const { messages } = relire(octets);
+
+    expect(messages.workoutMesgs?.[0]).toMatchObject({ sport: "swimming", subSport: "openWater" });
+    expect(messages.workoutMesgs?.[0].poolLength).toBeFalsy();
+    expect(messages.workoutStepMesgs![0].durationType).toBe("time");
+  });
+
+  it("laisse la course en minutes, bassin déclaré ou non", () => {
+    const etapes = relire(
+      construireFitWorkout({ sport: "course", titre: "Endurance", structure: structure() }, zonesAvec(), "25m")!
+    ).messages.workoutStepMesgs!;
+
+    expect(etapes[0].durationType).toBe("time");
+  });
+});
+
