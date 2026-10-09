@@ -49,6 +49,17 @@ function planReply(dates: string[]) {
   };
 }
 
+/** Réponse calquée sur les dates demandées, quelles qu'elles soient. */
+function planSurDates(dates: string[]) {
+  return {
+    text: JSON.stringify({
+      sessions: dates.map((date, i) => ({ date, sport: "course", titre: `Séance ${i}`, dureeMin: 45 })),
+    }),
+    model: "claude-sonnet-5",
+    usage: { inputTokens: 1500, outputTokens: 2000, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  };
+}
+
 /** Réponse d'un modèle qui ignore la consigne : une séance chaque jour. */
 function planSansRepos(dates: string[]) {
   return {
@@ -138,7 +149,11 @@ describeIfDb("génération en tâche de fond", () => {
     expect(fini.planId).toBeTruthy();
 
     const plan = await agent.get("/api/plans/current");
-    expect(plan.body.sessions).toHaveLength(7);
+    /* La première semaine ne couvre que les jours restants : le nombre dépend
+     * donc du jour où tourne le test, et sept n'est juste qu'un lundi. */
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const attendus = dates.filter((d) => d >= aujourdHui).length;
+    expect(plan.body.sessions).toHaveLength(attendus >= 2 ? attendus : 7);
   });
 
   it("ne lance pas deux générations en parallèle", async () => {
@@ -295,4 +310,42 @@ describeIfDb("génération en tâche de fond", () => {
     expect(apres.sport).toBe("repos");
     expect(apres.dureeMin).toBe(0);
   });
+
+  it("ne programme pas les jours déjà passés de la semaine d'inscription", async () => {
+    /*
+     * Un athlète inscrit en cours de semaine recevait un programme du lundi au
+     * dimanche, dont les premiers jours étaient déjà derrière lui. Il ne reçoit
+     * plus que ce qu'il peut encore faire.
+     */
+    const { agent, user } = await athlete("milieu-semaine@example.com");
+    const dates = WEEK();
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const restants = dates.filter((d) => d >= aujourdHui);
+
+    let demandees: string[] = [];
+    askClaude.mockImplementation((params: { messages: { content: string }[] }) => {
+      // Les dates réellement demandées au modèle, lues dans le prompt.
+      demandees = params.messages[0].content.match(/\d{4}-\d{2}-\d{2}/g)?.filter((d) => dates.includes(d)) ?? [];
+      return Promise.resolve(planSurDates([...new Set(demandees)]));
+    });
+
+    const lancement = await agent.post("/api/plans/generate");
+    await waitForJob(agent, lancement.body.id);
+
+    const seances = await prisma.session.findMany({
+      where: { userId: user.id },
+      orderBy: { date: "asc" },
+    });
+    const joursProduits = seances.map((s) => s.date.toISOString().slice(0, 10));
+
+    // Aucune séance avant aujourd'hui, quel que soit le jour où tourne le test.
+    for (const jour of joursProduits) expect(jour >= aujourdHui).toBe(true);
+    // Et le dimanche mis à part, la semaine en cours reste celle qui est servie.
+    if (restants.length >= 2) {
+      expect(joursProduits).toEqual(restants);
+    } else {
+      expect(joursProduits).toHaveLength(7);
+    }
+  });
+
 });

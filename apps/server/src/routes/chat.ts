@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL } from "../lib/anthropic.js";
+import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL, type ClaudeMessage } from "../lib/anthropic.js";
+import type Anthropic from "@anthropic-ai/sdk";
+import { NOM_OUTIL_SEANCE, enregistrerSeanceDeclaree, outilSeanceFaite } from "../lib/seanceDeclaree.js";
 import { recordAiCall } from "../lib/aiUsage.js";
 import { FUSEAU_QUOTA, hasStandardAccess, quotaChatQuotidien } from "../lib/subscription.js";
 import { FENETRE_CHAT, fenetreHistorique } from "../lib/chatHistory.js";
@@ -205,6 +207,7 @@ chatRouter.post(
     const system = [
       "Tu es le coach personnel de triathlon de cet athlète, dans un chat continu.",
       "Réponds de façon concise, concrète et bienveillante, en français.",
+      "Quand l'athlète raconte une séance qu'il a faite, enregistre-la avec l'outil prévu, puis dis-lui en une phrase que c'est noté dans son historique. S'il manque la date ou la durée, demande-les-lui avant d'enregistrer.",
       profile
         ? `Profil athlète : objectif=${profile.objectif}, date objectif=${profile.objectifDate.toISOString().slice(0, 10)}, heures/semaine=${profile.heuresSemaine}, contraintes=${profile.contraintes || "aucune"}, dernier temps natation=${profile.tempsNatation || "n/a"}, dernier temps vélo=${profile.tempsVelo || "n/a"}, dernier temps course=${profile.tempsCourse || "n/a"}`
         : "L'athlète n'a pas encore rempli son profil.",
@@ -237,17 +240,52 @@ chatRouter.post(
       .join("\n");
 
     let reply: string;
+    let seancesEnregistrees = 0;
     try {
+      const messages: ClaudeMessage[] = fenetreHistorique([
+        ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        { role: "user", content },
+      ]);
+
       const response = await askClaude({
         system,
-        messages: fenetreHistorique([
-          ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-          { role: "user", content },
-        ]),
+        messages,
         maxTokens: 1000,
+        tools: [outilSeanceFaite],
       });
       reply = response.text;
-      await recordAiCall({ userId: req.userId!, kind: "chat", response, succeeded: Boolean(reply.trim()) });
+      await recordAiCall({ userId: req.userId!, kind: "chat", response, succeeded: true });
+
+      /*
+       * Le modèle demande d'enregistrer une séance : on l'exécute, puis on lui
+       * rend la main pour qu'il réponde à l'athlète en connaissance du
+       * résultat. Un second appel, mais seulement quand une séance est
+       * réellement déclarée — pas à chaque message.
+       */
+      if (response.toolUses.length > 0) {
+        const resultats: Anthropic.ToolResultBlockParam[] = [];
+        for (const appel of response.toolUses) {
+          const resultat =
+            appel.name === NOM_OUTIL_SEANCE
+              ? await enregistrerSeanceDeclaree(req.userId!, appel.input, user.timezone)
+              : { message: "Outil inconnu.", enregistree: false };
+          if (resultat.enregistree) seancesEnregistrees += 1;
+          resultats.push({ type: "tool_result", tool_use_id: appel.id, content: resultat.message });
+        }
+
+        const suite = await askClaude({
+          system,
+          messages: [
+            ...messages,
+            { role: "assistant", content: response.content },
+            { role: "user", content: resultats },
+          ],
+          maxTokens: 1000,
+          tools: [outilSeanceFaite],
+        });
+        reply = suite.text;
+        await recordAiCall({ userId: req.userId!, kind: "chat", response: suite, succeeded: Boolean(reply.trim()) });
+      }
     } catch (err) {
       await recordAiCall({ userId: req.userId!, kind: "chat", model: MODEL, succeeded: false });
       console.error("Réponse du coach IA impossible :", err);
@@ -278,6 +316,8 @@ chatRouter.post(
       }),
     ]);
 
-    res.status(201).json(saved);
+    // L'interface doit pouvoir recharger la semaine : une séance vient d'y
+    // passer en « faite » sans que l'athlète ait touché à l'écran.
+    res.status(201).json({ ...saved, seancesEnregistrees });
   })
 );
