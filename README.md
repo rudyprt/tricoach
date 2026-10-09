@@ -187,6 +187,36 @@ volontairement strict — même jour, même discipline. Un rapprochement erroné
 marquerait une séance comme faite à tort et fausserait la progression de charge
 de la semaine suivante ; mieux vaut une activité non rattachée.
 
+## Outil de gestion (`apps/gestion`)
+
+Un mini-site séparé, réservé aux administrateurs, pour piloter l'activité :
+ce que l'application a coûté depuis le début, CA et résultat mensuels et
+annuels, prélèvements URSSAF de la micro-entreprise avec leur calendrier,
+seuils de TVA et du régime micro, utilisateurs (inscrits, payants, essais,
+actifs) et point mort. Les chiffres s'actualisent toutes les 30 secondes.
+
+- **Automatique** : utilisateurs et coût de l'API IA, lus dans la base de
+  l'application. Le coût IA est agrégé par mois au moment de l'appel
+  (`CoutIaMensuel`) : il ne disparaît plus quand un compte est supprimé.
+- **Saisi à la main** : les charges (hébergement, base, domaine…) et les
+  encaissements, tant qu'aucun paiement n'est branché. Un bouton pré-remplit
+  l'encaissement du mois à partir des comptes sur une offre payante.
+- **Paramètres** : taux URSSAF (BIC services par défaut), ACRE, versement
+  libératoire, périodicité, prix des offres, taux de change. Sans date de début
+  d'activité, les prélèvements sont affichés comme une simulation.
+
+Connexion avec un compte TriCoach ayant le rôle administrateur.
+
+En local :
+
+```bash
+cp apps/gestion/.env.example apps/gestion/.env   # même DATABASE_URL que le serveur
+npm run dev:gestion                               # http://localhost:5174
+```
+
+En production, `render.yaml` déclare un second service, `tricoach-gestion`.
+Renseignez-y la même `DATABASE_URL` que le service principal.
+
 ## Mentions légales
 
 Les pages **Conditions d'utilisation**, **Politique de confidentialité** et

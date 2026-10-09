@@ -458,3 +458,77 @@ model RateLimitCounter {
 
   @@index([expiresAt])
 }
+
+/// Coût IA cumulé par mois (fuseau Europe/Paris), tenu à jour à chaque appel.
+///
+/// Les lignes `AiCall` partent en cascade avec le compte : une suppression
+/// demandée par un athlète, ou la purge d'inactivité, effaçait donc
+/// rétroactivement une dépense bel et bien facturée. Cet agrégat ne dépend
+/// d'aucun compte et sert de référence à l'outil de gestion.
+model CoutIaMensuel {
+  /// "2026-10"
+  mois         String   @id
+  coutMicroUsd BigInt   @default(0)
+  appels       Int      @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
+/// Outil de gestion (apps/gestion) : charges de l'activité, saisies à la main.
+model GestionCharge {
+  id           String    @id @default(cuid())
+  libelle      String
+  /// "hebergement" | "base_de_donnees" | "ia" | "email" | "domaine" | "logiciel" | "materiel" | "juridique" | "marketing" | "banque" | "autre"
+  categorie    String
+  /// Montant réellement payé (TTC), en centimes d'euro.
+  montantCents Int
+  /// "ponctuelle" | "mensuelle" | "annuelle"
+  frequence    String
+  /// Date de la dépense ponctuelle, ou du premier prélèvement d'une dépense récurrente.
+  debut        DateTime  @db.Date
+  /// Dernier mois facturé d'une dépense récurrente (résiliation). Nul : toujours active.
+  fin          DateTime? @db.Date
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([debut])
+}
+
+/// Outil de gestion : sommes réellement encaissées.
+model GestionEncaissement {
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  libelle      String
+  /// "abonnement" | "autre"
+  categorie    String   @default("abonnement")
+  /// Montant encaissé, en centimes d'euro : c'est l'assiette des cotisations.
+  montantCents Int
+  /// Commission du prestataire de paiement, en centimes : une charge, pas une baisse du CA.
+  fraisCents   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([date])
+}
+
+/// Outil de gestion : paramètres (taux URSSAF, prix des offres...), une seule ligne.
+model GestionParametres {
+  id        String   @id @default("unique")
+  valeurs   Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Outil de gestion : photographie mensuelle des utilisateurs.
+///
+/// Seul l'état courant figure en base (l'offre d'un compte, pas son
+/// historique) : sans cette photographie, impossible de savoir combien de
+/// payants comptait un mois passé.
+model GestionInstantane {
+  /// "2026-10"
+  mois      String   @id
+  inscrits  Int
+  standard  Int
+  premium   Int
+  essais    Int
+  actifs30j Int
+  updatedAt DateTime @updatedAt
+}
