@@ -72,7 +72,7 @@ function preparer(cas: ProfilEval) {
     maxVolumeMin,
     jours,
     system: buildSystemPrompt(false, phase),
-    user: buildFirstWeekPrompt(profil, weekStart, phase, maxVolumeMin, [], [], zones, []),
+    user: buildFirstWeekPrompt(profil, jours, phase, maxVolumeMin, [], [], zones, []),
   };
 }
 

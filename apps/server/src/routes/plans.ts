@@ -89,7 +89,7 @@ export function buildSystemPrompt(includeDebrief: boolean, phase: Periodization)
     "Tu tiens compte du niveau, de l'objectif, du temps disponible, des blessures/contraintes signalées, et de l'historique récent des séances (charge, ressenti).",
     "Tu réponds UNIQUEMENT avec un JSON valide, sans texte autour, sans balises markdown, au format exact suivant :",
     `{${includeDebrief ? `"debrief":"string",` : ""}"sessions":[{"date":"YYYY-MM-DD","sport":"natation|velo|course|renfo|repos","titre":"string","dureeMin":number,"distanceKm":number|null,"description":"string","objectif":null|"string","structure":null|{"echauffement":{"dureeMin":number,"cible":"string","description":"string"},"corps":{"dureeMin":number,"cible":"string","description":"string","exercices":[{"repetitions":"string","allure":"string","recuperation":"string"}]},"retourCalme":{"dureeMin":number,"cible":"string","description":"string"}}}]}`,
-    "Une entrée par jour de la semaine (7 entrées), y compris les jours de repos (sport: repos, dureeMin: 0, objectif: null, structure: null).",
+    "Une entrée par date demandée dans le message utilisateur, ni plus ni moins, y compris les jours de repos (sport: repos, dureeMin: 0, objectif: null, structure: null). Une semaine complète en compte sept ; une première semaine commencée en cours de route, moins.",
     "",
     `PHASE DE PRÉPARATION — ${phase.label} (objectif dans ${phase.weeksToGoal} semaine(s)). ${phase.guidance}`,
     "Cette phase prime sur toute autre considération de contenu : la semaine générée doit être cohérente avec elle.",
@@ -164,9 +164,32 @@ function profileLines(
   ];
 }
 
+/**
+ * Les dates de la toute première semaine.
+ *
+ * Elle commence le jour de l'inscription, pas le lundi : un athlète inscrit un
+ * vendredi recevait un programme du lundi au dimanche dont quatre jours étaient
+ * déjà passés — une semaine à moitié périmée, et deux jours d'essai dépensés
+ * pour rien.
+ *
+ * Le dimanche fait exception : une « semaine » d'un seul jour ne montre rien du
+ * produit, et c'est la semaine suivante qui est produite.
+ */
+export function fenetrePremiereSemaine(
+  weekStart: Date,
+  aujourdHui: string
+): { debut: Date; dates: string[] } {
+  const restants = weekDays(weekStart).filter((jour) => jour >= aujourdHui);
+  if (restants.length >= 2 && restants.length < 7) {
+    return { debut: weekStart, dates: restants };
+  }
+  const debut = restants.length === 7 ? weekStart : addDays(weekStart, 7);
+  return { debut, dates: weekDays(debut) };
+}
+
 export function buildFirstWeekPrompt(
   profile: ProfileForPrompt,
-  weekStart: Date,
+  dates: string[],
   phase: Periodization,
   maxVolumeMin: number,
   recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
@@ -189,7 +212,12 @@ export function buildFirstWeekPrompt(
     ...testLines,
     "",
     `Séances récentes (pour adapter la charge et les zones) : ${historyLines}`,
-    `Génère le programme pour les 7 jours suivants (dans cet ordre) : ${weekDays(weekStart).join(", ")}`,
+    `Génère le programme pour les ${dates.length} jour(s) suivant(s) (dans cet ordre) : ${dates.join(", ")}`,
+    ...(dates.length < 7
+      ? [
+          "Cette première semaine est déjà entamée : l'athlète vient de créer son compte. Le volume indiqué tient déjà compte des jours restants — ne cherche pas à rattraper les jours passés, et ne place pas la sortie longue un jour qui ne s'y prête pas.",
+        ]
+      : []),
   ].join("\n");
 }
 
@@ -663,7 +691,23 @@ async function prepareGeneration(
   const borner = (volume: number) => (plafondCreneaux ? Math.min(volume, plafondCreneaux) : volume);
 
   if (kind === "premiere_semaine") {
-    const maxVolumeMin = borner(Math.round(profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte));
+    /*
+     * La première semaine commence le jour de l'inscription, pas le lundi.
+     *
+     * Un athlète inscrit un vendredi recevait un programme du lundi au
+     * dimanche, dont quatre jours étaient déjà passés : une première semaine à
+     * moitié périmée, et deux jours d'essai dépensés pour rien. Il ne reçoit
+     * plus que les jours qu'il peut encore faire.
+     *
+     * Le dimanche fait exception : une « semaine » d'un seul jour ne montre
+     * rien du produit. Mieux vaut lui donner la semaine qui commence demain.
+     */
+    const { debut, dates } = fenetrePremiereSemaine(weekStart, localCalendarDate(new Date(), user.timezone));
+
+    /* Le volume suit le nombre de jours : y verser une semaine entière serait
+     * le meilleur moyen de blesser quelqu'un dès son inscription. */
+    const volumeSemaine = profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte;
+    const maxVolumeMin = borner(Math.round((volumeSemaine * dates.length) / 7));
     const recentSessions = await prisma.session.findMany({
       where: { userId, status: { in: ["faite", "manquee"] } },
       orderBy: { date: "desc" },
@@ -671,23 +715,24 @@ async function prepareGeneration(
       select: { date: true, sport: true, dureeMin: true, distanceKm: true, status: true, ressenti: true },
     });
 
-    const test = await planWeeklyTest(userId, weekStart, phase, profile, weekDays(weekStart), new Set(datesRepos), new Set(disciplinesImposees(disponibilites, weekStart).keys()));
+    const datesReposFenetre = joursIndisponibles(disponibilites, debut).filter((d) => dates.includes(d));
+    const test = await planWeeklyTest(userId, debut, phase, profile, dates, new Set(datesReposFenetre), new Set(disciplinesImposees(disponibilites, debut).keys()));
 
     return {
-      weekStart,
+      weekStart: debut,
       phase,
-      allowedDates: weekDays(weekStart),
-      datesRepos,
+      allowedDates: dates,
+      datesRepos: datesReposFenetre,
       zones,
       aiKind: "plan_generation",
       system: buildSystemPrompt(false, phase),
       userPrompt: buildFirstWeekPrompt(
         profile,
-        weekStart,
+        dates,
         phase,
         maxVolumeMin,
         recentSessions,
-        await measuredActivityLines(userId, addDays(weekStart, -21)),
+        await measuredActivityLines(userId, addDays(debut, -21)),
         zones,
         [...(test ? testPromptLines(test) : []), ...lignesContexte]
       ),
