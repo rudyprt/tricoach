@@ -7,6 +7,7 @@ import { ah, HttpError } from "../lib/http.js";
 import { zonesActuelles } from "../lib/zoneInputs.js";
 import { rafraichirCibles } from "../lib/cibles.js";
 import { construireFitWorkout, nomFichierFit } from "../lib/fitWorkout.js";
+import { parseMateriel } from "../lib/disponibilites.js";
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
@@ -164,10 +165,19 @@ sessionsRouter.get(
     const zones = await zonesActuelles(req.userId!);
     if (!zones) throw new HttpError(400, "Renseignez votre profil pour exporter une séance.");
 
+    /* La natation s'encode selon le bassin : une séance en bassin se compte en
+     * longueurs, une séance en eau libre en minutes. Sans cette information le
+     * fichier est refusé par la montre. */
+    const profil = await prisma.athleteProfile.findUnique({
+      where: { userId: req.userId! },
+      select: { materiel: true },
+    });
+    const bassin = parseMateriel(profil?.materiel)?.piscine ?? null;
+
     const serialisee = serializeSession(seance);
     const [aJour] = rafraichirCibles([serialisee], zones).seances;
 
-    const fichier = construireFitWorkout(aJour, zones);
+    const fichier = construireFitWorkout(aJour, zones, bassin);
     if (!fichier) {
       throw new HttpError(422, "Cette séance n'a pas de structure exportable (repos ou séance libre).");
     }
