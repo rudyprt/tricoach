@@ -17,7 +17,12 @@ let cached: Env | null = null;
 
 export function env(): Env {
   if (!cached) {
-    const parsed = envSchema.safeParse(process.env);
+    // Une valeur collée depuis un téléphone arrive souvent avec un retour à la
+    // ligne final : « production\n » faisait échouer le démarrage sur Render.
+    const nettoye = Object.fromEntries(
+      Object.entries(process.env).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])
+    );
+    const parsed = envSchema.safeParse(nettoye);
     if (!parsed.success) {
       const details = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
       throw new Error(`Configuration invalide (apps/gestion) :\n${details}`);
