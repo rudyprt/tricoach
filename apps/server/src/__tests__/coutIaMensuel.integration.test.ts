@@ -36,6 +36,9 @@ describeIfDb("coût IA mensuel", () => {
     });
     const response: import("../lib/anthropic.js").ClaudeResponse = {
       text: "",
+      toolUses: [],
+      content: [],
+      stopReason: "end_turn",
       model: "claude-sonnet-5",
       usage: { inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
     };
