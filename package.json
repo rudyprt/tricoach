@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "workspaces": [
     "apps/client",
-    "apps/server"
+    "apps/server",
+    "apps/gestion"
   ],
   "engines": {
     "node": ">=20"
@@ -17,11 +18,14 @@
     "prisma:studio": "npx prisma studio --schema apps/server/prisma/schema.prisma",
     "build": "npm run prisma:generate -w apps/server && npm run build -w apps/client && npm run build -w apps/server",
     "start": "npm run prisma:deploy -w apps/server && npm run start -w apps/server",
-    "test": "npm run test -w apps/server && npm run test -w apps/client",
-    "typecheck": "npm run typecheck -w apps/server && tsc -b apps/client",
-    "lint": "npm run lint -w apps/client",
+    "test": "npm run test -w apps/server && npm run test -w apps/client && npm run test -w apps/gestion",
+    "typecheck": "npm run typecheck -w apps/server && tsc -b apps/client && npm run typecheck -w apps/gestion",
+    "lint": "npm run lint -w apps/client && npm run lint -w apps/gestion",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "eval-coach": "npm run eval-coach -w apps/server"
+    "eval-coach": "npm run eval-coach -w apps/server",
+    "dev:gestion": "npm run dev -w apps/gestion",
+    "build:gestion": "npm run build -w apps/gestion",
+    "start:gestion": "npm run start -w apps/gestion"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
