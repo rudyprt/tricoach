@@ -174,6 +174,13 @@ export function Historique() {
               </div>
             ))}
           </div>
+          {/* Dire d'où vient le chiffre : ce n'est pas une mesure de
+              fréquence cardiaque, mais l'intensité prescrite des séances
+              que l'athlète a déclarées faites. */}
+          <p className="mt-2.5 text-xs text-tres-doux">
+            Calculé sur l'intensité prévue de vos séances faites, ajustée à leur durée réelle. Ce n'est pas une
+            mesure de votre fréquence cardiaque.
+          </p>
         </div>
       )}
 

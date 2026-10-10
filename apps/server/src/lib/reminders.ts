@@ -369,17 +369,39 @@ export const INTERVALLE_RAPPELS_MS = 60 * 60 * 1000;
 let minuterie: NodeJS.Timeout | null = null;
 
 /**
+ * Délai avant le passage de démarrage. Assez court pour qu'un réveil serve à
+ * quelque chose, assez long pour ne pas disputer le processeur au démarrage —
+ * ni ralentir la première requête, celle qui vient de réveiller le serveur.
+ */
+const DELAI_PREMIER_PASSAGE_MS = 20 * 1000;
+
+/**
  * Démarre le passage horaire. Il est lancé depuis le point d'entrée du serveur
  * et non depuis `createApp`, pour qu'aucun test d'intégration ne déclenche
  * d'envoi.
+ *
+ * Un passage a aussi lieu peu après le démarrage. Sur un hébergement qui
+ * endort le service après quelques minutes sans visite, la minuterie horaire ne
+ * tourne presque jamais : elle meurt avec le processus et repart de zéro au
+ * réveil, si bien qu'un rappel n'atteignait l'athlète que par hasard. Le
+ * passage au réveil rattrape ce qui était dû pendant le sommeil.
+ *
+ * Il ne peut pas doubler les envois : chaque rappel est tracé par athlète,
+ * nature et période, et un rappel déjà envoyé n'est pas renvoyé.
  */
 export function startReminderScheduler(): void {
   if (minuterie || (!isMailConfigured() && !isPushConfigured())) return;
+
+  const reveil = setTimeout(() => {
+    runReminders().catch((erreur) => console.error("[rappels] passage de démarrage échoué", erreur));
+  }, DELAI_PREMIER_PASSAGE_MS);
+  reveil.unref();
+
   minuterie = setInterval(() => {
     runReminders().catch((erreur) => console.error("[rappels] passage échoué", erreur));
   }, INTERVALLE_RAPPELS_MS);
   minuterie.unref();
-  console.log("[rappels] passage automatique toutes les heures");
+  console.log("[rappels] passage au démarrage, puis toutes les heures");
 }
 
 export function stopReminderScheduler(): void {

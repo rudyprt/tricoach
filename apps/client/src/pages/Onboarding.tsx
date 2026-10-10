@@ -17,6 +17,9 @@ type DisciplineKey = (typeof DISCIPLINES)[number]["key"];
 export function Onboarding() {
   const [objectif, setObjectif] = useState("");
   const [objectifDate, setObjectifDate] = useState("");
+  /** Deux intentions qui s'excluent : viser un chrono, ou viser l'arrivée. */
+  const [objectifTemps, setObjectifTemps] = useState("");
+  const [objectifFinir, setObjectifFinir] = useState(false);
   const [temps, setTemps] = useState<Record<DisciplineKey, string>>({
     tempsNatation: "",
     tempsVelo: "",
@@ -42,6 +45,8 @@ export function Onboarding() {
       await api.put("/profile", {
         objectif,
         objectifDate,
+        objectifTemps,
+        objectifFinir,
         ...temps,
         heuresSemaine,
         // Un débutant complet ne peut pas donner de temps de référence. Le dire
@@ -94,6 +99,45 @@ export function Onboarding() {
               onChange={(e) => setObjectifDate(e.target.value)}
               className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-zinc-300">Ce que vous visez sur cette course</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setObjectifFinir(false)}
+                aria-pressed={!objectifFinir}
+                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  objectifFinir ? "border-bordure bg-zinc-900 text-doux" : "border-rose-600 bg-rose-950/30 text-white"
+                }`}
+              >
+                Un temps précis
+              </button>
+              <button
+                type="button"
+                onClick={() => setObjectifFinir(true)}
+                aria-pressed={objectifFinir}
+                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  objectifFinir ? "border-rose-600 bg-rose-950/30 text-white" : "border-bordure bg-zinc-900 text-doux"
+                }`}
+              >
+                La terminer
+              </button>
+            </div>
+            {objectifFinir ? (
+              <p className="text-xs text-doux">
+                Votre programme ira vers l'endurance et la capacité à tenir la distance, sans travail d'allure cible.
+              </p>
+            ) : (
+              <input
+                value={objectifTemps}
+                onChange={(e) => setObjectifTemps(e.target.value)}
+                placeholder="Temps visé (facultatif) — ex : sub 5h"
+                maxLength={40}
+                className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              />
+            )}
           </div>
 
           <button

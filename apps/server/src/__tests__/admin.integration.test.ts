@@ -203,10 +203,21 @@ describeIfDb("administration", () => {
     });
 
     it("mesure la fréquentation à partir de la dernière activité", async () => {
-      const { agent } = await signUpAdmin("admin10@example.com");
+      const { agent, user: admin } = await signUpAdmin("admin10@example.com");
       const recent = await signUp("recent@example.com");
       const ancien = await signUp("ancien@example.com");
 
+      /*
+       * La présence est écrite de façon détachée de la requête : au moment où
+       * le test lit les compteurs, l'écriture déclenchée par l'inscription de
+       * l'administrateur n'a pas forcément atterri, et il manquait alors au
+       * total. On pose les trois dates nous-mêmes plutôt que de compter sur
+       * une écriture dont la date d'arrivée ne nous appartient pas.
+       */
+      await prisma.user.update({
+        where: { id: admin.id },
+        data: { lastSeenAt: new Date(Date.now() - 3600 * 1000) },
+      });
       await prisma.user.update({
         where: { id: recent.user.id },
         data: { lastSeenAt: new Date(Date.now() - 2 * 3600 * 1000) },

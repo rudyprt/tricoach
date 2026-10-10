@@ -138,15 +138,26 @@ insightsRouter.get(
     for (const s of sessions) {
       const parsed = sessionStructureSchema.safeParse(s.structure);
       if (!parsed.success) continue;
+
+      /*
+       * Les durées des blocs sont celles du programme. Quand l'athlète a
+       * corrigé la durée réelle, il a fait une version plus courte ou plus
+       * longue de la même séance : les blocs suivent dans la même proportion.
+       * Sans ce report, une sortie de 90 minutes écourtée à 60 pesait toujours
+       * 90 dans la répartition, et le graphique décrivait le programme plutôt
+       * que l'entraînement.
+       */
+      const facteur = s.dureeReelleMin && s.dureeMin > 0 ? s.dureeReelleMin / s.dureeMin : 1;
+
       for (const block of Object.values(parsed.data)) {
         const match = block.cible?.match(ZONE_REGEX);
         const zone = match ? `Zone ${match[1]}` : "Non classée";
-        zoneMinutes.set(zone, (zoneMinutes.get(zone) ?? 0) + (block.dureeMin ?? 0));
+        zoneMinutes.set(zone, (zoneMinutes.get(zone) ?? 0) + (block.dureeMin ?? 0) * facteur);
       }
     }
 
     const zones = Array.from(zoneMinutes.entries())
-      .map(([zone, minutes]) => ({ zone, minutes }))
+      .map(([zone, minutes]) => ({ zone, minutes: Math.round(minutes) }))
       .sort((a, b) => a.zone.localeCompare(b.zone));
 
     res.json({ zones, windowDays: 30 });
