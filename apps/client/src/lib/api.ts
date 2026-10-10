@@ -32,6 +32,9 @@ export interface AthleteProfile {
   userId: string;
   objectif: string;
   objectifDate: string;
+  /** Temps visé, texte libre. Vide quand l'athlète vise seulement de finir. */
+  objectifTemps: string;
+  objectifFinir: boolean;
   tempsNatation: string;
   tempsVelo: string;
   tempsCourse: string;

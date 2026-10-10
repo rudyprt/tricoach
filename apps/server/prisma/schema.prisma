@@ -193,6 +193,13 @@ model AthleteProfile {
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   objectif            String
   objectifDate        DateTime
+  /// Temps visé sur l'objectif, texte libre ("sub 5h", "2h30").
+  /// Vide quand l'athlète vise seulement de finir.
+  objectifTemps       String    @default("")
+  /// L'athlète vise à terminer, sans chronomètre. Ce n'est pas une absence
+  /// d'objectif : cela change l'entraînement, qui privilégie alors l'endurance
+  /// et la capacité à tenir la distance plutôt que le travail d'allure.
+  objectifFinir       Boolean   @default(false)
   tempsNatation       String    @default("")
   tempsVelo           String    @default("")
   tempsCourse         String    @default("")
