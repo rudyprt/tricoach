@@ -67,6 +67,8 @@ type AiPlanResponse = z.infer<typeof aiPlanSchema>;
 export interface ProfileForPrompt {
   objectif: string;
   objectifDate: Date;
+  objectifTemps?: string;
+  objectifFinir?: boolean;
   tempsNatation: string;
   tempsVelo: string;
   tempsCourse: string;
@@ -151,6 +153,17 @@ function profileLines(
   return [
     `Objectif de l'athlète : ${profile.objectif}`,
     `Date de l'objectif : ${formatDate(profile.objectifDate)} (dans ${phase.weeksToGoal} semaine(s))`,
+    /*
+     * Terminer et viser un chrono ne s'entraînent pas pareil : le premier
+     * demande de tenir la distance, le second du travail d'allure. Sans cette
+     * ligne, le coach suppose un objectif de temps et prescrit des séances
+     * dont l'athlète n'a pas besoin.
+     */
+    profile.objectifFinir
+      ? "Intention sur cette course : LA TERMINER, sans objectif de temps. Construis l'entraînement autour de l'endurance et de la capacité à tenir la distance ; ne prescris pas de travail d'allure cible, et ne parle pas de chrono."
+      : profile.objectifTemps
+        ? `Temps visé sur cette course : ${profile.objectifTemps}. Oriente les séances spécifiques vers cette allure, et dis-lui quand une séance sert directement cet objectif.`
+        : "Aucun temps visé renseigné : ne suppose pas de chrono, et reste sur une progression générale.",
     `Phase de préparation : ${phase.label}`,
     `Dernier temps natation : ${profile.tempsNatation || "non renseigné"}`,
     `Dernier temps vélo : ${profile.tempsVelo || "non renseigné"}`,

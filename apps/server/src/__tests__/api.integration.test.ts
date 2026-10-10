@@ -253,6 +253,41 @@ describeIfDb("API", () => {
         expect(profil?.contraintes ?? "").toBe("");
       });
 
+      it("retient le temps visé sur l'objectif", async () => {
+        const { agent } = await signUp("vise-un-temps@example.com");
+
+        const put = await agent.put("/api/profile").send({ ...profilDeBase, objectifTemps: "sub 5h" });
+
+        expect(put.status).toBe(200);
+        expect(put.body.objectifTemps).toBe("sub 5h");
+        expect(put.body.objectifFinir).toBe(false);
+      });
+
+      it("efface le temps visé quand l'athlète veut seulement terminer", async () => {
+        /*
+         * Garder un chrono sous « la terminer » donnerait au coach deux
+         * consignes contradictoires : viser une allure, et ne pas en parler.
+         */
+        const { agent } = await signUp("juste-finir@example.com");
+        await agent.put("/api/profile").send({ ...profilDeBase, objectifTemps: "4h30" });
+
+        const put = await agent
+          .put("/api/profile")
+          .send({ ...profilDeBase, objectifTemps: "4h30", objectifFinir: true });
+
+        expect(put.body.objectifFinir).toBe(true);
+        expect(put.body.objectifTemps).toBe("");
+      });
+
+      it("n'impose rien quand l'athlète ne dit ni l'un ni l'autre", async () => {
+        const { agent } = await signUp("sans-intention@example.com");
+
+        const put = await agent.put("/api/profile").send(profilDeBase);
+
+        expect(put.body.objectifTemps).toBe("");
+        expect(put.body.objectifFinir).toBe(false);
+      });
+
       it("les enregistre et horodate le consentement quand la case est cochée", async () => {
         const { agent } = await signUp("avecsante@example.com");
 

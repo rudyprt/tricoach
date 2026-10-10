@@ -209,7 +209,7 @@ chatRouter.post(
       "Réponds de façon concise, concrète et bienveillante, en français.",
       "Quand l'athlète raconte une séance qu'il a faite, enregistre-la avec l'outil prévu, puis dis-lui en une phrase que c'est noté dans son historique. S'il manque la date ou la durée, demande-les-lui avant d'enregistrer.",
       profile
-        ? `Profil athlète : objectif=${profile.objectif}, date objectif=${profile.objectifDate.toISOString().slice(0, 10)}, heures/semaine=${profile.heuresSemaine}, contraintes=${profile.contraintes || "aucune"}, dernier temps natation=${profile.tempsNatation || "n/a"}, dernier temps vélo=${profile.tempsVelo || "n/a"}, dernier temps course=${profile.tempsCourse || "n/a"}`
+        ? `Profil athlète : objectif=${profile.objectif}${profile.objectifFinir ? " (il vise à LA TERMINER, sans chrono : ne lui parle pas d'allure cible de course)" : profile.objectifTemps ? ` (temps visé : ${profile.objectifTemps})` : ""}, date objectif=${profile.objectifDate.toISOString().slice(0, 10)}, heures/semaine=${profile.heuresSemaine}, contraintes=${profile.contraintes || "aucune"}, dernier temps natation=${profile.tempsNatation || "n/a"}, dernier temps vélo=${profile.tempsVelo || "n/a"}, dernier temps course=${profile.tempsCourse || "n/a"}`
         : "L'athlète n'a pas encore rempli son profil.",
       phase ? `Phase de préparation actuelle : ${phase.label} (objectif dans ${phase.weeksToGoal} semaine(s)). ${phase.guidance}` : "",
       zones ? `Zones d'entraînement (à reprendre telles quelles) :\n${formatZonesForPrompt(zones)}` : "",

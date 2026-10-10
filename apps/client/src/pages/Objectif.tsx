@@ -20,6 +20,9 @@ export function Objectif() {
   const [loaded, setLoaded] = useState(false);
   const [objectif, setObjectif] = useState("");
   const [objectifDate, setObjectifDate] = useState("");
+  /** Deux intentions qui s'excluent : viser un chrono, ou viser l'arrivée. */
+  const [objectifTemps, setObjectifTemps] = useState("");
+  const [objectifFinir, setObjectifFinir] = useState(false);
   const [temps, setTemps] = useState<Record<DisciplineKey, string>>({
     tempsNatation: "",
     tempsVelo: "",
@@ -50,6 +53,8 @@ export function Objectif() {
       if (data) {
         setObjectif(data.objectif);
         setObjectifDate(data.objectifDate.slice(0, 10));
+        setObjectifTemps(data.objectifTemps ?? "");
+        setObjectifFinir(Boolean(data.objectifFinir));
         setTemps({
           tempsNatation: data.tempsNatation,
           tempsVelo: data.tempsVelo,
@@ -87,6 +92,8 @@ export function Objectif() {
       const { data } = await api.put<{ seancesLiberees?: number }>("/profile", {
         objectif,
         objectifDate,
+        objectifTemps,
+        objectifFinir,
         ...temps,
         heuresSemaine,
         contraintes,
@@ -166,6 +173,56 @@ export function Objectif() {
             onChange={(e) => setObjectifDate(e.target.value)}
             className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-zinc-300">Ce que vous visez sur cette course</label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setObjectifFinir(false)}
+              aria-pressed={!objectifFinir}
+              className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                objectifFinir
+                  ? "border-bordure bg-zinc-900 text-doux"
+                  : "border-rose-600 bg-rose-950/30 text-white"
+              }`}
+            >
+              Un temps précis
+            </button>
+            <button
+              type="button"
+              onClick={() => setObjectifFinir(true)}
+              aria-pressed={objectifFinir}
+              className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                objectifFinir
+                  ? "border-rose-600 bg-rose-950/30 text-white"
+                  : "border-bordure bg-zinc-900 text-doux"
+              }`}
+            >
+              La terminer
+            </button>
+          </div>
+
+          {objectifFinir ? (
+            <p className="text-xs text-doux">
+              Votre programme sera construit autour de l'endurance et de la capacité à tenir la distance, sans
+              travail d'allure cible.
+            </p>
+          ) : (
+            <>
+              <input
+                value={objectifTemps}
+                onChange={(e) => setObjectifTemps(e.target.value)}
+                placeholder="Ex : sub 5h, 2h30, 45min"
+                maxLength={40}
+                className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
+              />
+              <p className="text-xs text-doux">
+                Facultatif. Renseigné, il oriente les séances spécifiques vers cette allure.
+              </p>
+            </>
+          )}
         </div>
 
         <div className="space-y-2">

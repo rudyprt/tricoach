@@ -24,6 +24,9 @@ const profileSchema = z.object({
   tempsVelo: z.string().max(100).optional().default(""),
   tempsCourse: z.string().max(100).optional().default(""),
   heuresSemaine: z.number().positive("Indiquez un nombre d'heures positif.").max(40, "40 heures maximum par semaine."),
+  /** Temps visé, en texte libre. Vide quand l'athlète vise seulement de finir. */
+  objectifTemps: z.string().trim().max(40).optional().default(""),
+  objectifFinir: z.boolean().optional().default(false),
   contraintes: z.string().max(1000).optional().default(""),
   /** Case cochée sous le champ des blessures. Absente vaut refus. */
   consentSante: z.boolean().optional().default(false),
@@ -56,7 +59,7 @@ profileRouter.put(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Données invalides." });
       return;
     }
-    const { objectifDate, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcSeuilVelo, fcMax, disponibilites, materiel, consentSante, ...rest } =
+    const { objectifDate, objectifTemps, objectifFinir, ftpWatts, seuilCourseSecParKm, cssSecPer100m, fcSeuil, fcSeuilVelo, fcMax, disponibilites, materiel, consentSante, ...rest } =
       parsed.data;
 
     /*
@@ -88,8 +91,15 @@ profileRouter.put(
      * ou décocher la case retire le consentement, et l'horodatage avec.
      */
     const consentSanteAt = contraintes && consentSante ? (profilActuel?.consentSanteAt ?? new Date()) : null;
+    /*
+     * Les deux intentions s'excluent : viser un temps, ou viser l'arrivée.
+     * Garder un chrono sous une case « juste finir » cochée donnerait au coach
+     * deux consignes contradictoires.
+     */
     const data = {
       ...rest,
+      objectifFinir,
+      objectifTemps: objectifFinir ? "" : objectifTemps,
       contraintes,
       consentSanteAt,
       // Prisma distingue « absent » de « null » sur une colonne JSON : sans
