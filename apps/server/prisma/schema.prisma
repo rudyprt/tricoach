@@ -60,6 +60,7 @@ model User {
   partages               SharedWeek[]
   pauses                 TrainingPause[]
   races                  Race[]
+  consignesCoach         ConsigneCoach[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -281,6 +282,22 @@ model Session {
 
   @@index([userId, date])
   @@index([planId])
+}
+
+/// Ce que l'athlète a demandé au coach dans le chat pour ses programmes
+/// (« le renfo le lundi », « pas de natation le vendredi »). Relu à chaque
+/// génération de semaine : sans elle, la demande se perdait dans le fil.
+model ConsigneCoach {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  texte     String
+  /// Fin de validité d'une consigne temporaire (déplacement, blessure passagère) ;
+  /// null pour une consigne permanente.
+  jusquAu   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model ChatMessage {

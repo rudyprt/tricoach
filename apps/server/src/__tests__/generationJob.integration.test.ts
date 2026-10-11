@@ -210,6 +210,20 @@ describeIfDb("génération en tâche de fond", () => {
     }
   });
 
+  it("applique à la semaine les consignes données au coach dans le chat", async () => {
+    const { agent, user } = await athlete("consigne-semaine@example.com");
+    await prisma.consigneCoach.create({ data: { userId: user.id, texte: "Placer le renforcement le lundi." } });
+    const dates = WEEK();
+    askClaude.mockResolvedValue(planReply(dates));
+
+    const lancement = await agent.post("/api/plans/generate");
+    await waitForJob(agent, lancement.body.id);
+
+    const prompt = askClaude.mock.calls[0][0].messages[0].content as string;
+    expect(prompt).toContain("CONSIGNES DONNÉES PAR L'ATHLÈTE");
+    expect(prompt).toContain("Placer le renforcement le lundi.");
+  });
+
   it("ne lance pas deux générations en parallèle", async () => {
     const { agent } = await athlete("double@example.com");
     const dates = WEEK();

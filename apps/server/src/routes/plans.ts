@@ -40,6 +40,7 @@ import {
 import { DESCRIPTION_REPOS_DECLARE } from "../lib/reposDeclare.js";
 import { describeActivity } from "../lib/activityMatching.js";
 import { renfoPromptLines } from "../lib/renforcement.js";
+import { consignesActives, consignesPromptLines } from "../lib/consignesCoach.js";
 
 export const plansRouter = Router();
 plansRouter.use(requireAuth);
@@ -709,6 +710,9 @@ async function prepareGeneration(
     ...chargePromptLines(charge),
     ...disponibilitesPromptLines(disponibilites, weekStart),
     ...materielPromptLines(materiel),
+    // Ce que l'athlète a demandé au coach dans le chat : sans ces lignes, la
+    // génération ignorait tout ce qui s'y disait.
+    ...consignesPromptLines(await consignesActives(userId, user.timezone)),
   ];
 
   /** Applique le plafond des créneaux au volume calculé par la périodisation. */

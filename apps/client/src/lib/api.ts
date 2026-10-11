@@ -204,6 +204,13 @@ export function isGenerationRunning(job: GenerationJob | null): boolean {
   return job?.status === "en_attente" || job?.status === "en_cours";
 }
 
+/** Une demande faite au coach dans le chat, appliquée aux semaines générées. */
+export interface ConsigneCoach {
+  id: string;
+  texte: string;
+  jusquAu: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
