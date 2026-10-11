@@ -35,6 +35,11 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
         <span className="text-xs text-doux">{block.dureeMin} min</span>
       </div>
       <p className="mb-1 text-xs font-medium text-zinc-300">{block.cible}</p>
+      {block.fc && (
+        <p className="mb-1 inline-flex items-center gap-1 rounded-full bg-rose-950/60 px-2 py-0.5 text-xs font-semibold text-rose-300">
+          <span aria-hidden="true">❤️</span> {block.fc}
+        </p>
+      )}
       <p className="text-sm text-doux">{block.description}</p>
 
       {block.exercices && block.exercices.length > 0 && (
@@ -58,6 +63,7 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
                 </span>
                 <span className="text-doux">
                   {ex.allure}
+                  {ex.fc && <span className="font-semibold text-rose-300"> · ❤️ {ex.fc}</span>}
                   {ex.recuperation ? ` · récup ${ex.recuperation}` : ""}
                 </span>
               </li>

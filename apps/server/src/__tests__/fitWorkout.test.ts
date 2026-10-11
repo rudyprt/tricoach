@@ -92,6 +92,18 @@ describe("fichier d'entraînement", () => {
     expect(corps.customTargetValueHigh).toBe(Math.round((1000 / 241) * 1000));
   });
 
+  it("ajoute la fréquence cardiaque en seconde cible", () => {
+    const avecFc = structure();
+    avecFc.corps.fc = "160–171 bpm";
+    const corps = relire(construireFitWorkout({ sport: "course", titre: "Seuil", structure: avecFc }, zonesAvec())!)
+      .messages.workoutStepMesgs!.find((e) => e.intensity === "active")!;
+    // L'allure reste la cible principale ; les battements, décalés de 100, la doublent.
+    expect(corps.targetType).toBe("speed");
+    expect(corps.secondaryTargetType).toBe("heartRate");
+    expect(corps.secondaryCustomTargetValueLow).toBe(260);
+    expect(corps.secondaryCustomTargetValueHigh).toBe(271);
+  });
+
   it("donne des watts à vélo, décalés comme le format l'exige", () => {
     const octets = construireFitWorkout({ sport: "velo", titre: "Seuil", structure: structure() }, zonesAvec())!;
     const corps = relire(octets).messages.workoutStepMesgs!.find((e) => e.intensity === "active")!;

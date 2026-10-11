@@ -9,6 +9,8 @@ export const sessionExerciseSchema = z.object({
   nom: z.string().max(80).optional(),
   /** Point technique clé, pour le renforcement. */
   consigne: z.string().max(160).optional(),
+  /** Fréquence cardiaque de la zone visée, ajoutée au service : jamais stockée. */
+  fc: z.string().optional(),
 });
 
 export const sessionBlockSchema = z.object({
@@ -16,6 +18,8 @@ export const sessionBlockSchema = z.object({
   cible: z.string(),
   description: z.string(),
   exercices: z.array(sessionExerciseSchema).optional(),
+  /** Fréquence cardiaque de la zone visée, ajoutée au service : jamais stockée. */
+  fc: z.string().optional(),
 });
 
 export const sessionStructureSchema = z.object({

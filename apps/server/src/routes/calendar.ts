@@ -4,7 +4,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah } from "../lib/http.js";
 import { serializeSession } from "../lib/session.js";
 import { zonesActuelles } from "../lib/zoneInputs.js";
-import { rafraichirCibles } from "../lib/cibles.js";
+import { ajouterFrequencesCardiaques, rafraichirCibles } from "../lib/cibles.js";
 
 export const calendarRouter = Router();
 calendarRouter.use(requireAuth);
@@ -64,7 +64,7 @@ calendarRouter.get(
     // celles calculées le jour où la séance a été écrite.
     const zones = await zonesActuelles(req.userId!);
     const brutes = sessions.map(serializeSession);
-    const serialisees = zones ? rafraichirCibles(brutes, zones).seances : brutes;
+    const serialisees = zones ? ajouterFrequencesCardiaques(rafraichirCibles(brutes, zones).seances, zones) : brutes;
 
     for (const session of serialisees) {
       const sport = SPORT_LABELS[session.sport] ?? session.sport;
@@ -75,15 +75,17 @@ calendarRouter.get(
       if (session.objectif) description.push(`Objectif : ${session.objectif}`);
       if (session.description) description.push(session.description);
       if (session.structure) {
+        const { echauffement, corps, retourCalme } = session.structure;
+        const fc = (valeur?: string) => (valeur ? ` (${valeur})` : "");
         description.push(
-          `Échauffement (${session.structure.echauffement.dureeMin} min) : ${session.structure.echauffement.cible} — ${session.structure.echauffement.description}`,
-          `Corps (${session.structure.corps.dureeMin} min) : ${session.structure.corps.cible} — ${session.structure.corps.description}`
+          `Échauffement (${echauffement.dureeMin} min) : ${echauffement.cible}${fc(echauffement.fc)} — ${echauffement.description}`,
+          `Corps (${corps.dureeMin} min) : ${corps.cible}${fc(corps.fc)} — ${corps.description}`
         );
-        for (const ex of session.structure.corps.exercices ?? []) {
-          description.push(`  • ${ex.repetitions} à ${ex.allure}${ex.recuperation ? ` (récup ${ex.recuperation})` : ""}`);
+        for (const ex of corps.exercices ?? []) {
+          description.push(`  • ${ex.repetitions} à ${ex.allure}${fc(ex.fc)}${ex.recuperation ? ` (récup ${ex.recuperation})` : ""}`);
         }
         description.push(
-          `Retour au calme (${session.structure.retourCalme.dureeMin} min) : ${session.structure.retourCalme.cible} — ${session.structure.retourCalme.description}`
+          `Retour au calme (${retourCalme.dureeMin} min) : ${retourCalme.cible}${fc(retourCalme.fc)} — ${retourCalme.description}`
         );
       }
 
