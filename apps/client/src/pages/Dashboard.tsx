@@ -40,6 +40,37 @@ const SPORT_ICON: Record<Session["sport"], string> = {
  * pour ne pas marteler le serveur pendant deux minutes. */
 const POLL_INTERVAL_MS = 2500;
 
+/*
+ * La semaine choisie le dimanche reste affichée : passer d'un onglet à l'autre
+ * ou rouvrir l'appli ramenait sur la semaine qui s'achève. Le choix est daté du
+ * lundi visé, et s'éteint de lui-même quand ce lundi devient la semaine en cours.
+ */
+const CLE_VUE = "tricoach.semaine-affichee";
+
+/** Date locale du lendemain (AAAA-MM-JJ) : le lundi qui vient, un dimanche. */
+function demainLocal(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function vueRetenue(): "courante" | "suivante" {
+  try {
+    return new Date().getDay() === 0 && localStorage.getItem(CLE_VUE) === demainLocal() ? "suivante" : "courante";
+  } catch {
+    return "courante";
+  }
+}
+
+function retenirVue(vue: "courante" | "suivante") {
+  try {
+    if (vue === "suivante") localStorage.setItem(CLE_VUE, demainLocal());
+    else localStorage.removeItem(CLE_VUE);
+  } catch {
+    // Stockage indisponible (navigation privée) : le choix vaut pour cet écran seulement.
+  }
+}
+
 export function Dashboard() {
   const { user } = useAuth();
   const [plan, setPlan] = useState<TrainingPlan | null>(null);
@@ -62,7 +93,7 @@ export function Dashboard() {
    * semaine qui vient à découvrir.
    */
   const estDimanche = new Date().getDay() === 0;
-  const [vue, setVue] = useState<"courante" | "suivante">("courante");
+  const [vue, setVue] = useState<"courante" | "suivante">(vueRetenue);
   const vueRef = useRef(vue);
   const [suivantePrete, setSuivantePrete] = useState(false);
   /** Bascule sur la semaine prochaine une fois sa génération réussie. */
@@ -75,8 +106,17 @@ export function Dashboard() {
       const { data } = await api.get<TrainingPlan | null>("/plans/current", {
         params: suivante ? { semaine: "suivante" } : undefined,
       });
+      if (suivante && !data) {
+        // La semaine retenue n'existe plus : retour à celle en cours.
+        vueRef.current = "courante";
+        setVue("courante");
+        retenirVue("courante");
+        const { data: courante } = await api.get<TrainingPlan | null>("/plans/current");
+        setPlan(courante);
+        return;
+      }
       setPlan(data);
-      if (suivante && data) setSuivantePrete(true);
+      if (suivante) setSuivantePrete(true);
     } finally {
       setLoading(false);
     }
@@ -86,6 +126,7 @@ export function Dashboard() {
     (cible: "courante" | "suivante") => {
       vueRef.current = cible;
       setVue(cible);
+      retenirVue(cible);
       void loadPlan();
     },
     [loadPlan]
@@ -120,6 +161,7 @@ export function Dashboard() {
         if (basculerApres.current) {
           vueRef.current = "suivante";
           setVue("suivante");
+          retenirVue("suivante");
         }
         await loadPlan();
       } else {
