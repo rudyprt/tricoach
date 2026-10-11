@@ -91,6 +91,7 @@ interface Etape {
   targetValue?: number;
   customTargetValueLow?: number;
   customTargetValueHigh?: number;
+  notes?: string;
 }
 
 /** Cible chiffrée d'un bloc, exprimée dans l'unité que le format attend. */
@@ -270,6 +271,68 @@ function etapesDuCorps(
   return { etapes, repetition: { fois: serie.fois } };
 }
 
+/**
+ * Séries d'un exercice de renforcement : « 3 x 10 par jambe » se compte en
+ * répétitions, « 3 x 40 s » se chronomètre.
+ */
+export function lireSeriesRenfo(
+  texte: string
+): { fois: number; durationType: "reps" | "time"; durationValue: number } | null {
+  const m = texte.match(/(\d{1,2})\s*[x×*]\s*(\d{1,3})\s*(s\b|sec|min\b|')?/i);
+  if (!m) return null;
+  const fois = Number(m[1]);
+  const valeur = Number(m[2]);
+  if (fois < 1 || fois > 12 || valeur <= 0) return null;
+  const unite = (m[3] ?? "").toLowerCase();
+  if (unite === "min" || unite === "'") return { fois, durationType: "time", durationValue: valeur * 60 * 1000 };
+  if (unite) return { fois, durationType: "time", durationValue: valeur * 1000 };
+  return { fois, durationType: "reps", durationValue: valeur };
+}
+
+/**
+ * Le renforcement sur la montre : un exercice par étape, nommé, répété autant
+ * de fois qu'il a de séries, avec son repos. Sans cela, la montre n'affichait
+ * qu'un bloc « Corps de séance » de quarante minutes, sans dire quoi faire.
+ */
+function etapesRenfo(exercices: NonNullable<SessionStructure["corps"]["exercices"]>): Etape[] {
+  const etapes: Etape[] = [];
+  for (const exercice of exercices) {
+    const serie = lireSeriesRenfo(exercice.repetitions);
+    const debut = etapes.length;
+    const notes = [exercice.repetitions, exercice.allure, exercice.consigne].filter(Boolean).join(" · ");
+    etapes.push({
+      wktStepName: (exercice.nom || exercice.repetitions).slice(0, 15),
+      intensity: "active",
+      // Sans série lisible, l'athlète passe à la suite d'une pression sur le bouton.
+      ...(serie ? { durationType: serie.durationType, durationValue: serie.durationValue } : { durationType: "open" }),
+      targetType: "open",
+      notes: notes.slice(0, 50),
+    });
+    const recup = lireRecuperation(exercice.recuperation);
+    if (recup) {
+      etapes.push({ wktStepName: "Repos", intensity: "rest", durationType: "time", durationValue: recup, targetType: "open" });
+    }
+    if (serie && serie.fois > 1) {
+      etapes.push({
+        wktStepName: `× ${serie.fois}`,
+        intensity: "active",
+        durationType: "repeatUntilStepsCmplt",
+        durationValue: debut,
+        targetType: "open",
+        targetValue: serie.fois,
+      });
+    }
+  }
+  return etapes;
+}
+
+/** Les répétitions renvoient à un index absolu : on décale celles du corps. */
+function decaler(etape: Etape, decalage: number): Etape {
+  return etape.durationType === "repeatUntilStepsCmplt"
+    ? { ...etape, durationValue: (etape.durationValue ?? 0) + decalage }
+    : etape;
+}
+
 export interface SeanceAExporter {
   sport: string;
   titre: string;
@@ -306,7 +369,10 @@ export function construireFitWorkout(
   }
 
   const debutCorps = etapes.length;
-  const { etapes: etapesCorps, repetition } = etapesDuCorps(seance.sport, corps, zones, longueurBassin);
+  const renfo = seance.sport === "renfo" && (corps.exercices?.length ?? 0) > 0;
+  const { etapes: etapesCorps, repetition } = renfo
+    ? { etapes: etapesRenfo(corps.exercices!).map((e) => decaler(e, debutCorps)), repetition: null }
+    : etapesDuCorps(seance.sport, corps, zones, longueurBassin);
   etapes.push(...etapesCorps);
 
   if (repetition) {

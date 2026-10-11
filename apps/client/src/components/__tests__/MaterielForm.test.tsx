@@ -30,6 +30,21 @@ describe("MaterielForm", () => {
     expect(onChange).toHaveBeenCalledWith({ ...MATERIEL_PAR_DEFAUT, homeTrainer: true });
   });
 
+  it("remonte le matériel de renforcement", () => {
+    const onChange = vi.fn();
+    render(<MaterielForm valeur={MATERIEL_PAR_DEFAUT} onChange={onChange} />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Matériel de renforcement" }), { target: { value: "salle" } });
+
+    expect(onChange).toHaveBeenCalledWith({ ...MATERIEL_PAR_DEFAUT, renfo: "salle" });
+  });
+
+  it("retient le poids du corps pour un profil enregistré sans ce choix", () => {
+    const { renfo: _ignore, ...ancien } = MATERIEL_PAR_DEFAUT;
+    render(<MaterielForm valeur={ancien} onChange={vi.fn()} />);
+    expect(screen.getByRole("combobox", { name: "Matériel de renforcement" })).toHaveValue("poids_du_corps");
+  });
+
   it("reflète l'état de chaque équipement", () => {
     render(<MaterielForm valeur={{ ...MATERIEL_PAR_DEFAUT, capteurPuissance: true }} onChange={vi.fn()} />);
 

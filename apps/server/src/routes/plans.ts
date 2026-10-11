@@ -39,6 +39,7 @@ import {
 } from "../lib/disponibilites.js";
 import { DESCRIPTION_REPOS_DECLARE } from "../lib/reposDeclare.js";
 import { describeActivity } from "../lib/activityMatching.js";
+import { renfoPromptLines } from "../lib/renforcement.js";
 
 export const plansRouter = Router();
 plansRouter.use(requireAuth);
@@ -90,7 +91,7 @@ export function buildSystemPrompt(includeDebrief: boolean, phase: Periodization)
     "Tu conçois des programmes d'entraînement hebdomadaires personnalisés en natation, vélo, course à pied et renforcement.",
     "Tu tiens compte du niveau, de l'objectif, du temps disponible, des blessures/contraintes signalées, et de l'historique récent des séances (charge, ressenti).",
     "Tu réponds UNIQUEMENT avec un JSON valide, sans texte autour, sans balises markdown, au format exact suivant :",
-    `{${includeDebrief ? `"debrief":"string",` : ""}"sessions":[{"date":"YYYY-MM-DD","sport":"natation|velo|course|renfo|repos","titre":"string","dureeMin":number,"distanceKm":number|null,"description":"string","objectif":null|"string","structure":null|{"echauffement":{"dureeMin":number,"cible":"string","description":"string"},"corps":{"dureeMin":number,"cible":"string","description":"string","exercices":[{"repetitions":"string","allure":"string","recuperation":"string"}]},"retourCalme":{"dureeMin":number,"cible":"string","description":"string"}}}]}`,
+    `{${includeDebrief ? `"debrief":"string",` : ""}"sessions":[{"date":"YYYY-MM-DD","sport":"natation|velo|course|renfo|repos","titre":"string","dureeMin":number,"distanceKm":number|null,"description":"string","objectif":null|"string","structure":null|{"echauffement":{"dureeMin":number,"cible":"string","description":"string"},"corps":{"dureeMin":number,"cible":"string","description":"string","exercices":[{"nom":"string","repetitions":"string","allure":"string","recuperation":"string","consigne":"string"}]},"retourCalme":{"dureeMin":number,"cible":"string","description":"string"}}}]}`,
     "Une entrée par date demandée dans le message utilisateur, ni plus ni moins, y compris les jours de repos (sport: repos, dureeMin: 0, objectif: null, structure: null). Une semaine complète en compte sept ; une première semaine commencée en cours de route, moins.",
     "",
     `PHASE DE PRÉPARATION — ${phase.label} (objectif dans ${phase.weeksToGoal} semaine(s)). ${phase.guidance}`,
@@ -99,11 +100,13 @@ export function buildSystemPrompt(includeDebrief: boolean, phase: Periodization)
     "Champ \"objectif\" (obligatoire pour toute séance sport != repos) : explique en 1-2 phrases COURTES (20-30 mots maximum, jamais plus) POURQUOI cette séance précise est programmée maintenant — quelle qualité elle développe et en quoi elle sert l'objectif de l'athlète. Écris directement à l'athlète (\"tu\"), clair et motivant. Respecte STRICTEMENT cette limite de mots, y compris pour un objectif à long terme (ne développe pas plus longuement sous prétexte que l'échéance est lointaine).",
     "",
     "Pour toute séance sport != repos, remplis TOUJOURS \"structure\" avec 3 blocs : échauffement, corps de séance, retour au calme. La somme de leurs dureeMin doit être proche de dureeMin total.",
-    "\"cible\" décrit l'intensité concrète du bloc : la zone (Z1 à Z5, nommée) ET la valeur chiffrée correspondante. Les zones de l'athlète sont fournies dans le message utilisateur : REPRENDS EXACTEMENT ces valeurs, ne les recalcule pas et n'en invente aucune qui n'y figure pas.",
+    "\"cible\" décrit l'intensité concrète du bloc : la zone (Z1 à Z5, nommée) ET la valeur chiffrée correspondante (le renforcement fait exception : il se dose en RPE, voir plus bas). Les zones de l'athlète sont fournies dans le message utilisateur : REPRENDS EXACTEMENT ces valeurs, ne les recalcule pas et n'en invente aucune qui n'y figure pas.",
     "UNITÉS — chaque discipline a la sienne, ne les mélange jamais. NATATION : temps aux 100 m (ex: 1:44/100m). COURSE À PIED : allure au kilomètre (ex: 4:08/km). VÉLO : la valeur donnée dans les zones ci-dessus — watts si une FTP est connue, sinon fréquence cardiaque, sinon vitesse en km/h assortie de la sensation. Une allure au kilomètre dans un bassin, ou des watts pour quelqu'un qui n'a pas de capteur, sont inexécutables. Cette règle vaut aussi pour le champ \"allure\" de chaque exercice.",
     "UNE SEULE valeur chiffrée par cible : celle de la discipline. N'ajoute PAS la fréquence cardiaque à une allure de course ou de natation, ni à une puissance — l'athlète a déjà son repère, et deux chiffres qui ne coïncident pas exactement le font douter des deux. La fréquence cardiaque n'est la valeur de la cible que lorsque les zones ci-dessus ne donnent rien d'autre pour cette discipline, à savoir le vélo sans FTP.",
-    "\"corps.exercices\" (uniquement pour le bloc corps de séance, quand la séance comporte du fractionné/intervalles/répétitions) : liste concrète et chiffrée, MAXIMUM 4 lignes, ex: [{\"repetitions\":\"6 x 400m\",\"allure\":\"4:10/km (Z4 seuil)\",\"recuperation\":\"90s trot\"}]. Pour une sortie continue sans fractionné (endurance, sortie longue), laisse \"exercices\" vide ou omets-le et décris l'effort dans \"description\".",
+    "\"corps.exercices\" (uniquement pour le bloc corps de séance, quand la séance comporte du fractionné/intervalles/répétitions) : liste concrète et chiffrée, MAXIMUM 4 lignes (sauf renforcement, voir plus bas), \"nom\" et \"consigne\" réservés au renforcement, ex: [{\"repetitions\":\"6 x 400m\",\"allure\":\"4:10/km (Z4 seuil)\",\"recuperation\":\"90s trot\"}]. Pour une sortie continue sans fractionné (endurance, sortie longue), laisse \"exercices\" vide ou omets-le et décris l'effort dans \"description\".",
     "Le volume hebdomadaire total doit respecter les heures disponibles indiquées par l'athlète ET la limite de volume donnée dans le message utilisateur.",
+    ...renfoPromptLines(phase.phase),
+    "",
     "IMPORTANT — sois très concis partout, sans exception : chaque \"description\" (séance et blocs) fait 15 mots maximum, chaque \"objectif\" fait 20-30 mots maximum. La réponse complète doit rester compacte : pas de phrases superflues, va droit à l'essentiel. Ne jamais tronquer le JSON : si tu manques de place, raccourcis encore les textes plutôt que de laisser une réponse incomplète.",
   ];
 
@@ -1015,17 +1018,29 @@ plansRouter.get(
   "/current",
   ah(async (req: AuthedRequest, res) => {
     const user = await loadUserContext(req.userId!);
-    const weekStart = startOfWeek(new Date(), user.timezone);
-    const weekEnd = addDays(weekStart, 7);
+    const cetteSemaine = startOfWeek(new Date(), user.timezone);
 
-    const plan = await prisma.trainingPlan.findFirst({
-      where: { userId: req.userId!, weekStart },
-      orderBy: { generatedAt: "desc" },
-    });
+    /*
+     * Inscrit un dimanche, l'athlète reçoit la semaine qui commence le
+     * lendemain : il ne restait qu'un jour dans la sienne. Sans ce repli, son
+     * écran restait vide jusqu'au lundi, programme pourtant prêt.
+     */
+    const plan =
+      (await prisma.trainingPlan.findFirst({
+        where: { userId: req.userId!, weekStart: cetteSemaine },
+        orderBy: { generatedAt: "desc" },
+      })) ??
+      (await prisma.trainingPlan.findFirst({
+        where: { userId: req.userId!, weekStart: addDays(cetteSemaine, 7) },
+        orderBy: { generatedAt: "desc" },
+      }));
     if (!plan) {
       res.json(null);
       return;
     }
+
+    const weekStart = plan.weekStart;
+    const weekEnd = addDays(weekStart, 7);
 
     // Les séances sont chargées par semaine et non par plan : une régénération
     // ou un réajustement laisse les séances déjà réalisées rattachées au plan

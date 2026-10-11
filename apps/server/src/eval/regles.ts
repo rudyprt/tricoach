@@ -25,7 +25,7 @@ export interface SeanceGeneree {
   objectif: string | null;
   structure: {
     echauffement: { dureeMin: number; cible: string; description: string };
-    corps: { dureeMin: number; cible: string; description: string; exercices?: { repetitions: string; allure: string; recuperation?: string }[] };
+    corps: { dureeMin: number; cible: string; description: string; exercices?: { repetitions: string; allure: string; recuperation?: string; nom?: string }[] };
     retourCalme: { dureeMin: number; cible: string; description: string };
   } | null;
 }
@@ -69,6 +69,18 @@ export function estDure(seance: SeanceGeneree): boolean {
 }
 
 export const REGLES: Regle[] = [
+  {
+    nom: "renfo-detaille",
+    pourquoi: "« Gainage, 30 min » ne dit pas quoi faire : une séance de renforcement se lit comme une fiche, exercice par exercice.",
+    verifier: (seances) =>
+      seances
+        .filter((s) => s.sport === "renfo" && s.dureeMin > 0)
+        .filter((s) => {
+          const exercices = s.structure?.corps.exercices ?? [];
+          return exercices.length < 4 || exercices.some((e) => !e.nom || !e.repetitions);
+        })
+        .map((s) => ({ regle: "renfo-detaille", detail: `${s.date} : ${s.structure?.corps.exercices?.length ?? 0} exercice(s) nommé(s)` })),
+  },
   {
     nom: "sept-jours",
     pourquoi: "Un jour manquant laisse un trou que l'athlète interprète comme un repos non voulu.",

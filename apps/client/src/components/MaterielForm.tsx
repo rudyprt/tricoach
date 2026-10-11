@@ -9,6 +9,7 @@ export const MATERIEL_PAR_DEFAUT: Materiel = {
   tapisCourse: false,
   piscine: "25m",
   velo: "route",
+  renfo: "poids_du_corps",
 };
 
 const PISCINES = [
@@ -23,6 +24,13 @@ const VELOS = [
   { valeur: "contre_la_montre", label: "Vélo de contre-la-montre" },
   { valeur: "vtt", label: "VTT / gravel" },
   { valeur: "aucun", label: "Pas de vélo" },
+] as const;
+
+const RENFOS = [
+  { valeur: "poids_du_corps", label: "Renfo : poids du corps" },
+  { valeur: "elastiques", label: "Renfo : élastiques" },
+  { valeur: "halteres", label: "Renfo : haltères / kettlebell" },
+  { valeur: "salle", label: "Renfo : salle de musculation" },
 ] as const;
 
 const LIBELLES_PISCINE: Record<Materiel["piscine"], string> = {
@@ -84,6 +92,18 @@ export function MaterielForm({ valeur, onChange }: { valeur: Materiel; onChange:
           ))}
         </select>
       </div>
+      <select
+        aria-label="Matériel de renforcement"
+        value={valeur.renfo ?? "poids_du_corps"}
+        onChange={(e) => onChange({ ...valeur, renfo: e.target.value as NonNullable<Materiel["renfo"]> })}
+        className={champ}
+      >
+        {RENFOS.map((r) => (
+          <option key={r.valeur} value={r.valeur}>
+            {r.label}
+          </option>
+        ))}
+      </select>
 
       {/* Deux conséquences que l'athlète ne devinerait pas depuis un menu
           déroulant, et qui expliquent pourquoi ses allures changent. */}
