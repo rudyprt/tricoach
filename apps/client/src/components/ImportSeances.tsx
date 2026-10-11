@@ -70,7 +70,7 @@ export function ImportSeances({ onImport }: { onImport?: () => void }) {
         ref={inputRef}
         type="file"
         multiple
-        accept=".fit,.gpx,.tcx"
+        accept=".fit,.gpx,.tcx,.zip"
         onChange={(e) => envoyer(e.target.files)}
         className="hidden"
       />
@@ -84,9 +84,18 @@ export function ImportSeances({ onImport }: { onImport?: () => void }) {
       </button>
 
       <p className="mt-2 text-xs text-tres-doux">
-        Formats acceptés : .fit, .gpx, .tcx — Garmin, Polar, Coros, Suunto, Wahoo, Apple Watch. Vous pouvez en
-        déposer plusieurs à la fois.
+        Formats acceptés : .fit, .gpx, .tcx, et l'archive .zip de Garmin — Garmin, Polar, Coros, Suunto, Wahoo,
+        Apple Watch. Vous pouvez en déposer plusieurs à la fois.
       </p>
+
+      <details className="mt-2 text-xs text-doux">
+        <summary className="cursor-pointer font-semibold text-zinc-300">Depuis Garmin Connect, comment faire ?</summary>
+        <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
+          <li>Sur connect.garmin.com (navigateur, pas l'application), ouvrez l'activité.</li>
+          <li>Roue dentée en haut à droite → « Exporter l'original ».</li>
+          <li>Déposez ici le fichier .zip téléchargé, tel quel.</li>
+        </ol>
+      </details>
 
       {resultats && (
         <ul className="mt-3 space-y-1">

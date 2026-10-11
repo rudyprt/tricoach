@@ -166,6 +166,31 @@ describeIfDb("import de fichiers", () => {
     expect((await prisma.session.findUniqueOrThrow({ where: { id: session.id } })).status).toBe("faite");
   });
 
+  it("importe l'archive .zip de Garmin Connect telle quelle", async () => {
+    const { agent, user } = await athlete("garmin-zip@example.com");
+    const session = await seancePrevue(user.id, "course", 45);
+
+    const res = await agent
+      .post("/api/activities/import")
+      .attach("fichiers", path.join(fixtures, "garmin-export.zip"));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ importees: 1, rapprochees: 1 });
+    expect(res.body.resultats[0]).toMatchObject({ fichier: "123456789_ACTIVITY.fit", statut: "importe_et_rattache" });
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: session.id } })).status).toBe("faite");
+  });
+
+  it("signale une archive illisible sans bloquer les autres fichiers", async () => {
+    const { agent } = await athlete("zip-casse@example.com");
+    const res = await agent
+      .post("/api/activities/import")
+      .attach("fichiers", Buffer.from("pas une archive"), { filename: "export.zip" })
+      .attach("fichiers", path.join(fixtures, "velo.gpx"));
+
+    expect(res.body.importees).toBe(1);
+    expect(res.body.resultats).toContainEqual(expect.objectContaining({ fichier: "export.zip", statut: "erreur" }));
+  });
+
   it("importe plusieurs fichiers de formats différents en une fois", async () => {
     const { agent, user } = await athlete("multi@example.com");
 

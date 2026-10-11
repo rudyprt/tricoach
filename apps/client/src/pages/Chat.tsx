@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { useConfirmation } from "../ui/Confirmation";
+import { ConsignesCoach } from "../components/ConsignesCoach";
 
 export function Chat() {
   const { user } = useAuth();
@@ -22,6 +23,8 @@ export function Chat() {
   const [quota, setQuota] = useState<ChatQuota | null>(null);
   const [bloque, setBloque] = useState<"quota" | "abonnement" | null>(null);
   const [clearing, setClearing] = useState(false);
+  /** Incrémenté quand le coach retient ou retire une consigne. */
+  const [versionConsignes, setVersionConsignes] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,8 +57,11 @@ export function Chat() {
     setSending(true);
 
     try {
-      const { data } = await api.post<ChatMessage>("/chat", { content: optimistic.content });
+      const { data } = await api.post<ChatMessage & { consignesModifiees?: boolean }>("/chat", {
+        content: optimistic.content,
+      });
       setMessages((prev) => [...prev, data]);
+      if (data.consignesModifiees) setVersionConsignes((v) => v + 1);
       // Le compteur suit l'envoi accepté : le serveur n'enregistre la question
       // que si le coach a répondu, un échec ne doit donc rien consommer ici.
       setQuota((prev) => {
@@ -120,6 +126,8 @@ export function Chat() {
           )}
         </div>
       </div>
+
+      <ConsignesCoach version={versionConsignes} />
 
       <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-bordure bg-zinc-950 p-4">
         {messages.length === 0 && (

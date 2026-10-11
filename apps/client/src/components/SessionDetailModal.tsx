@@ -254,7 +254,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
             <input
               ref={fichierRef}
               type="file"
-              accept=".fit,.gpx,.tcx"
+              accept=".fit,.gpx,.tcx,.zip"
               className="hidden"
               onChange={importerFichier}
             />

@@ -38,6 +38,19 @@ function claudeOutilSeance(input: Record<string, unknown>) {
   };
 }
 
+/** Réponse où le modèle appelle un outil donné. */
+function claudeOutil(name: string, input: Record<string, unknown>) {
+  const bloc = { type: "tool_use", id: "toolu_outil", name, input };
+  return {
+    text: "",
+    toolUses: [{ id: bloc.id, name, input }],
+    content: [bloc],
+    stopReason: "tool_use",
+    model: "claude-sonnet-5",
+    usage: { inputTokens: 1200, outputTokens: 80, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  };
+}
+
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -468,6 +481,57 @@ describeIfDb("chat", () => {
       // Le second appel n'a lieu que si une séance est réellement déclarée :
       // le coût ne double pas à chaque message.
       expect(askClaude).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("consignes données au coach", () => {
+    it("retient une demande sur le programme et la renvoie à l'athlète", async () => {
+      const { agent, user } = await signUp("consigne@example.com");
+      askClaude
+        .mockResolvedValueOnce(claudeOutil("retenir_consigne", { texte: "Placer le renforcement le lundi." }))
+        .mockResolvedValueOnce(claudeReply("C'est noté, dès la prochaine semaine."));
+
+      const res = await agent.post("/api/chat").send({ content: "Je veux le renfo le lundi" });
+      expect(res.status).toBe(201);
+      expect(res.body.consignesModifiees).toBe(true);
+
+      const liste = await agent.get("/api/consignes");
+      expect(liste.body.consignes).toEqual([
+        expect.objectContaining({ texte: "Placer le renforcement le lundi.", jusquAu: null }),
+      ]);
+      expect(await prisma.consigneCoach.count({ where: { userId: user.id } })).toBe(1);
+    });
+
+    it("montre au coach les consignes déjà retenues, et le laisse en retirer une", async () => {
+      const { agent, user } = await signUp("consigne-oubli@example.com");
+      const consigne = await prisma.consigneCoach.create({ data: { userId: user.id, texte: "Renforcement le lundi." } });
+
+      askClaude
+        .mockResolvedValueOnce(claudeOutil("oublier_consigne", { id: consigne.id }))
+        .mockResolvedValueOnce(claudeReply("Retirée."));
+      await agent.post("/api/chat").send({ content: "Finalement le lundi ne me va plus" });
+
+      expect(askClaude.mock.calls[0][0].system).toContain(`[${consigne.id}] Renforcement le lundi.`);
+      expect(await prisma.consigneCoach.count({ where: { userId: user.id } })).toBe(0);
+    });
+
+    it("ignore une consigne temporaire échue", async () => {
+      const { agent, user } = await signUp("consigne-echue@example.com");
+      await prisma.consigneCoach.create({
+        data: { userId: user.id, texte: "Pas de vélo pendant le déplacement.", jusquAu: new Date("2020-01-10T00:00:00.000Z") },
+      });
+      expect((await agent.get("/api/consignes")).body.consignes).toHaveLength(0);
+    });
+
+    it("laisse l'athlète effacer une consigne, mais pas celle d'un autre", async () => {
+      const { agent, user } = await signUp("consigne-efface@example.com");
+      const { user: autre } = await signUp("consigne-autre@example.com");
+      const sienne = await prisma.consigneCoach.create({ data: { userId: user.id, texte: "Sortie longue le dimanche." } });
+      const etrangere = await prisma.consigneCoach.create({ data: { userId: autre.id, texte: "Natation le mardi." } });
+
+      expect((await agent.delete(`/api/consignes/${etrangere.id}`)).status).toBe(404);
+      expect((await agent.delete(`/api/consignes/${sienne.id}`)).status).toBe(204);
+      expect(await prisma.consigneCoach.count()).toBe(1);
     });
   });
 

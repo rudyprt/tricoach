@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
 import { MAX_FILE_BYTES, formatFromFilename, parseActivityFile } from "../lib/activityFiles.js";
+import { estUneArchive, extraireActivites } from "../lib/archiveZip.js";
 import { findMatchingSession } from "../lib/activityMatching.js";
 import { rateLimit, byUser } from "../lib/rateLimit.js";
 
@@ -54,9 +55,32 @@ activitiesRouter.post(
   importRateLimit,
   upload.array("fichiers", 10),
   ah(async (req: AuthedRequest, res) => {
-    const fichiers = (req.files as Express.Multer.File[] | undefined) ?? [];
-    if (fichiers.length === 0) {
+    const recus = (req.files as Express.Multer.File[] | undefined) ?? [];
+    if (recus.length === 0) {
       throw new HttpError(400, "Aucun fichier reçu. Déposez un fichier .fit, .gpx ou .tcx.");
+    }
+
+    const resultats: { fichier: string; statut: string; detail?: string }[] = [];
+
+    // Une archive Garmin (« Exporter l'original ») est ouverte ici : ce sont
+    // les fichiers d'activité qu'elle contient qui sont importés.
+    const fichiers: { originalname: string; buffer: Buffer }[] = [];
+    for (const recu of recus) {
+      if (!estUneArchive(recu.originalname)) {
+        fichiers.push(recu);
+        continue;
+      }
+      try {
+        for (const extrait of extraireActivites(recu.buffer)) {
+          fichiers.push({ originalname: extrait.nom, buffer: extrait.contenu });
+        }
+      } catch (err) {
+        resultats.push({
+          fichier: recu.originalname,
+          statut: "erreur",
+          detail: err instanceof HttpError ? err.message : "Archive illisible.",
+        });
+      }
     }
 
     /*
@@ -74,7 +98,6 @@ activitiesRouter.post(
       : null;
     if (demandee && !seanceVisee) throw new HttpError(404, "Séance introuvable.");
 
-    const resultats: { fichier: string; statut: string; detail?: string }[] = [];
     let importees = 0;
     let rapprochees = 0;
 

@@ -5,6 +5,16 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL, type ClaudeMessage } from "../lib/anthropic.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { NOM_OUTIL_SEANCE, enregistrerSeanceDeclaree, outilSeanceFaite } from "../lib/seanceDeclaree.js";
+import {
+  NOM_OUTIL_OUBLIER,
+  NOM_OUTIL_RETENIR,
+  consignesActives,
+  consignesChatLines,
+  oublierConsigne,
+  outilOublierConsigne,
+  outilRetenirConsigne,
+  retenirConsigne,
+} from "../lib/consignesCoach.js";
 import { recordAiCall } from "../lib/aiUsage.js";
 import { FUSEAU_QUOTA, hasStandardAccess, quotaChatQuotidien } from "../lib/subscription.js";
 import { FENETRE_CHAT, fenetreHistorique } from "../lib/chatHistory.js";
@@ -193,7 +203,7 @@ chatRouter.post(
     // dont la surcharge est déjà mesurée, ou proposer une séance un jour où
     // l'athlète a déclaré être indisponible.
     const semaine = startOfWeek(new Date(), user.timezone);
-    const [charge, courses, interruption, testsEnCours] = await Promise.all([
+    const [charge, courses, interruption, testsEnCours, consignes] = await Promise.all([
       bilanDeCharge(req.userId!),
       coursesDeLAthlete(req.userId!, semaine),
       pauseEnCours(req.userId!),
@@ -202,12 +212,15 @@ chatRouter.post(
         orderBy: { scheduledFor: "asc" },
         take: 3,
       }),
+      consignesActives(req.userId!, user.timezone),
     ]);
 
     const system = [
       "Tu es le coach personnel de triathlon de cet athlète, dans un chat continu.",
       "Réponds de façon concise, concrète et bienveillante, en français.",
       "Quand l'athlète raconte une séance qu'il a faite, enregistre-la avec l'outil prévu, puis dis-lui en une phrase que c'est noté dans son historique. S'il manque la date ou la durée, demande-les-lui avant d'enregistrer.",
+      "Quand l'athlète exprime une demande sur la construction de ses programmes (un jour pour une discipline, une séance à éviter, une contrainte passagère), retiens-la avec l'outil retenir_consigne, puis dis-lui qu'elle s'appliquera dès la prochaine semaine générée — et que pour la semaine en cours, il peut utiliser « Réajuster ma semaine ». S'il la retire ou la remplace, supprime l'ancienne avec oublier_consigne.",
+      ...consignesChatLines(consignes),
       profile
         ? `Profil athlète : objectif=${profile.objectif}${profile.objectifFinir ? " (il vise à LA TERMINER, sans chrono : ne lui parle pas d'allure cible de course)" : profile.objectifTemps ? ` (temps visé : ${profile.objectifTemps})` : ""}, date objectif=${profile.objectifDate.toISOString().slice(0, 10)}, heures/semaine=${profile.heuresSemaine}, contraintes=${profile.contraintes || "aucune"}, dernier temps natation=${profile.tempsNatation || "n/a"}, dernier temps vélo=${profile.tempsVelo || "n/a"}, dernier temps course=${profile.tempsCourse || "n/a"}`
         : "L'athlète n'a pas encore rempli son profil.",
@@ -241,6 +254,8 @@ chatRouter.post(
 
     let reply: string;
     let seancesEnregistrees = 0;
+    let consignesModifiees = false;
+    const outils = [outilSeanceFaite, outilRetenirConsigne, outilOublierConsigne];
     try {
       const messages: ClaudeMessage[] = fenetreHistorique([
         ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
@@ -251,7 +266,7 @@ chatRouter.post(
         system,
         messages,
         maxTokens: 1000,
-        tools: [outilSeanceFaite],
+        tools: outils,
       });
       reply = response.text;
       await recordAiCall({ userId: req.userId!, kind: "chat", response, succeeded: true });
@@ -265,11 +280,21 @@ chatRouter.post(
       if (response.toolUses.length > 0) {
         const resultats: Anthropic.ToolResultBlockParam[] = [];
         for (const appel of response.toolUses) {
-          const resultat =
-            appel.name === NOM_OUTIL_SEANCE
-              ? await enregistrerSeanceDeclaree(req.userId!, appel.input, user.timezone)
-              : { message: "Outil inconnu.", enregistree: false };
-          if (resultat.enregistree) seancesEnregistrees += 1;
+          let resultat: { message: string };
+          if (appel.name === NOM_OUTIL_SEANCE) {
+            const r = await enregistrerSeanceDeclaree(req.userId!, appel.input, user.timezone);
+            if (r.enregistree) seancesEnregistrees += 1;
+            resultat = r;
+          } else if (appel.name === NOM_OUTIL_RETENIR || appel.name === NOM_OUTIL_OUBLIER) {
+            const r =
+              appel.name === NOM_OUTIL_RETENIR
+                ? await retenirConsigne(req.userId!, appel.input, user.timezone)
+                : await oublierConsigne(req.userId!, appel.input);
+            if (r.modifiee) consignesModifiees = true;
+            resultat = r;
+          } else {
+            resultat = { message: "Outil inconnu." };
+          }
           resultats.push({ type: "tool_result", tool_use_id: appel.id, content: resultat.message });
         }
 
@@ -281,7 +306,7 @@ chatRouter.post(
             { role: "user", content: resultats },
           ],
           maxTokens: 1000,
-          tools: [outilSeanceFaite],
+          tools: outils,
         });
         reply = suite.text;
         await recordAiCall({ userId: req.userId!, kind: "chat", response: suite, succeeded: Boolean(reply.trim()) });
@@ -318,6 +343,6 @@ chatRouter.post(
 
     // L'interface doit pouvoir recharger la semaine : une séance vient d'y
     // passer en « faite » sans que l'athlète ait touché à l'écran.
-    res.status(201).json({ ...saved, seancesEnregistrees });
+    res.status(201).json({ ...saved, seancesEnregistrees, consignesModifiees });
   })
 );
