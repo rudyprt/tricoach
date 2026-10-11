@@ -132,7 +132,7 @@ function FormulaireResultat({ test, onDone }: { test: FitnessTest; onDone: () =>
  * Le test programmé, sa saisie, et l'historique. Un athlète ne progresse pas
  * sur des zones figées : ce bloc est ce qui les tient à jour.
  */
-export function TestsCard() {
+export function TestsCard({ version = 0 }: { version?: number } = {}) {
   const [data, setData] = useState<FitnessTestsResponse | null>(null);
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -148,7 +148,7 @@ export function TestsCard() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [version]);
 
   async function ignorer(id: string) {
     await api.post(`/tests/${id}/skip`);

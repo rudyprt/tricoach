@@ -12,6 +12,7 @@ import {
 } from "../lib/api";
 import { Spinner } from "../components/Spinner";
 import { TestsCard } from "../components/TestsCard";
+import { PrecisionZones } from "../components/PrecisionZones";
 import { useConfirmation } from "../ui/Confirmation";
 import { useToasts } from "../ui/Toasts";
 import { Terme } from "../ui/Glossaire";
@@ -143,6 +144,8 @@ function ZoneEditor({
 
 export function Zones() {
   const [data, setData] = useState<ZonesResponse | null>(null);
+  /** Incrémenté quand l'athlète lance un test : le bloc des tests se recharge. */
+  const [versionTests, setVersionTests] = useState(0);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ZoneOverrides>({});
   const [saving, setSaving] = useState(false);
@@ -282,7 +285,11 @@ export function Zones() {
         </div>
       )}
 
-      {!editing && <TestsCard />}
+      {!editing && data?.precision && data.precision.length > 0 && (
+        <PrecisionZones precision={data.precision} onTestDemande={() => setVersionTests((v) => v + 1)} />
+      )}
+
+      {!editing && <TestsCard version={versionTests} />}
 
       {!editing && <ProgressionSeuilsChart />}
 

@@ -150,8 +150,9 @@ describe("computeTrainingZones", () => {
   describe("vélo", () => {
     it("calcule des zones de puissance sur la FTP", () => {
       const { velo } = computeTrainingZones({ ftpWatts: 250 });
-      expect(zoneDe(velo, "Z4")).toBe("225–263 W");
-      expect(zoneDe(velo, "Z2")).toBe("138–188 W");
+      // 90 à 105 % de la FTP ; la borne de 225 W appartient à Z3, Z4 commence au watt suivant.
+      expect(zoneDe(velo, "Z4")).toBe("226–263 W");
+      expect(zoneDe(velo, "Z2")).toBe("139–188 W");
     });
 
     it("n'invente aucune zone de puissance sans FTP", () => {
@@ -183,11 +184,10 @@ describe("computeTrainingZones", () => {
 
   describe("fréquence cardiaque", () => {
     it("calcule les zones sur la FC au seuil quand elle est connue", () => {
-      // Modèle Joe Friel à cinq zones : Z4 va de 95 à 102 % du seuil, elle
-      // contient donc les 170 bpm.
+      // Z4 va de 96 à 102 % du seuil : elle contient donc les 170 bpm.
       const { frequenceCardiaque } = computeTrainingZones({ fcSeuil: 170 });
       expect(zoneDe(frequenceCardiaque, "Z4")).toBe("162–173 bpm");
-      expect(zoneDe(frequenceCardiaque, "Z2")).toBe("145–153 bpm");
+      expect(zoneDe(frequenceCardiaque, "Z2")).toBe("137–151 bpm");
     });
 
     it("estime le seuil depuis la FC max, en le signalant", () => {
@@ -199,7 +199,7 @@ describe("computeTrainingZones", () => {
 
     it("préfère un seuil mesuré à une estimation depuis la FC max", () => {
       const avec = computeTrainingZones({ fcSeuil: 160, fcMax: 200 });
-      expect(zoneDe(avec.frequenceCardiaque, "Z4")).toBe("152–163 bpm");
+      expect(zoneDe(avec.frequenceCardiaque, "Z4")).toBe("153–163 bpm");
     });
 
     it("ne propose rien sans donnée cardiaque", () => {
@@ -440,34 +440,55 @@ describe("cohérence des tables de zones", () => {
   });
 });
 
-describe("modèle Joe Friel à cinq zones", () => {
+describe("zones de fréquence cardiaque", () => {
   const zoneDeFc = (zone: string, inputs: Parameters<typeof computeTrainingZones>[0]) =>
     computeTrainingZones(inputs).frequenceCardiaque!.find((r) => r.zone === zone)!.value;
+  const bornesFc = (texte: string) => texte.match(/\d+/g)!.map(Number);
 
-  it("découpe les zones aux pourcentages du modèle", () => {
-    // 65-85, 85-90, 90-95, 95-102 pour une FC au seuil de 160 bpm.
+  it("découpe les zones aux pourcentages du seuil, en battements entiers", () => {
+    // 75-80, 81-89, 90-95, 96-102 % pour une FC au seuil de 160 bpm.
     const seuil = { fcSeuil: 160 };
-    expect(zoneDeFc("Z1", seuil)).toBe("104–136 bpm");
-    expect(zoneDeFc("Z2", seuil)).toBe("136–144 bpm");
-    expect(zoneDeFc("Z3", seuil)).toBe("144–152 bpm");
-    expect(zoneDeFc("Z4", seuil)).toBe("152–163 bpm");
+    expect(zoneDeFc("Z1", seuil)).toBe("120–128 bpm");
+    expect(zoneDeFc("Z2", seuil)).toBe("129–142 bpm");
+    expect(zoneDeFc("Z3", seuil)).toBe("143–152 bpm");
+    expect(zoneDeFc("Z4", seuil)).toBe("153–163 bpm");
+  });
+
+  it("ne donne plus une récupération de quarante battements", () => {
+    // Avec un seuil à 188 bpm, l'ancien découpage annonçait « Z1 : 122–160 ».
+    const seuil = { fcSeuil: 188, fcMax: 204 };
+    expect(zoneDeFc("Z1", seuil)).toBe("141–150 bpm");
+    expect(zoneDeFc("Z2", seuil)).toBe("151–167 bpm");
+    expect(zoneDeFc("Z5", seuil)).toBe("193–204 bpm");
+  });
+
+  it("enchaîne les zones sans trou ni chevauchement, quel que soit l'athlète", () => {
+    for (let fcSeuil = 130; fcSeuil <= 200; fcSeuil++) {
+      const zones = computeTrainingZones({ fcSeuil }).frequenceCardiaque!.map((z) => bornesFc(z.value));
+      for (let i = 1; i < zones.length; i++) expect(zones[i][0]).toBe(zones[i - 1][1] + 1);
+      // Le seuil tombe dans la zone qui porte son nom.
+      expect(fcSeuil).toBeGreaterThanOrEqual(zones[3][0]);
+      expect(fcSeuil).toBeLessThanOrEqual(zones[3][1]);
+      // L'endurance fondamentale est la zone la plus large : c'est là que se fait le volume.
+      const largeurs = zones.map(([bas, haut]) => haut - bas);
+      expect(Math.max(...largeurs.slice(0, 4))).toBe(largeurs[1]);
+    }
   });
 
   it("fait monter la zone haute jusqu'à la FC maximale connue", () => {
-    // Friel ne lui donne pas de plafond : la FC max est la vraie borne, et
-    // elle parle davantage à l'athlète qu'un pourcentage arbitraire.
-    expect(zoneDeFc("Z5", { fcSeuil: 168, fcMax: 186 })).toBe("171–186 bpm");
+    expect(zoneDeFc("Z5", { fcSeuil: 168, fcMax: 186 })).toBe("172–186 bpm");
   });
 
   it("se rabat sur une borne prudente sans FC maximale", () => {
-    expect(zoneDeFc("Z5", { fcSeuil: 168 })).toBe("171–178 bpm");
+    expect(zoneDeFc("Z5", { fcSeuil: 168 })).toBe("172–178 bpm");
   });
 
   it("ignore une FC maximale incohérente avec le seuil", () => {
     // Une valeur inférieure au bas de la zone ne peut pas en être le plafond.
-    expect(zoneDeFc("Z5", { fcSeuil: 168, fcMax: 150 })).toBe("171–178 bpm");
+    expect(zoneDeFc("Z5", { fcSeuil: 168, fcMax: 150 })).toBe("172–178 bpm");
   });
 });
+
 
 describe("lecture d'un temps de référence ambigu", () => {
   it("lit « 1:45 » en heures sur un semi-marathon", () => {
@@ -620,5 +641,27 @@ describe("fréquence au seuil, par discipline", () => {
     expect(z.frequenceCardiaque).toBeNull();
     expect(z.frequenceCardiaqueVelo).toBeNull();
     for (const r of z.course ?? []) expect(r.fc).toBeUndefined();
+  });
+});
+
+describe("zones jointives", () => {
+  // Une borne partagée par deux zones laisse l'athlète sans savoir dans
+  // laquelle il se trouve : « 131 W » était à la fois le haut de Z1 et le bas de Z2.
+  const nombres = (texte: string) => texte.match(/\d+/g)!.map(Number);
+  const secondes = (texte: string) => texte.match(/\d+:\d{2}/g)!.map((t) => Number(t.split(":")[0]) * 60 + Number(t.split(":")[1]));
+
+  it("ne partage aucune borne de puissance entre deux zones", () => {
+    const velo = computeTrainingZones({ ftpWatts: 238 }).velo!.map((z) => nombres(z.value));
+    for (let i = 1; i < velo.length; i++) expect(velo[i][0]).toBe(velo[i - 1][1] + 1);
+  });
+
+  it("ne partage aucune allure entre deux zones", () => {
+    const { course, natation } = computeTrainingZones({ seuilCourseSecParKm: 252, cssSecPer100m: 102 });
+    for (const zones of [course!, natation!]) {
+      const s = zones.map((z) => secondes(z.value));
+      // Allure : [rapide, lente]. La lente d'une zone est une seconde plus rapide
+      // que la rapide de la zone précédente, plus lente.
+      for (let i = 1; i < s.length; i++) expect(s[i][1]).toBe(s[i - 1][0] - 1);
+    }
   });
 });

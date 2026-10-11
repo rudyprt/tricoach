@@ -135,6 +135,16 @@ export interface ZonesResponse {
     aCardio: boolean;
   };
   periodization: Periodization;
+  /** D'où vient chaque jeu de zones : mesuré, saisi, estimé ou absent. */
+  precision?: PrecisionZone[];
+}
+
+export interface PrecisionZone {
+  discipline: "course" | "velo" | "natation" | "frequenceCardiaque";
+  niveau: "mesuree" | "saisie" | "estimee" | "absente";
+  source: string;
+  test: "course" | "velo" | "natation" | null;
+  aRefaire: boolean;
 }
 
 export interface SessionExercise {

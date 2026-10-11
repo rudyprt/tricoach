@@ -7,6 +7,7 @@ import { ah, HttpError } from "../lib/http.js";
 import { computeTrainingZones, periodization } from "../lib/training.js";
 import { parseZoneOverrides, zoneOverridesSchema } from "../lib/zoneOverrides.js";
 import { buildZoneInputs, suggestFtp } from "../lib/zoneInputs.js";
+import { precisionDesZones } from "../lib/precisionZones.js";
 import { startOfWeek, safeTimeZone } from "../lib/week.js";
 import { disponibilitesSchema, materielSchema, parseDisponibilites } from "../lib/disponibilites.js";
 import { libererJoursIndisponibles } from "../lib/reposDeclare.js";
@@ -173,6 +174,8 @@ profileRouter.get(
         aCardio: Boolean(inputs.fcSeuil || inputs.fcMax),
       },
       periodization: { phase: phase.phase, label: phase.label, weeksToGoal: phase.weeksToGoal },
+      // D'où vient chaque jeu de zones : une valeur estimée doit se lire comme telle.
+      precision: await precisionDesZones(req.userId!, profile, inputs),
     });
   })
 );

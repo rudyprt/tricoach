@@ -86,9 +86,9 @@ describe("fichier d'entraînement", () => {
     )!;
     const corps = relire(octets).messages.workoutStepMesgs!.find((e) => e.intensity === "active")!;
 
-    // Z4 vaut 4:01–4:21/km, soit 241 à 261 s : la vitesse basse est la plus lente.
+    // Z4 vaut 4:01–4:20/km (4:21 appartient à Z3), soit 241 à 260 s : la vitesse basse est la plus lente.
     expect(corps.targetType).toBe("speed");
-    expect(corps.customTargetValueLow).toBe(Math.round((1000 / 261) * 1000));
+    expect(corps.customTargetValueLow).toBe(Math.round((1000 / 260) * 1000));
     expect(corps.customTargetValueHigh).toBe(Math.round((1000 / 241) * 1000));
   });
 
@@ -98,7 +98,8 @@ describe("fichier d'entraînement", () => {
 
     // Sous 1000, la montre lirait un pourcentage de FTP.
     expect(corps.targetType).toBe("power");
-    expect(corps.customTargetValueLow).toBe(223 + 1000);
+    // 223 W ferme Z3 : Z4 commence au watt suivant.
+    expect(corps.customTargetValueLow).toBe(224 + 1000);
     expect(corps.customTargetValueHigh).toBe(260 + 1000);
   });
 
@@ -166,6 +167,27 @@ describe("natation", () => {
       poolLength: 25,
       poolLengthUnit: "metric",
     });
+  });
+
+  it("cible le type de nage, pas une vitesse que les montres refusent en natation", () => {
+    const etapes = relire(
+      construireFitWorkout(
+        seanceNage([{ repetitions: "8 x 100 m", allure: "1:44/100m (Z4 seuil)", recuperation: "20 s" }]),
+        zonesAvec(),
+        "25m"
+      )!
+    ).messages.workoutStepMesgs!;
+
+    const nagees = etapes.filter((e) => e.durationType === "distance");
+    expect(nagees.length).toBeGreaterThan(0);
+    for (const etape of nagees) {
+      expect(etape).toMatchObject({ targetType: "swimStroke", targetStrokeType: "freestyle" });
+      expect(etape.customTargetValueLow).toBeUndefined();
+      // « interval » n'existe pas pour une séance de nage.
+      expect(etape.intensity).not.toBe("interval");
+    }
+    // L'allure reste lisible, en note de l'étape.
+    expect(nagees.find((e) => e.durationValue === 10000)?.notes).toContain("1:44/100m");
   });
 
   it("exprime les blocs en distance, et non en minutes", () => {

@@ -245,16 +245,6 @@ const BIKE_BANDS: ZoneBand[] = [
 ];
 
 /**
- * Zones de fréquence cardiaque du modèle Joe Friel à cinq zones, en pourcentage
- * de la fréquence cardiaque au seuil.
- *
- * La version précédente transposait les tables détaillées de Friel, écrites en
- * pourcentages entiers — « Z3 : 90 à 93 %, Z4 : 94 à 99 % » — ce qui laissait
- * des battements orphelins une fois converti, et plaçait le seuil lui-même
- * hors de la zone qui porte son nom. Ce découpage-ci est jointif, et sa
- * quatrième zone encadre le seuil.
- */
-/**
  * Écart de fréquence au seuil entre disciplines, en battements.
  *
  * À effort égal, le cœur ne bat pas au même rythme selon la posture et la masse
@@ -269,17 +259,44 @@ const BIKE_BANDS: ZoneBand[] = [
 const ECART_FC_VELO = 7;
 const ECART_FC_NATATION = 12;
 
-const HR_BANDS: ZoneBand[] = [
-  { zone: "Z1", label: "récupération", from: 0.65, to: 0.85 },
-  { zone: "Z2", label: "endurance fondamentale", from: 0.85, to: 0.9 },
-  { zone: "Z3", label: "tempo", from: 0.9, to: 0.95 },
-  { zone: "Z4", label: "seuil", from: 0.95, to: 1.02 },
-  // Friel n'assigne pas de plafond à la cinquième zone. Faute de fréquence
-  // cardiaque maximale connue, on s'arrête un peu au-dessus du seuil : mieux
-  // vaut une borne prudente qu'un intervalle ouvert sur une valeur
-  // qu'aucun athlète n'atteindra.
-  { zone: "Z5", label: "VO2max", from: 1.02, to: 1.06 },
-];
+/**
+ * Zones de fréquence cardiaque, en pourcentage de la fréquence au seuil.
+ *
+ * Le découpage précédent reprenait le modèle de Joe Friel : une première zone
+ * de 65 à 85 % du seuil, soit près de quarante battements — « Z1 entre 122 et
+ * 160 » —, et une endurance fondamentale réduite à huit battements, placée
+ * plus haut que l'allure d'endurance des zones de course. Les deux tableaux
+ * se contredisaient, et l'athlète ne savait plus lequel suivre.
+ *
+ * Les bornes retenues (récupération 75-80 %, endurance 81-89 %, tempo
+ * 90-95 %, seuil 96-102 %, au-delà VO2max) sont celles de Fitzgerald et
+ * Johnson pour l'entraînement polarisé : l'endurance fondamentale y est la
+ * zone la plus large, celle où se fait l'essentiel du volume, et elle
+ * correspond aux allures faciles des zones de course. Le seuil tombe dans la
+ * zone qui porte son nom.
+ *
+ * Chaque zone est un intervalle de battements entiers, sans chevauchement ni
+ * trou : la borne basse d'une zone est le battement qui suit la borne haute de
+ * la précédente.
+ */
+const COUPURES_FC = [0.75, 0.805, 0.895, 0.955, 1.025] as const;
+const LIBELLES_FC = ["récupération", "endurance fondamentale", "tempo", "seuil", "VO2max"] as const;
+/** Plafond de la zone haute quand la FC maximale est inconnue : une borne prudente plutôt qu'un intervalle ouvert. */
+const PLAFOND_FC_SANS_MAX = 1.06;
+
+export function zonesCardiaques(lthr: number, fcMax?: number | null): ZoneRange[] {
+  const coupures = COUPURES_FC.map((c) => Math.round(lthr * c));
+  return LIBELLES_FC.map((label, i) => {
+    const bas = coupures[i];
+    let haut: number;
+    if (i < coupures.length - 1) haut = coupures[i + 1] - 1;
+    else {
+      // La FC maximale connue est la vraie borne de la zone haute.
+      haut = fcMax && fcMax > bas ? fcMax : Math.round(lthr * PLAFOND_FC_SANS_MAX);
+    }
+    return { zone: `Z${i + 1}`, label, value: `${bas}–${haut} bpm` };
+  });
+}
 
 /**
  * Vitesse soutenable pendant `targetS` secondes, déduite d'une performance de
@@ -294,12 +311,21 @@ export function thresholdSpeed(perf: ParsedPerformance, targetS: number, exponen
   return distance / targetS;
 }
 
+/*
+ * Les zones sont jointives sans se chevaucher : la borne qui sépare deux zones
+ * n'appartient qu'à l'une d'elles. « 131 W » figurait en haut de Z1 et en bas
+ * de Z2, « 5:00/km » à la fois en endurance et en tempo — l'athlète ne savait
+ * pas dans quelle zone il roulait. `suite` signale une zone qui en prolonge
+ * une autre : sa borne basse commence une unité après.
+ */
+
 /** Plage d'allure, de la plus rapide à la plus lente, unité mentionnée une fois. */
-function formatPaceBand(thresholdSpeedMs: number, band: ZoneBand, per: 1000 | 100): string {
+function formatPaceBand(thresholdSpeedMs: number, band: ZoneBand, per: 1000 | 100, suite = false): string {
   // Une fraction de vitesse basse correspond à une allure lente : les bornes
-  // s'inversent au passage de la vitesse à l'allure.
-  const lent = per / (thresholdSpeedMs * band.from);
-  const rapide = per / (thresholdSpeedMs * band.to);
+  // s'inversent au passage de la vitesse à l'allure. La borne lente d'une zone
+  // est la rapide de la zone précédente : on la décale d'une seconde.
+  const lent = Math.round(per / (thresholdSpeedMs * band.from)) - (suite ? 1 : 0);
+  const rapide = Math.round(per / (thresholdSpeedMs * band.to));
   const unite = per === 1000 ? "/km" : "/100m";
   const fmt = (v: number) => (per === 1000 ? formatPacePerKm(v) : formatPacePer100m(v)).replace(unite, "");
   return `${fmt(rapide)}–${fmt(lent)}${unite}`;
@@ -315,23 +341,15 @@ function formatPaceBand(thresholdSpeedMs: number, band: ZoneBand, per: 1000 | 10
  * L'approximation vaut sur terrain plat et sans vent, ce que la note qui
  * accompagne ces zones rappelle à l'athlète.
  */
-function formatSpeedBand(thresholdSpeedMs: number, band: ZoneBand): string {
+function formatSpeedBand(thresholdSpeedMs: number, band: ZoneBand, suite = false): string {
   const kmh = (fraction: number) => Math.round(thresholdSpeedMs * Math.cbrt(fraction) * 3.6);
-  return `${kmh(band.from)}–${kmh(band.to)} km/h`;
+  return `${kmh(band.from) + (suite ? 1 : 0)}–${kmh(band.to)} km/h`;
 }
 
-function formatWattBand(ftp: number, band: ZoneBand): string {
-  return `${Math.round(ftp * band.from)}–${Math.round(ftp * band.to)} W`;
+function formatWattBand(ftp: number, band: ZoneBand, suite = false): string {
+  return `${Math.round(ftp * band.from) + (suite ? 1 : 0)}–${Math.round(ftp * band.to)} W`;
 }
 
-function formatHrBand(lthr: number, band: ZoneBand, fcMax?: number | null): string {
-  const bas = Math.round(lthr * band.from);
-  // La zone haute n'a pas de plafond chez Friel : quand la fréquence cardiaque
-  // maximale est connue, c'est elle la vraie borne, et elle est plus parlante
-  // qu'un pourcentage arbitraire.
-  const haut = band.zone === "Z5" && fcMax && fcMax > bas ? fcMax : Math.round(lthr * band.to);
-  return `${bas}–${haut} bpm`;
-}
 
 /* ------------------------------------------------------------------ */
 /* Calcul des zones                                                    */
@@ -480,10 +498,10 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   }
 
   if (vitesseSeuilCourse) {
-    course = RUN_BANDS.map((b) => ({
+    course = RUN_BANDS.map((b, i) => ({
       zone: b.zone,
       label: b.label,
-      value: formatPaceBand(vitesseSeuilCourse!, b, 1000),
+      value: formatPaceBand(vitesseSeuilCourse!, b, 1000, i > 0),
     }));
   }
 
@@ -525,10 +543,10 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
       if (equivalences) notes.push(`Natation. ${equivalences}`);
     }
 
-    natation = SWIM_BANDS.map((b) => ({
+    natation = SWIM_BANDS.map((b, i) => ({
       zone: b.zone,
       label: b.label,
-      value: formatPaceBand(vitesseCss!, b, 100),
+      value: formatPaceBand(vitesseCss!, b, 100, i > 0),
     }));
   }
 
@@ -537,10 +555,10 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   let veloVitesse: ZoneRange[] | null = null;
 
   if (inputs.ftpWatts && inputs.ftpWatts > 50) {
-    velo = BIKE_BANDS.map((b) => ({
+    velo = BIKE_BANDS.map((b, i) => ({
       zone: b.zone,
       label: b.label,
-      value: formatWattBand(inputs.ftpWatts!, b),
+      value: formatWattBand(inputs.ftpWatts!, b, i > 0),
     }));
     notes.push(`Vélo : zones de puissance calculées sur une FTP de ${inputs.ftpWatts} W.`);
   } else {
@@ -571,10 +589,10 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
       // De 15 à 55 km/h au seuil : au-delà, c'est le temps saisi qui est en
       // cause, pas le cycliste.
       if (kmh >= 15 && kmh <= 55) {
-        veloVitesse = BIKE_BANDS.map((b) => ({
+        veloVitesse = BIKE_BANDS.map((b, i) => ({
           zone: b.zone,
           label: b.label,
-          value: formatSpeedBand(estimee, b),
+          value: formatSpeedBand(estimee, b, i > 0),
         }));
         notes.push(
           `Vélo : vitesse au seuil estimée à ${Math.round(kmh)} km/h à partir de votre temps de référence. Ces repères ne valent que sur terrain plat et sans vent.`
@@ -590,7 +608,7 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   if (inputs.fcSeuil && inputs.fcSeuil > 100) {
     seuilFc = inputs.fcSeuil;
     notes.push(
-      `Fréquence cardiaque : zones du modèle Joe Friel, calculées sur une FC au seuil de ${seuilFc} bpm.`
+      `Fréquence cardiaque : zones calculées sur votre FC au seuil de ${seuilFc} bpm.`
     );
   } else if (inputs.fcMax && inputs.fcMax > 120) {
     // Approximation usuelle en l'absence de test de seuil. Signalée comme telle :
@@ -602,11 +620,7 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
   }
 
   if (seuilFc) {
-    frequenceCardiaque = HR_BANDS.map((b) => ({
-      zone: b.zone,
-      label: b.label,
-      value: formatHrBand(seuilFc!, b, inputs.fcMax),
-    }));
+    frequenceCardiaque = zonesCardiaques(seuilFc, inputs.fcMax);
     // Dit quel que soit le chemin suivi : le malentendu est de lire ce tableau
     // comme un second jeu de zones qui devrait coïncider avec les allures.
     notes.push(
@@ -636,8 +650,7 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
    * une mesure propre manque, la valeur est déduite de la course avec l'écart
    * documenté plus haut — et la note le dit, pour qu'on sache ce qu'on lit.
    */
-  const bandesFc = (seuil: number) =>
-    HR_BANDS.map((b) => ({ zone: b.zone, label: b.label, value: formatHrBand(seuil, b, inputs.fcMax) }));
+  const bandesFc = (seuil: number) => zonesCardiaques(seuil, inputs.fcMax);
 
   const fcDiscipline = (mesuree: number | null | undefined, ecart: number, nom: string) => {
     if (!seuilFc) return null;
