@@ -247,10 +247,33 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
               <FaDownload size={12} aria-hidden="true" />
               Envoyer à ma montre (.fit)
             </a>
-            <p className="text-center text-xs text-doux">
-              Garmin : Connect → Entraînement → Importer. Coros : application → Entraînement → Importer.
-              La séance part ensuite sur la montre à la synchronisation.
-            </p>
+            {/*
+              L'application mobile Garmin Connect prend tout fichier .fit pour
+              un parcours GPS et demande d'en choisir le type : la séance s'y
+              perd. Seul le site importe une séance d'entraînement — il faut le
+              dire avant que l'athlète ne bute dessus.
+            */}
+            <details className="rounded-lg bg-zinc-900/60 px-3 py-2 text-xs text-doux">
+              <summary className="cursor-pointer text-center font-semibold text-zinc-300">
+                Comment la mettre sur ma montre ?
+              </summary>
+              <div className="mt-2 space-y-2">
+                <div>
+                  <p className="font-semibold text-zinc-300">Garmin</p>
+                  <p>
+                    Pas l'application du téléphone : elle prend le fichier pour un parcours. Ouvrez{" "}
+                    <span className="font-semibold text-zinc-300">connect.garmin.com</span> dans un navigateur (sur
+                    téléphone, en « version pour ordinateur ») → Entraînement et planification → Entraînements →
+                    Importer → choisissez le fichier, puis « Envoyer vers l'appareil ».
+                  </p>
+                </div>
+                <div>
+                  <p className="font-semibold text-zinc-300">Coros</p>
+                  <p>Application Coros → Entraînement → Importer, puis synchronisez la montre.</p>
+                </div>
+                <p>La séance apparaît ensuite dans les entraînements de la montre.</p>
+              </div>
+            </details>
 
             {/*
               Le retour : le fichier que la montre a produit une fois la séance
