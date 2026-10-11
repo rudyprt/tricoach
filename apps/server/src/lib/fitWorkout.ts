@@ -94,6 +94,23 @@ interface Etape {
   notes?: string;
 }
 
+/**
+ * Cible d'une étape. En natation, les montres Garmin refusent une séance dont
+ * les étapes visent une vitesse : une séance de nage se cible par type de
+ * nage. L'allure n'est pas perdue pour autant, elle s'affiche en note de
+ * l'étape, là où l'athlète la lit pendant la séance.
+ */
+function cibleEtape(
+  sport: string,
+  texte: string,
+  zones: TrainingZones
+): Pick<Etape, "targetType" | "targetValue" | "customTargetValueLow" | "customTargetValueHigh" | "notes"> {
+  if (sport === "natation") {
+    return { targetType: "swimStroke", targetValue: 0, ...(texte ? { notes: texte.slice(0, 50) } : {}) };
+  }
+  return cibleFit(sport, texte, zones);
+}
+
 /** Cible chiffrée d'un bloc, exprimée dans l'unité que le format attend. */
 function cibleFit(
   sport: string,
@@ -224,7 +241,7 @@ function etapesDuCorps(
           wktStepName: "Corps de séance",
           intensity: "active",
           ...dureeOuDistance(Math.max(1, corps.dureeMin), corps.cible, zones, longueurBassin),
-          ...cibleFit(sport, corps.cible, zones),
+          ...cibleEtape(sport, corps.cible, zones),
         },
       ],
       repetition: null,
@@ -251,9 +268,10 @@ function etapesDuCorps(
   const etapes: Etape[] = [
     {
       wktStepName: exercice.repetitions.slice(0, 15),
-      intensity: "interval",
+      // Une séance de nage ne connaît que « active » pour ses séries.
+      intensity: sport === "natation" ? "active" : "interval",
       ...duree,
-      ...cibleFit(sport, exercice.allure || corps.cible, zones),
+      ...cibleEtape(sport, exercice.allure || corps.cible, zones),
     },
   ];
 
@@ -364,7 +382,7 @@ export function construireFitWorkout(
       wktStepName: "Échauffement",
       intensity: "warmup",
       ...dureeOuDistance(echauffement.dureeMin, echauffement.cible, zones, longueurBassin),
-      ...cibleFit(seance.sport, echauffement.cible, zones),
+      ...cibleEtape(seance.sport, echauffement.cible, zones),
     });
   }
 
@@ -393,7 +411,7 @@ export function construireFitWorkout(
       wktStepName: "Retour au calme",
       intensity: "cooldown",
       ...dureeOuDistance(retourCalme.dureeMin, retourCalme.cible, zones, longueurBassin),
-      ...cibleFit(seance.sport, retourCalme.cible, zones),
+      ...cibleEtape(seance.sport, retourCalme.cible, zones),
     });
   }
 

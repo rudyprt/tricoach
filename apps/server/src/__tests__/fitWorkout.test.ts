@@ -168,6 +168,27 @@ describe("natation", () => {
     });
   });
 
+  it("cible le type de nage, pas une vitesse que les montres refusent en natation", () => {
+    const etapes = relire(
+      construireFitWorkout(
+        seanceNage([{ repetitions: "8 x 100 m", allure: "1:44/100m (Z4 seuil)", recuperation: "20 s" }]),
+        zonesAvec(),
+        "25m"
+      )!
+    ).messages.workoutStepMesgs!;
+
+    const nagees = etapes.filter((e) => e.durationType === "distance");
+    expect(nagees.length).toBeGreaterThan(0);
+    for (const etape of nagees) {
+      expect(etape).toMatchObject({ targetType: "swimStroke", targetStrokeType: "freestyle" });
+      expect(etape.customTargetValueLow).toBeUndefined();
+      // « interval » n'existe pas pour une séance de nage.
+      expect(etape.intensity).not.toBe("interval");
+    }
+    // L'allure reste lisible, en note de l'étape.
+    expect(nagees.find((e) => e.durationValue === 10000)?.notes).toContain("1:44/100m");
+  });
+
   it("exprime les blocs en distance, et non en minutes", () => {
     const etapes = relire(construireFitWorkout(seanceNage(), zonesAvec(), "25m")!).messages.workoutStepMesgs!;
 
