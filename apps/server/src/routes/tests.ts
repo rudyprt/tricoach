@@ -3,7 +3,8 @@ import { athleteWriteRateLimit } from "../lib/rateLimit.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
-import { PROTOCOLS, deriveThresholds, type TestSport } from "../lib/fitnessTests.js";
+import { PROTOCOLS, TEST_SPORTS, deriveThresholds, type TestSport } from "../lib/fitnessTests.js";
+import { localCalendarDate, startOfWeek } from "../lib/week.js";
 import { applyTestResult } from "../lib/testScheduling.js";
 
 export const testsRouter = Router();
@@ -61,6 +62,43 @@ testsRouter.get(
       enCours: tests.filter((t) => t.status === "planifie").map(serialize),
       historique: tests.filter((t) => t.status === "realise").map(serialize),
     });
+  })
+);
+
+/**
+ * L'athlète lance lui-même un test, sans attendre que le coach le programme.
+ *
+ * Les tests arrivent d'eux-mêmes toutes les dix semaines par discipline ; mais
+ * l'athlète qui découvre que ses zones sont estimées veut les mesurer
+ * maintenant. Le test est posé à aujourd'hui, et son résultat se saisit comme
+ * celui d'un test programmé.
+ */
+testsRouter.post(
+  "/demander",
+  ah(async (req: AuthedRequest, res) => {
+    const sport = (req.body as { sport?: unknown })?.sport;
+    if (typeof sport !== "string" || !(TEST_SPORTS as readonly string[]).includes(sport)) {
+      throw new HttpError(400, "Discipline inconnue.");
+    }
+    const deja = await prisma.fitnessTest.findFirst({
+      where: { userId: req.userId!, sport, status: "planifie" },
+    });
+    if (deja) {
+      res.json(serialize(deja));
+      return;
+    }
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! }, select: { timezone: true } });
+    const protocole = PROTOCOLS[sport as TestSport];
+    const cree = await prisma.fitnessTest.create({
+      data: {
+        userId: req.userId!,
+        sport,
+        kind: protocole.kind,
+        scheduledFor: new Date(`${localCalendarDate(new Date(), user.timezone)}T00:00:00.000Z`),
+        weekStart: startOfWeek(new Date(), user.timezone),
+      },
+    });
+    res.status(201).json(serialize(cree));
   })
 );
 

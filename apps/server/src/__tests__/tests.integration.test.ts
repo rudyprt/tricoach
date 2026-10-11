@@ -374,4 +374,64 @@ describeIfDb("tests de terrain", () => {
 
     expect((await prisma.fitnessTest.findUniqueOrThrow({ where: { id: vieux.id } })).status).toBe("abandonne");
   });
+
+  describe("précision des zones", () => {
+    type Ligne = { discipline: string; niveau: string; aRefaire: boolean; source: string };
+    const precision = async (agent: ReturnType<typeof request.agent>) =>
+      (await agent.get("/api/profile/zones")).body.precision as Ligne[];
+    const de = (liste: Ligne[], discipline: string) => liste.find((p) => p.discipline === discipline)!;
+
+    it("dit qu'une zone tirée d'un chrono est estimée, et qu'une discipline sans référence n'en a pas", async () => {
+      const { agent } = await athlete("precision-chrono@example.com");
+      const liste = await precision(agent);
+      expect(de(liste, "course")).toMatchObject({ niveau: "estimee" });
+      expect(de(liste, "course").source).toContain("10km en 50:00");
+      expect(de(liste, "velo")).toMatchObject({ niveau: "absente" });
+      expect(de(liste, "frequenceCardiaque")).toMatchObject({ niveau: "absente" });
+    });
+
+    it("dit qu'une zone vient d'un test, et qu'il faut le refaire passé huit semaines", async () => {
+      const { agent, user } = await athlete("precision-test@example.com");
+      const ilYA = (jours: number) => new Date(Date.now() - jours * 24 * 3600 * 1000);
+      await prisma.athleteProfile.update({ where: { userId: user.id }, data: { seuilCourseSecParKm: 255, fcSeuil: 172, ftpWatts: 240 } });
+      await prisma.fitnessTest.create({
+        data: { userId: user.id, sport: "course", kind: "course_30min", scheduledFor: ilYA(20), weekStart: ilYA(20), status: "realise", appliedAt: ilYA(20), distanceM: 7050, fcMoyenne: 172 },
+      });
+      await prisma.fitnessTest.create({
+        data: { userId: user.id, sport: "velo", kind: "velo_20min", scheduledFor: ilYA(90), weekStart: ilYA(90), status: "realise", appliedAt: ilYA(90), puissanceMoy: 252 },
+      });
+
+      const liste = await precision(agent);
+      expect(de(liste, "course")).toMatchObject({ niveau: "mesuree", aRefaire: false });
+      expect(de(liste, "frequenceCardiaque")).toMatchObject({ niveau: "mesuree" });
+      expect(de(liste, "velo")).toMatchObject({ niveau: "mesuree", aRefaire: true });
+    });
+
+    it("signale une FC au seuil estimée depuis la FC max", async () => {
+      const { agent, user } = await athlete("precision-fcmax@example.com");
+      await prisma.athleteProfile.update({ where: { userId: user.id }, data: { fcMax: 190 } });
+      expect(de(await precision(agent), "frequenceCardiaque")).toMatchObject({ niveau: "estimee" });
+    });
+  });
+
+  describe("test lancé par l'athlète", () => {
+    it("pose le test à aujourd'hui, une seule fois par discipline", async () => {
+      const { agent, user } = await athlete("demande-test@example.com");
+      const premier = await agent.post("/api/tests/demander").send({ sport: "velo" });
+      expect(premier.status).toBe(201);
+      expect(premier.body).toMatchObject({ sport: "velo", status: "planifie" });
+
+      const second = await agent.post("/api/tests/demander").send({ sport: "velo" });
+      expect(second.body.id).toBe(premier.body.id);
+      expect(await prisma.fitnessTest.count({ where: { userId: user.id } })).toBe(1);
+
+      // Il apparaît là où se saisit le résultat.
+      expect((await agent.get("/api/tests")).body.enCours).toHaveLength(1);
+    });
+
+    it("refuse une discipline inconnue", async () => {
+      const { agent } = await athlete("demande-test-invalide@example.com");
+      expect((await agent.post("/api/tests/demander").send({ sport: "aviron" })).status).toBe(400);
+    });
+  });
 });
