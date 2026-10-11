@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 /**
@@ -46,7 +46,7 @@ function repondre(suivante: unknown) {
 function afficherLe(iso: string) {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(iso));
-  render(
+  return render(
     <MemoryRouter>
       <Dashboard />
     </MemoryRouter>
@@ -57,6 +57,7 @@ describe("tableau de bord, le dimanche", () => {
   afterEach(() => {
     vi.useRealTimers();
     get.mockReset();
+    localStorage.clear();
   });
 
   it("propose de préparer la semaine prochaine", async () => {
@@ -69,6 +70,31 @@ describe("tableau de bord, le dimanche", () => {
     repondre({ ...PLAN, id: "p2", weekStart: "2026-10-12T00:00:00.000Z" });
     afficherLe("2026-10-11T18:00:00");
     expect(await screen.findByRole("button", { name: "Voir la semaine prochaine" })).toBeInTheDocument();
+  });
+
+  it("garde la semaine prochaine affichée après avoir quitté l'écran", async () => {
+    repondre({ ...PLAN, id: "p2", weekStart: "2026-10-12T00:00:00.000Z" });
+    const premier = afficherLe("2026-10-11T18:00:00");
+    fireEvent.click(await screen.findByRole("button", { name: "Voir la semaine prochaine" }));
+    expect(await screen.findByText("Semaine prochaine")).toBeInTheDocument();
+    premier.unmount();
+
+    // Retour sur l'écran : la semaine choisie est toujours là.
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText("Semaine prochaine")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "← Revenir à cette semaine" })).toBeInTheDocument();
+  });
+
+  it("oublie ce choix le lundi, quand la semaine visée devient la semaine en cours", async () => {
+    localStorage.setItem("tricoach.semaine-affichee", "2026-10-12");
+    repondre(null);
+    afficherLe("2026-10-12T09:00:00");
+    await screen.findByText(/Fondation aérobie/);
+    expect(screen.queryByText("Semaine prochaine")).not.toBeInTheDocument();
   });
 
   it("ne dit rien les autres jours", async () => {
