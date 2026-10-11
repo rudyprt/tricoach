@@ -4,7 +4,9 @@ import { env } from "./env.js";
 import { isMailConfigured, sendMail, type Mail } from "./mailer.js";
 import { isPushConfigured, notifier } from "./push.js";
 import { trialEndsAt } from "./subscription.js";
-import { addDays, localCalendarDate, safeTimeZone, startOfWeek } from "./week.js";
+import { addDays, jourLocal, localCalendarDate, safeTimeZone, startOfWeek } from "./week.js";
+
+export { jourLocal };
 
 export const REMINDER_KINDS = ["semaine_a_generer", "seances_oubliees", "fin_essai"] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];
@@ -24,13 +26,6 @@ export function heureLocale(instant: Date, timeZone: string): number {
     hourCycle: "h23",
   }).format(instant);
   return Number(rendu);
-}
-
-/** Jour de la semaine local, 1 = lundi … 7 = dimanche. */
-export function jourLocal(instant: Date, timeZone: string): number {
-  const iso = localCalendarDate(instant, timeZone);
-  const jour = new Date(`${iso}T00:00:00.000Z`).getUTCDay();
-  return jour === 0 ? 7 : jour;
 }
 
 /**

@@ -76,3 +76,10 @@ export function startOfLocalDay(instant: Date, timeZone: string): Date {
   const offsetMs = asUtc.getTime() - instant.getTime();
   return new Date(guess.getTime() - offsetMs);
 }
+
+/** Jour de la semaine local, 1 = lundi … 7 = dimanche. */
+export function jourLocal(instant: Date, timeZone: string): number {
+  const iso = localCalendarDate(instant, timeZone);
+  const jour = new Date(`${iso}T00:00:00.000Z`).getUTCDay();
+  return jour === 0 ? 7 : jour;
+}

@@ -9,7 +9,7 @@ import { serializeSession, sessionStructureSchema } from "../lib/session.js";
 import { hasStandardAccess } from "../lib/subscription.js";
 import { ah, HttpError } from "../lib/http.js";
 import { generationRateLimit } from "../lib/rateLimit.js";
-import { addDays, formatDate, localCalendarDate, startOfWeek, weekDays } from "../lib/week.js";
+import { addDays, formatDate, jourLocal, localCalendarDate, startOfWeek, weekDays } from "../lib/week.js";
 import {
   computeTrainingZones,
   formatZonesForPrompt,
@@ -664,7 +664,15 @@ async function prepareGeneration(
     );
   }
 
-  const weekStart = startOfWeek(new Date(), user.timezone);
+  /*
+   * Le dimanche soir, le rappel invite à préparer la semaine : celle qui
+   * commence le lendemain, pas celle qui s'achève. Sans ce décalage, le
+   * bouton régénérait la semaine finissante et la nouvelle restait
+   * introuvable jusqu'au lundi.
+   */
+  const cetteSemaine = startOfWeek(new Date(), user.timezone);
+  const weekStart =
+    kind === "semaine_suivante" && jourLocal(new Date(), user.timezone) === 7 ? addDays(cetteSemaine, 7) : cetteSemaine;
   const phase = periodization(weekStart, profile.objectifDate);
   // Les zones sont calculées une seule fois, à partir du profil et de ce que
   // les séances importées révèlent (fréquence cardiaque maximale observée).
@@ -1019,21 +1027,20 @@ plansRouter.get(
   ah(async (req: AuthedRequest, res) => {
     const user = await loadUserContext(req.userId!);
     const cetteSemaine = startOfWeek(new Date(), user.timezone);
+    const semaineSuivante = addDays(cetteSemaine, 7);
 
     /*
      * Inscrit un dimanche, l'athlète reçoit la semaine qui commence le
      * lendemain : il ne restait qu'un jour dans la sienne. Sans ce repli, son
      * écran restait vide jusqu'au lundi, programme pourtant prêt.
      */
+    const planDe = (weekStart: Date) =>
+      prisma.trainingPlan.findFirst({ where: { userId: req.userId!, weekStart }, orderBy: { generatedAt: "desc" } });
+    // « ?semaine=suivante » : la semaine préparée le dimanche, consultée avant son début.
     const plan =
-      (await prisma.trainingPlan.findFirst({
-        where: { userId: req.userId!, weekStart: cetteSemaine },
-        orderBy: { generatedAt: "desc" },
-      })) ??
-      (await prisma.trainingPlan.findFirst({
-        where: { userId: req.userId!, weekStart: addDays(cetteSemaine, 7) },
-        orderBy: { generatedAt: "desc" },
-      }));
+      req.query.semaine === "suivante"
+        ? await planDe(semaineSuivante)
+        : ((await planDe(cetteSemaine)) ?? (await planDe(semaineSuivante)));
     if (!plan) {
       res.json(null);
       return;

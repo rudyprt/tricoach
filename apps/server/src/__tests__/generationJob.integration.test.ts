@@ -176,6 +176,40 @@ describeIfDb("génération en tâche de fond", () => {
     expect(courant.body.sessions).toHaveLength(1);
   });
 
+  it("prépare le dimanche soir la semaine qui commence le lendemain", async () => {
+    // Dimanche 11 octobre 2026, 20 h à Paris.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-11T18:00:00.000Z"));
+    try {
+      const { agent, user } = await athlete("dimanche-soir@example.com");
+      const lundi = new Date("2026-10-05T00:00:00.000Z");
+      const enCours = await prisma.trainingPlan.create({ data: { userId: user.id, weekStart: lundi, rawAiJson: "{}" } });
+      await prisma.session.create({
+        data: { planId: enCours.id, userId: user.id, date: lundi, sport: "course", titre: "Footing", dureeMin: 45, status: "faite" },
+      });
+
+      let demandees: string[] = [];
+      askClaude.mockImplementation((params: { messages: { content: string }[] }) => {
+        demandees = [...new Set(params.messages[0].content.match(/2026-10-\d{2}/g) ?? [])].filter((d) => d >= "2026-10-12");
+        return Promise.resolve(planSurDates(demandees));
+      });
+
+      const lancement = await agent.post("/api/plans/next");
+      expect(lancement.status).toBe(202);
+      expect((await waitForJob(agent, lancement.body.id)).status).toBe("reussie");
+      expect([...demandees].sort()[0]).toBe("2026-10-12");
+
+      // La semaine qui s'achève reste affichée ce soir, la suivante est consultable.
+      const courant = await agent.get("/api/plans/current");
+      expect(courant.body.id).toBe(enCours.id);
+      const suivante = await agent.get("/api/plans/current?semaine=suivante");
+      expect(suivante.body.weekStart.slice(0, 10)).toBe("2026-10-12");
+      expect(suivante.body.sessions).toHaveLength(7);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("ne lance pas deux générations en parallèle", async () => {
     const { agent } = await athlete("double@example.com");
     const dates = WEEK();
