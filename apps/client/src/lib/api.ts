@@ -154,6 +154,8 @@ export interface SessionExercise {
   /** Renforcement : nom du mouvement et point technique clé. */
   nom?: string;
   consigne?: string;
+  /** Fréquence cardiaque de la zone visée, calculée sur les zones de l'athlète. */
+  fc?: string;
 }
 
 export interface SessionBlock {
@@ -161,6 +163,8 @@ export interface SessionBlock {
   cible: string;
   description: string;
   exercices?: SessionExercise[];
+  /** Fréquence cardiaque de la zone visée, calculée sur les zones de l'athlète. */
+  fc?: string;
 }
 
 export interface SessionStructure {

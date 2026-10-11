@@ -27,7 +27,7 @@ import {
 } from "../lib/pause.js";
 import { coursesDeLAthlete, coursesPromptLines, facteurVolumeCourses } from "../lib/races.js";
 import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
-import { corrigerCibles, rafraichirCibles } from "../lib/cibles.js";
+import { ajouterFrequencesCardiaques, corrigerCibles, rafraichirCibles } from "../lib/cibles.js";
 import {
   disciplinesImposees,
   disponibilitesPromptLines,
@@ -536,7 +536,7 @@ function planPayload(
   const sessions = plan.sessions.map(serializeSession);
   return {
     ...plan,
-    sessions: zones ? rafraichirCibles(sessions, zones).seances : sessions,
+    sessions: zones ? ajouterFrequencesCardiaques(rafraichirCibles(sessions, zones).seances, zones) : sessions,
     periodization: { phase: phase.phase, label: phase.label, weeksToGoal: phase.weeksToGoal },
   };
 }

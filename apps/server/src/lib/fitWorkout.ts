@@ -92,6 +92,25 @@ interface Etape {
   customTargetValueLow?: number;
   customTargetValueHigh?: number;
   notes?: string;
+  secondaryTargetType?: string;
+  secondaryCustomTargetValueLow?: number;
+  secondaryCustomTargetValueHigh?: number;
+}
+
+/**
+ * La fréquence cardiaque en seconde cible : la montre affiche l'allure ou les
+ * watts à tenir, et les battements à ne pas dépasser. Les montres qui ne
+ * gèrent pas la cible secondaire l'ignorent sans refuser le fichier.
+ */
+function fcSecondaire(sport: string, fc: string | undefined, cible: Pick<Etape, "targetType">): Partial<Etape> {
+  if (!fc || sport === "natation" || cible.targetType === "heartRate") return {};
+  const bornes = bornesNumeriques(fc);
+  if (!bornes) return {};
+  return {
+    secondaryTargetType: "heartRate",
+    secondaryCustomTargetValueLow: bornes[0] + DECALAGE_BPM,
+    secondaryCustomTargetValueHigh: bornes[1] + DECALAGE_BPM,
+  };
 }
 
 /**
@@ -100,15 +119,13 @@ interface Etape {
  * nage. L'allure n'est pas perdue pour autant, elle s'affiche en note de
  * l'étape, là où l'athlète la lit pendant la séance.
  */
-function cibleEtape(
-  sport: string,
-  texte: string,
-  zones: TrainingZones
-): Pick<Etape, "targetType" | "targetValue" | "customTargetValueLow" | "customTargetValueHigh" | "notes"> {
+function cibleEtape(sport: string, texte: string, zones: TrainingZones, fc?: string): Partial<Etape> & Pick<Etape, "targetType"> {
   if (sport === "natation") {
-    return { targetType: "swimStroke", targetValue: 0, ...(texte ? { notes: texte.slice(0, 50) } : {}) };
+    const note = [texte, fc].filter(Boolean).join(" · ");
+    return { targetType: "swimStroke", targetValue: 0, ...(note ? { notes: note.slice(0, 50) } : {}) };
   }
-  return cibleFit(sport, texte, zones);
+  const cible = cibleFit(sport, texte, zones);
+  return { ...cible, ...fcSecondaire(sport, fc, cible) };
 }
 
 /** Cible chiffrée d'un bloc, exprimée dans l'unité que le format attend. */
@@ -241,7 +258,7 @@ function etapesDuCorps(
           wktStepName: "Corps de séance",
           intensity: "active",
           ...dureeOuDistance(Math.max(1, corps.dureeMin), corps.cible, zones, longueurBassin),
-          ...cibleEtape(sport, corps.cible, zones),
+          ...cibleEtape(sport, corps.cible, zones, corps.fc),
         },
       ],
       repetition: null,
@@ -271,7 +288,7 @@ function etapesDuCorps(
       // Une séance de nage ne connaît que « active » pour ses séries.
       intensity: sport === "natation" ? "active" : "interval",
       ...duree,
-      ...cibleEtape(sport, exercice.allure || corps.cible, zones),
+      ...cibleEtape(sport, exercice.allure || corps.cible, zones, exercice.fc ?? corps.fc),
     },
   ];
 
@@ -382,7 +399,7 @@ export function construireFitWorkout(
       wktStepName: "Échauffement",
       intensity: "warmup",
       ...dureeOuDistance(echauffement.dureeMin, echauffement.cible, zones, longueurBassin),
-      ...cibleEtape(seance.sport, echauffement.cible, zones),
+      ...cibleEtape(seance.sport, echauffement.cible, zones, echauffement.fc),
     });
   }
 
@@ -411,7 +428,7 @@ export function construireFitWorkout(
       wktStepName: "Retour au calme",
       intensity: "cooldown",
       ...dureeOuDistance(retourCalme.dureeMin, retourCalme.cible, zones, longueurBassin),
-      ...cibleEtape(seance.sport, retourCalme.cible, zones),
+      ...cibleEtape(seance.sport, retourCalme.cible, zones, retourCalme.fc),
     });
   }
 

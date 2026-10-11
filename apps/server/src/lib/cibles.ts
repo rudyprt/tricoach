@@ -99,7 +99,8 @@ export function uniteIncoherente(sport: string, cible: string, zones: TrainingZo
 
 interface BlocCible {
   cible?: string;
-  exercices?: { allure?: string }[] | null;
+  fc?: string;
+  exercices?: { allure?: string; fc?: string }[] | null;
 }
 
 interface SeanceCorrigeable {
@@ -322,4 +323,50 @@ export function rafraichirCibles<T extends SeanceCorrigeable & { status?: string
   });
 
   return { seances: misesAJour, rafraichies };
+}
+
+/**
+ * Zones de fréquence cardiaque d'une discipline, au seuil de cette discipline.
+ * La course a les siennes, le vélo et la natation un seuil plus bas.
+ */
+function zonesFcPour(sport: string, zones: TrainingZones): Map<string, string> | null {
+  const depuis = (ranges: ZoneRange[] | null | undefined, cle: "fc" | "value") => {
+    const paires = (ranges ?? []).filter((r) => r[cle]?.endsWith("bpm")).map((r) => [r.zone, r[cle]!] as const);
+    return paires.length ? new Map(paires) : null;
+  };
+  if (sport === "course") return depuis(zones.course, "fc") ?? depuis(zones.frequenceCardiaque, "value");
+  if (sport === "velo") return depuis(zones.velo ?? zones.veloVitesse, "fc") ?? depuis(zones.frequenceCardiaqueVelo, "value");
+  if (sport === "natation") return depuis(zones.natation, "fc");
+  return null;
+}
+
+/**
+ * La fréquence cardiaque de chaque bloc, à côté de l'allure.
+ *
+ * Le coach n'écrit qu'une valeur par cible — deux chiffres rédigés par le
+ * modèle qui ne coïncident pas font douter des deux. Mais l'athlète veut ses
+ * battements sous les yeux : ils sont donc ajoutés ici, tirés de SES zones et
+ * de la zone que vise le bloc, jamais inventés. Sans zone citée ou sans
+ * donnée cardiaque, rien n'est ajouté.
+ */
+export function ajouterFrequencesCardiaques<T extends SeanceCorrigeable>(seances: T[], zones: TrainingZones): T[] {
+  return seances.map((seance) => {
+    const parZone = zonesFcPour(seance.sport, zones);
+    if (!seance.structure || !parZone) return seance;
+
+    const structure = { ...seance.structure };
+    for (const nom of BLOCS) {
+      const bloc = structure[nom];
+      if (!bloc) continue;
+      const zoneBloc = bloc.cible ? zoneCitee(bloc.cible) : null;
+      const fcBloc = zoneBloc ? parZone.get(zoneBloc) : undefined;
+      const exercices = bloc.exercices?.map((exercice) => {
+        const zone = (exercice.allure && zoneCitee(exercice.allure)) || zoneBloc;
+        const fc = zone ? parZone.get(zone) : undefined;
+        return fc ? { ...exercice, fc } : exercice;
+      });
+      structure[nom] = { ...bloc, ...(fcBloc ? { fc: fcBloc } : {}), ...(exercices ? { exercices } : {}) };
+    }
+    return { ...seance, structure };
+  });
 }

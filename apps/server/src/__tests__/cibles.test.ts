@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { bornesNumeriques, corrigerCibles, rafraichirCibles, uniteIncoherente, zoneCitee } from "../lib/cibles.js";
-import type { TrainingZones } from "../lib/training.js";
+import { ajouterFrequencesCardiaques, bornesNumeriques, corrigerCibles, rafraichirCibles, uniteIncoherente, zoneCitee } from "../lib/cibles.js";
+import { computeTrainingZones, type TrainingZones } from "../lib/training.js";
+import type { SessionStructure } from "../lib/session.js";
 
 const ZONES: TrainingZones = {
   course: [
@@ -311,5 +312,41 @@ describe("unités réparées à la lecture", () => {
     const { seances } = rafraichirCibles([passee], APRES);
 
     expect(seances[0]).toBe(passee);
+  });
+});
+
+describe("fréquence cardiaque de chaque bloc", () => {
+  const zones = computeTrainingZones({ seuilCourseSecParKm: 252, ftpWatts: 238, cssSecPer100m: 102, fcSeuil: 168, fcMax: 189 });
+  const fcDe = (liste: { zone: string; fc?: string }[] | null, zone: string) => liste!.find((z) => z.zone === zone)!.fc;
+  const seance = (sport: string) => ({
+    sport,
+    structure: {
+      echauffement: { dureeMin: 15, cible: "Z2 endurance fondamentale", description: "" },
+      corps: { dureeMin: 30, cible: "Z3 tempo", description: "", exercices: [{ repetitions: "6 x 1000m", allure: "Z4 seuil — 4:10/km" }] },
+      retourCalme: { dureeMin: 10, cible: "Z1 récupération", description: "" },
+    } as SessionStructure,
+  });
+
+  it("donne à chaque bloc les battements de sa zone, tirés des zones de l'athlète", () => {
+    const [course] = ajouterFrequencesCardiaques([seance("course")], zones);
+    expect(course.structure.echauffement.fc).toBe(fcDe(zones.course, "Z2"));
+    expect(course.structure.corps.fc).toBe(fcDe(zones.course, "Z3"));
+    // L'exercice vise sa propre zone, pas celle du bloc.
+    expect(course.structure.corps.exercices![0].fc).toBe(fcDe(zones.course, "Z4"));
+    expect(course.structure.retourCalme.fc).toMatch(/^\d+–\d+ bpm$/);
+  });
+
+  it("prend la fréquence propre à la discipline", () => {
+    const [velo] = ajouterFrequencesCardiaques([seance("velo")], zones);
+    const [course] = ajouterFrequencesCardiaques([seance("course")], zones);
+    // Assis sur le vélo, le cœur bat plus bas à effort égal.
+    expect(velo.structure.corps.fc).toBe(fcDe(zones.velo, "Z3"));
+    expect(velo.structure.corps.fc).not.toBe(course.structure.corps.fc);
+  });
+
+  it("n'invente rien sans donnée cardiaque ni pour le renforcement", () => {
+    const sansFc = computeTrainingZones({ seuilCourseSecParKm: 252 });
+    expect(ajouterFrequencesCardiaques([seance("course")], sansFc)[0].structure.corps).not.toHaveProperty("fc");
+    expect(ajouterFrequencesCardiaques([seance("renfo")], zones)[0].structure.corps).not.toHaveProperty("fc");
   });
 });

@@ -132,6 +132,12 @@ export function SeanceGuidee({ session, onFermer }: { session: Session; onFermer
         {courant.bloc.cible && (
           <p className="mt-6 font-mono text-lg text-accent-clair">{courant.bloc.cible}</p>
         )}
+        {courant.bloc.fc && (
+          <p className="mt-2 flex items-center gap-1.5 font-mono text-2xl font-bold text-rose-300">
+            <span aria-hidden="true">❤️</span>
+            <span>{courant.bloc.fc}</span>
+          </p>
+        )}
         <p className="mt-2 max-w-sm text-base leading-relaxed text-doux">{courant.bloc.description}</p>
 
         {courant.bloc.exercices && courant.bloc.exercices.length > 0 && (
@@ -141,6 +147,7 @@ export function SeanceGuidee({ session, onFermer }: { session: Session; onFermer
                 {ex.nom && <p className="font-semibold text-fort">{ex.nom}</p>}
                 <span className="font-mono font-semibold text-fort">{ex.repetitions}</span>
                 <span className="text-doux">{ex.nom ? ` · ${ex.allure}` : ` à ${ex.allure}`}</span>
+                {ex.fc && <span className="font-semibold text-rose-300"> · ❤️ {ex.fc}</span>}
                 {ex.recuperation && (
                   <span className="text-tres-doux">
                     {" "}

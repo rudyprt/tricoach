@@ -5,7 +5,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { serializeSession } from "../lib/session.js";
 import { ah, HttpError } from "../lib/http.js";
 import { zonesActuelles } from "../lib/zoneInputs.js";
-import { rafraichirCibles } from "../lib/cibles.js";
+import { ajouterFrequencesCardiaques, rafraichirCibles } from "../lib/cibles.js";
 import { construireFitWorkout, nomFichierFit } from "../lib/fitWorkout.js";
 import { parseMateriel } from "../lib/disponibilites.js";
 
@@ -60,7 +60,7 @@ sessionsRouter.get(
     const serialisees = page.map(serializeSession);
 
     res.json({
-      sessions: zones ? rafraichirCibles(serialisees, zones).seances : serialisees,
+      sessions: zones ? ajouterFrequencesCardiaques(rafraichirCibles(serialisees, zones).seances, zones) : serialisees,
       nextCursor: hasMore ? page[page.length - 1]?.id : null,
     });
   })
@@ -175,7 +175,7 @@ sessionsRouter.get(
     const bassin = parseMateriel(profil?.materiel)?.piscine ?? null;
 
     const serialisee = serializeSession(seance);
-    const [aJour] = rafraichirCibles([serialisee], zones).seances;
+    const [aJour] = ajouterFrequencesCardiaques(rafraichirCibles([serialisee], zones).seances, zones);
 
     const fichier = construireFitWorkout(aJour, zones, bassin);
     if (!fichier) {
