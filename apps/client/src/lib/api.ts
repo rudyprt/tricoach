@@ -77,6 +77,8 @@ export interface Materiel {
   tapisCourse: boolean;
   piscine: "aucune" | "25m" | "50m" | "eau_libre";
   velo: "route" | "contre_la_montre" | "vtt" | "aucun";
+  /** Matériel de renforcement ; absent des profils enregistrés avant son ajout. */
+  renfo?: "poids_du_corps" | "elastiques" | "halteres" | "salle";
 }
 
 export type TrainingPhase =
@@ -139,6 +141,9 @@ export interface SessionExercise {
   repetitions: string;
   allure: string;
   recuperation?: string;
+  /** Renforcement : nom du mouvement et point technique clé. */
+  nom?: string;
+  consigne?: string;
 }
 
 export interface SessionBlock {

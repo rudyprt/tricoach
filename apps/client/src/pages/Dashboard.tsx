@@ -56,16 +56,40 @@ export function Dashboard() {
   const [overtraining, setOvertraining] = useState<OvertrainingInsight | null>(null);
   const [hasPastPlan, setHasPastPlan] = useState(false);
   const [debriefDismissed, setDebriefDismissed] = useState(false);
+  /*
+   * Le dimanche, la semaine en cours s'achève et la suivante se prépare. On
+   * peut consulter l'une ou l'autre : la séance du jour reste à valider, la
+   * semaine qui vient à découvrir.
+   */
+  const estDimanche = new Date().getDay() === 0;
+  const [vue, setVue] = useState<"courante" | "suivante">("courante");
+  const vueRef = useRef(vue);
+  const [suivantePrete, setSuivantePrete] = useState(false);
+  /** Bascule sur la semaine prochaine une fois sa génération réussie. */
+  const basculerApres = useRef(false);
 
   const loadPlan = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get<TrainingPlan | null>("/plans/current");
+      const suivante = vueRef.current === "suivante";
+      const { data } = await api.get<TrainingPlan | null>("/plans/current", {
+        params: suivante ? { semaine: "suivante" } : undefined,
+      });
       setPlan(data);
+      if (suivante && data) setSuivantePrete(true);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const afficherSemaine = useCallback(
+    (cible: "courante" | "suivante") => {
+      vueRef.current = cible;
+      setVue(cible);
+      void loadPlan();
+    },
+    [loadPlan]
+  );
 
   /**
    * La génération dure souvent plus d'une minute : le serveur la traite en
@@ -93,10 +117,15 @@ export function Dashboard() {
       setGenerating(false);
       if (current.status === "reussie") {
         setDebriefDismissed(false);
+        if (basculerApres.current) {
+          vueRef.current = "suivante";
+          setVue("suivante");
+        }
         await loadPlan();
       } else {
         setError(current.error ?? "Échec de la génération du programme.");
       }
+      basculerApres.current = false;
     },
     [loadPlan]
   );
@@ -111,6 +140,7 @@ export function Dashboard() {
         await followJob(data);
       } catch (err) {
         setGenerating(false);
+        basculerApres.current = false;
         if (isSubscriptionRequiredError(err)) {
           setSubscriptionRequired(true);
         }
@@ -121,7 +151,12 @@ export function Dashboard() {
   );
 
   const generatePlan = useCallback(() => startGeneration("/plans/generate"), [startGeneration]);
-  const generateNextWeek = useCallback(() => startGeneration("/plans/next"), [startGeneration]);
+  const generateNextWeek = useCallback(() => {
+    // Le dimanche, le serveur prépare la semaine du lendemain : c'est elle
+    // qu'on affiche une fois prête.
+    basculerApres.current = estDimanche;
+    return startGeneration("/plans/next");
+  }, [startGeneration, estDimanche]);
 
   /**
    * Réajuste les jours restants. Le motif est facultatif mais précieux : il
@@ -170,6 +205,12 @@ export function Dashboard() {
       .catch(() => undefined);
     api.get<AthleteProfile | null>("/profile").then(({ data }) => setProfile(data));
     api.get<{ exists: boolean }>("/plans/previous").then(({ data }) => setHasPastPlan(data.exists));
+    if (estDimanche) {
+      api
+        .get<TrainingPlan | null>("/plans/current", { params: { semaine: "suivante" } })
+        .then(({ data }) => setSuivantePrete(Boolean(data)))
+        .catch(() => undefined);
+    }
     if (user?.isPremium) {
       api.get<OvertrainingInsight>("/insights/overtraining").then(({ data }) => setOvertraining(data));
     }
@@ -258,7 +299,10 @@ export function Dashboard() {
           : "Les séances encore planifiées seront remplacées.",
       confirmer: "Régénérer",
     });
-    if (confirme) generatePlan();
+    if (confirme) {
+      if (vue === "suivante") generateNextWeek();
+      else generatePlan();
+    }
   }
 
   const trialDaysLeft =
@@ -391,7 +435,15 @@ export function Dashboard() {
 
         <div className="lg:order-1 lg:min-w-0">
       {generating ? (
-        <GenerationEnCours titre={plan ? "Votre coach réajuste la semaine" : "Votre coach prépare la semaine"} />
+        <GenerationEnCours
+          titre={
+            basculerApres.current
+              ? "Votre coach prépare la semaine prochaine"
+              : plan
+                ? "Votre coach réajuste la semaine"
+                : "Votre coach prépare la semaine"
+          }
+        />
       ) : loading ? (
         <p className="flex items-center gap-2 text-doux">
           <Spinner /> Chargement…
@@ -419,6 +471,34 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="space-y-5">
+          {estDimanche && vue === "courante" && (
+            <div className="animate-fade-in-up flex items-center justify-between gap-3 rounded-2xl border border-rose-900/50 bg-gradient-to-r from-rose-950/50 to-black p-3.5">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">🗓️ Votre semaine se termine ce soir</p>
+                <p className="text-xs text-doux">
+                  {suivantePrete ? "La suivante est prête." : "Votre coach peut déjà préparer la suivante."}
+                </p>
+              </div>
+              <Bouton
+                variante="principal"
+                className="shrink-0"
+                onClick={suivantePrete ? () => afficherSemaine("suivante") : generateNextWeek}
+              >
+                {suivantePrete ? "Voir la semaine prochaine" : "Préparer la semaine prochaine"}
+              </Bouton>
+            </div>
+          )}
+          {vue === "suivante" && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-bordure bg-surface px-3.5 py-2.5">
+              <p className="text-sm font-semibold text-fort">Semaine prochaine</p>
+              <button
+                onClick={() => afficherSemaine("courante")}
+                className="text-xs font-semibold text-rose-400 hover:underline"
+              >
+                ← Revenir à cette semaine
+              </button>
+            </div>
+          )}
           {/* La forme de la semaine avant son détail : où sont les jours durs,
               où sont les jours de repos. */}
           <VueSemaine sessions={plan.sessions} selectionId={selectedId} onSelect={setSelectedId} />

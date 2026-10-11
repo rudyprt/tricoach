@@ -5,6 +5,10 @@ export const sessionExerciseSchema = z.object({
   repetitions: z.string(),
   allure: z.string(),
   recuperation: z.string().optional(),
+  /** Nom du mouvement, pour le renforcement : « 3 x 10 » ne dit pas quoi faire. */
+  nom: z.string().max(80).optional(),
+  /** Point technique clé, pour le renforcement. */
+  consigne: z.string().max(160).optional(),
 });
 
 export const sessionBlockSchema = z.object({

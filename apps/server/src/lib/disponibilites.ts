@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MATERIELS_RENFO, renfoMaterielLigne } from "./renforcement.js";
 import { formatDate, weekDays } from "./week.js";
 
 /**
@@ -75,6 +76,8 @@ export const materielSchema = z
     tapisCourse: z.boolean().optional().default(false),
     piscine: z.enum(PISCINES).optional().default("25m"),
     velo: z.enum(VELOS).optional().default("route"),
+    /** Ce qui est disponible pour le renforcement : la charge prescrite doit être faisable. */
+    renfo: z.enum(MATERIELS_RENFO).optional().default("poids_du_corps"),
   })
   .nullable()
   .optional();
@@ -226,6 +229,7 @@ export function materielPromptLines(materiel: Materiel | null): string[] {
   if (!materiel.cardiofrequencemetre && !materiel.montreGps) {
     lignes.push("- Ni cardiofréquencemètre ni montre GPS : exprime l'intensité en sensation et en capacité à parler, pas en chiffres que l'athlète ne peut pas lire pendant l'effort.");
   }
+  lignes.push(renfoMaterielLigne(materiel.renfo));
 
   return lignes;
 }

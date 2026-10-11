@@ -22,11 +22,16 @@ let app: Express;
 let prisma: import("@prisma/client").PrismaClient;
 let resetAllRateLimits: () => Promise<void>;
 
+/**
+ * La semaine que sert la première génération. Le dimanche, il ne reste qu'un
+ * jour : c'est la semaine suivante qui est produite, et le test échouait
+ * chaque dimanche en attendant la semaine en cours.
+ */
 const WEEK = () => {
   const d = new Date();
   const day = d.getUTCDay();
   d.setUTCHours(0, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() + ((day === 0 ? -6 : 1) - day));
+  d.setUTCDate(d.getUTCDate() + (day === 0 ? 1 : 1 - day));
   return Array.from({ length: 7 }, (_, i) => {
     const x = new Date(d);
     x.setUTCDate(x.getUTCDate() + i);
@@ -154,6 +159,55 @@ describeIfDb("génération en tâche de fond", () => {
     const aujourdHui = new Date().toISOString().slice(0, 10);
     const attendus = dates.filter((d) => d >= aujourdHui).length;
     expect(plan.body.sessions).toHaveLength(attendus >= 2 ? attendus : 7);
+  });
+
+  it("affiche la semaine à venir quand elle seule existe, comme après une inscription un dimanche", async () => {
+    const { agent, user } = await athlete("dimanche@example.com");
+    const { startOfWeek, addDays } = await import("../lib/week.js");
+    const { timezone } = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const lundiProchain = addDays(startOfWeek(new Date(), timezone), 7);
+    const plan = await prisma.trainingPlan.create({ data: { userId: user.id, weekStart: lundiProchain, rawAiJson: "{}" } });
+    await prisma.session.create({
+      data: { planId: plan.id, userId: user.id, date: lundiProchain, sport: "course", titre: "Footing", dureeMin: 45 },
+    });
+
+    const courant = await agent.get("/api/plans/current");
+    expect(courant.body?.id).toBe(plan.id);
+    expect(courant.body.sessions).toHaveLength(1);
+  });
+
+  it("prépare le dimanche soir la semaine qui commence le lendemain", async () => {
+    // Dimanche 11 octobre 2026, 20 h à Paris.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-11T18:00:00.000Z"));
+    try {
+      const { agent, user } = await athlete("dimanche-soir@example.com");
+      const lundi = new Date("2026-10-05T00:00:00.000Z");
+      const enCours = await prisma.trainingPlan.create({ data: { userId: user.id, weekStart: lundi, rawAiJson: "{}" } });
+      await prisma.session.create({
+        data: { planId: enCours.id, userId: user.id, date: lundi, sport: "course", titre: "Footing", dureeMin: 45, status: "faite" },
+      });
+
+      let demandees: string[] = [];
+      askClaude.mockImplementation((params: { messages: { content: string }[] }) => {
+        demandees = [...new Set(params.messages[0].content.match(/2026-10-\d{2}/g) ?? [])].filter((d) => d >= "2026-10-12");
+        return Promise.resolve(planSurDates(demandees));
+      });
+
+      const lancement = await agent.post("/api/plans/next");
+      expect(lancement.status).toBe(202);
+      expect((await waitForJob(agent, lancement.body.id)).status).toBe("reussie");
+      expect([...demandees].sort()[0]).toBe("2026-10-12");
+
+      // La semaine qui s'achève reste affichée ce soir, la suivante est consultable.
+      const courant = await agent.get("/api/plans/current");
+      expect(courant.body.id).toBe(enCours.id);
+      const suivante = await agent.get("/api/plans/current?semaine=suivante");
+      expect(suivante.body.weekStart.slice(0, 10)).toBe("2026-10-12");
+      expect(suivante.body.sessions).toHaveLength(7);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ne lance pas deux générations en parallèle", async () => {

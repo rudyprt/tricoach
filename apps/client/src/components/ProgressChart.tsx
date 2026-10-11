@@ -1,5 +1,6 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import type { Session } from "../lib/api";
+import { formatDuree } from "../lib/formats";
 
 function weekStartLabel(dateStr: string): string {
   const d = new Date(dateStr);
@@ -27,7 +28,8 @@ function buildWeeklyData(sessions: Session[]): WeekPoint[] {
       byWeek.set(label, { semaine: label, natation: 0, velo: 0, course: 0, renfo: 0 });
     }
     const point = byWeek.get(label)!;
-    const hours = s.dureeMin / 60;
+    // Ce qui a été fait, pas ce qui était prévu, quand l'athlète l'a renseigné.
+    const hours = (s.dureeReelleMin ?? s.dureeMin) / 60;
     if (s.sport === "natation") point.natation += hours;
     else if (s.sport === "velo") point.velo += hours;
     else if (s.sport === "course") point.course += hours;
@@ -58,6 +60,9 @@ export function ProgressChart({ sessions }: { sessions: Session[] }) {
           <Tooltip
             contentStyle={{ background: "#09090b", border: "1px solid #27272a", borderRadius: 8 }}
             labelStyle={{ color: "#e4e4e7" }}
+            // Les heures sont des fractions (70 min → 1,1666…) : on les relit
+            // en durée, comme l'athlète les compte.
+            formatter={(v: number) => formatDuree(Math.round(v * 60))}
           />
           <Legend />
           <Line type="monotone" dataKey="natation" name="Natation" stroke="#38bdf8" strokeWidth={2} />

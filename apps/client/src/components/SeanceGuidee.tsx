@@ -138,9 +138,16 @@ export function SeanceGuidee({ session, onFermer }: { session: Session; onFermer
           <ul className="mt-4 w-full max-w-sm space-y-1.5 text-left">
             {courant.bloc.exercices.map((ex, i) => (
               <li key={i} className="rounded-lg bg-surface px-3 py-2 text-sm">
+                {ex.nom && <p className="font-semibold text-fort">{ex.nom}</p>}
                 <span className="font-mono font-semibold text-fort">{ex.repetitions}</span>
-                <span className="text-doux"> à {ex.allure}</span>
-                {ex.recuperation && <span className="text-tres-doux"> · récup {ex.recuperation}</span>}
+                <span className="text-doux">{ex.nom ? ` · ${ex.allure}` : ` à ${ex.allure}`}</span>
+                {ex.recuperation && (
+                  <span className="text-tres-doux">
+                    {" "}
+                    · {ex.nom ? "repos" : "récup"} {ex.recuperation}
+                  </span>
+                )}
+                {ex.consigne && <p className="mt-0.5 text-xs italic text-doux">{ex.consigne}</p>}
               </li>
             ))}
           </ul>

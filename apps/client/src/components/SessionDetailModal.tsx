@@ -39,17 +39,30 @@ function BlockCard({ label, block, color }: { label: string; block: SessionBlock
 
       {block.exercices && block.exercices.length > 0 && (
         <ul className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
-          {block.exercices.map((ex, i) => (
-            <li key={i} className="flex items-start gap-2 text-xs">
-              <span className="mt-0.5 shrink-0 rounded bg-black/30 px-1.5 py-0.5 font-mono text-zinc-300">
-                {ex.repetitions}
-              </span>
-              <span className="text-doux">
-                {ex.allure}
-                {ex.recuperation ? ` · récup ${ex.recuperation}` : ""}
-              </span>
-            </li>
-          ))}
+          {block.exercices.map((ex, i) =>
+            ex.nom ? (
+              // Renforcement : une fiche de salle, un exercice par ligne.
+              <li key={i} className="rounded-lg bg-black/25 px-2.5 py-2 text-xs">
+                <p className="text-sm font-semibold text-fort">{ex.nom}</p>
+                <p className="mt-0.5 text-zinc-300">
+                  <span className="font-mono font-semibold">{ex.repetitions}</span>
+                  {ex.allure ? ` · ${ex.allure}` : ""}
+                  {ex.recuperation ? ` · repos ${ex.recuperation}` : ""}
+                </p>
+                {ex.consigne && <p className="mt-0.5 italic text-doux">{ex.consigne}</p>}
+              </li>
+            ) : (
+              <li key={i} className="flex items-start gap-2 text-xs">
+                <span className="mt-0.5 shrink-0 rounded bg-black/30 px-1.5 py-0.5 font-mono text-zinc-300">
+                  {ex.repetitions}
+                </span>
+                <span className="text-doux">
+                  {ex.allure}
+                  {ex.recuperation ? ` · récup ${ex.recuperation}` : ""}
+                </span>
+              </li>
+            )
+          )}
         </ul>
       )}
     </div>
