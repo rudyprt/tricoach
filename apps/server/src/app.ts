@@ -22,6 +22,7 @@ import { pushRouter } from "./routes/push.js";
 import { partageRouter } from "./routes/partage.js";
 import { consignesRouter } from "./routes/consignes.js";
 import { nutritionRouter } from "./routes/nutrition.js";
+import { capturesRouter } from "./routes/captures.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
 import { env, isProduction } from "./lib/env.js";
 
@@ -87,6 +88,7 @@ export function createApp() {
   app.use("/api/profile", profileRouter);
   app.use("/api/plans", plansRouter);
   app.use("/api/sessions", sessionsRouter);
+  app.use("/api/sessions", capturesRouter);
   app.use("/api/chat", chatRouter);
   app.use("/api/insights", insightsRouter);
   app.use("/api/calendar", calendarRouter);
