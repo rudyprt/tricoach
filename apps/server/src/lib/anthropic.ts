@@ -1,8 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "./env.js";
-import type { TokenUsage } from "./pricing.js";
-
-export const MODEL = "claude-sonnet-5";
+import { costMicroUsd, type TokenUsage } from "./pricing.js";
+import { reflexionPermanente } from "./modeles.js";
 
 export function isAiConfigured(): boolean {
   return Boolean(env().ANTHROPIC_API_KEY);
@@ -51,23 +50,41 @@ export type ClaudeMessage = {
   content: Anthropic.MessageParam["content"];
 };
 
+/**
+ * Un appel au modèle.
+ *
+ * Le prompt système arrive en deux parties. `system` porte les consignes, les
+ * mêmes pour tous les athlètes : il est mis en cache, et les appels suivants ne
+ * le paient plus qu'au dixième de son prix (les outils, placés avant lui, en
+ * profitent aussi). `contexte` porte ce qui change d'un athlète ou d'une
+ * question à l'autre : placé après, il ne casse pas le cache.
+ */
 export async function askClaude(params: {
+  modele: string;
+  /** Type d'appel, pour le journal. */
+  etiquette: string;
   system: string;
+  contexte?: string;
   messages: ClaudeMessage[];
-  maxTokens?: number;
+  maxTokens: number;
   tools?: Anthropic.Tool[];
 }): Promise<ClaudeResponse> {
   const anthropic = getClient();
-  // Cette version du SDK ne type pas encore "thinking", mais l'API l'accepte : on le
-  // désactive explicitement pour que tout le budget de tokens serve la réponse visible
-  // (sans ça, le modèle peut consommer max_tokens entier en réflexion interne invisible).
+  const system = [
+    { type: "text", text: params.system, cache_control: { type: "ephemeral" } },
+    ...(params.contexte ? [{ type: "text", text: params.contexte }] : []),
+  ];
+  // Cette version du SDK ne type ni "thinking" ni le cache, que l'API accepte.
+  // La réflexion est désactivée là où c'est permis, pour que tout le budget de
+  // tokens serve la réponse visible ; les modèles qui pensent toujours la gardent,
+  // et leur plafond de sortie en tient compte.
   const response = (await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: params.maxTokens ?? 2000,
-    system: params.system,
+    model: params.modele,
+    max_tokens: params.maxTokens,
+    system,
     messages: params.messages,
     ...(params.tools?.length ? { tools: params.tools } : {}),
-    thinking: { type: "disabled" },
+    ...(reflexionPermanente(params.modele) ? {} : { thinking: { type: "disabled" } }),
   } as any)) as Anthropic.Message;
   const textBlock = response.content.find((block) => block.type === "text");
   const text = textBlock && textBlock.type === "text" ? textBlock.text : "";
@@ -85,30 +102,38 @@ export async function askClaude(params: {
     );
   } else if (response.stop_reason === "max_tokens") {
     console.error(
-      `Réponse Claude tronquée par la limite de tokens (maxTokens=${params.maxTokens ?? 2000}, longueur reçue=${text.length} caractères).`
+      `Réponse Claude tronquée par la limite de tokens (maxTokens=${params.maxTokens}, longueur reçue=${text.length} caractères).`
     );
   }
 
   // Cette version du SDK ne type pas encore les compteurs de cache, que l'API
   // renvoie pourtant : on les lit sans supposer leur présence.
-  const usage = (response.usage ?? {}) as {
+  const brut = (response.usage ?? {}) as {
     input_tokens?: number;
     output_tokens?: number;
     cache_read_input_tokens?: number;
     cache_creation_input_tokens?: number;
   };
-
-  return {
-    text,
-    toolUses,
-    content: response.content,
-    stopReason: response.stop_reason ?? null,
-    model: response.model ?? MODEL,
-    usage: {
-      inputTokens: usage.input_tokens ?? 0,
-      outputTokens: usage.output_tokens ?? 0,
-      cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-      cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
-    },
+  const usage: TokenUsage = {
+    inputTokens: brut.input_tokens ?? 0,
+    outputTokens: brut.output_tokens ?? 0,
+    cacheReadTokens: brut.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: brut.cache_creation_input_tokens ?? 0,
   };
+  const model = response.model ?? params.modele;
+  console.info(journalAppel(params.etiquette, model, usage));
+
+  return { text, toolUses, content: response.content, stopReason: response.stop_reason ?? null, model, usage };
+}
+
+/**
+ * Une ligne par appel : ce qui est entré, sorti, lu ou écrit dans le cache, et
+ * le prix. C'est elle qui dit si une économie annoncée se vérifie.
+ */
+export function journalAppel(etiquette: string, model: string, usage: TokenUsage): string {
+  const cout = costMicroUsd(model, usage) / 1_000_000;
+  return (
+    `[ia] ${etiquette} modele=${model} entree=${usage.inputTokens} sortie=${usage.outputTokens}` +
+    ` cache_lu=${usage.cacheReadTokens} cache_ecrit=${usage.cacheWriteTokens} cout=${cout.toFixed(5)}$`
+  );
 }

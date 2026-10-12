@@ -45,7 +45,6 @@ const prompt = (profil: Partial<ProfileForPrompt>) =>
     phase,
     300,
     [],
-    [],
     zones,
     []
   );

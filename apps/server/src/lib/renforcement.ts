@@ -35,6 +35,11 @@ const PAR_PHASE: Record<TrainingPhase, string> = {
 
 /** Consignes du prompt système pour toute séance de renforcement. */
 export function renfoPromptLines(phase: TrainingPhase): string[] {
+  return [...renfoReglesLines(), `- ${renfoPhaseLigne(phase)}`];
+}
+
+/** Ce qui vaut quelle que soit la phase : la partie mise en cache du prompt. */
+export function renfoReglesLines(): string[] {
   return [
     "",
     "SÉANCES DE RENFORCEMENT (sport: renfo) — à écrire comme une vraie séance de musculation, jamais comme un simple titre :",
@@ -45,8 +50,12 @@ export function renfoPromptLines(phase: TrainingPhase): string[] {
     "- \"echauffement\" : 8 à 10 min de mobilité articulaire et d'activation. \"retourCalme\" : 5 à 10 min d'étirements doux ou de mobilité. Leur \"cible\" est un RPE (ex : \"RPE 3/10\"), jamais une zone ni une allure.",
     "- \"corps.cible\" donne l'intensité globale en RPE (ex : \"RPE 7/10\"). Séance de 30 à 50 min au total.",
     "- Placement : jamais de renforcement des jambes la veille d'une séance clé de course à pied ou de vélo ; idéalement le même jour qu'une séance facile.",
-    `- ${PAR_PHASE[phase]}`,
   ];
+}
+
+/** Volume, charge et fréquence du renforcement dans la phase courante. */
+export function renfoPhaseLigne(phase: TrainingPhase): string {
+  return PAR_PHASE[phase];
 }
 
 /** Ligne du matériel : la charge prescrite doit être réalisable chez l'athlète. */

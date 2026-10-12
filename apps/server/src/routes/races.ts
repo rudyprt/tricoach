@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { athleteWriteRateLimit, byUser, rateLimit } from "../lib/rateLimit.js";
 import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropic.js";
+import { MAX_TOKENS, MODELE_PLAN_COURSE } from "../lib/modeles.js";
 import { recordAiCall } from "../lib/aiUsage.js";
 import { computeTrainingZones } from "../lib/training.js";
 import { buildZoneInputs } from "../lib/zoneInputs.js";
@@ -173,7 +174,13 @@ racesRouter.post(
 
     let plan;
     try {
-      const response = await askClaude({ system, messages: [{ role: "user", content: userPrompt }], maxTokens: 4000 });
+      const response = await askClaude({
+        modele: MODELE_PLAN_COURSE,
+        etiquette: "plan_course",
+        system,
+        messages: [{ role: "user", content: userPrompt }],
+        maxTokens: MAX_TOKENS.planCourse,
+      });
       // L'appel est enregistré avant la validation : une réponse mal formée a
       // été facturée quand même, et le coût affiché doit rester fidèle.
       try {

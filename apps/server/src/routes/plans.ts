@@ -3,7 +3,9 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL } from "../lib/anthropic.js";
+import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropic.js";
+import { MAX_TOKENS, MODELE_PLAN } from "../lib/modeles.js";
+import { resumeAthlete } from "../lib/resumeAthlete.js";
 import { recordAiCall, type AiCallKind } from "../lib/aiUsage.js";
 import { serializeSession, sessionStructureSchema } from "../lib/session.js";
 import { hasStandardAccess } from "../lib/subscription.js";
@@ -39,7 +41,7 @@ import {
 } from "../lib/disponibilites.js";
 import { DESCRIPTION_REPOS_DECLARE } from "../lib/reposDeclare.js";
 import { describeActivity } from "../lib/activityMatching.js";
-import { renfoPromptLines } from "../lib/renforcement.js";
+import { renfoPhaseLigne, renfoReglesLines } from "../lib/renforcement.js";
 import { consignesActives, consignesPromptLines } from "../lib/consignesCoach.js";
 
 export const plansRouter = Router();
@@ -86,64 +88,67 @@ export interface ProfileForPrompt {
   materiel: unknown;
 }
 
-export function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): string {
-  const lines = [
-    "Tu es un coach de triathlon expérimenté et bienveillant.",
-    "Tu conçois des programmes d'entraînement hebdomadaires personnalisés en natation, vélo, course à pied et renforcement.",
-    "Tu tiens compte du niveau, de l'objectif, du temps disponible, des blessures/contraintes signalées, et de l'historique récent des séances (charge, ressenti).",
-    "Tu réponds UNIQUEMENT avec un JSON valide, sans texte autour, sans balises markdown, au format exact suivant :",
-    `{${includeDebrief ? `"debrief":"string",` : ""}"sessions":[{"date":"YYYY-MM-DD","sport":"natation|velo|course|renfo|repos","titre":"string","dureeMin":number,"distanceKm":number|null,"description":"string","objectif":null|"string","structure":null|{"echauffement":{"dureeMin":number,"cible":"string","description":"string"},"corps":{"dureeMin":number,"cible":"string","description":"string","exercices":[{"nom":"string","repetitions":"string","allure":"string","recuperation":"string","consigne":"string"}]},"retourCalme":{"dureeMin":number,"cible":"string","description":"string"}}}]}`,
-    "Une entrée par date demandée dans le message utilisateur, ni plus ni moins, y compris les jours de repos (sport: repos, dureeMin: 0, objectif: null, structure: null). Une semaine complète en compte sept ; une première semaine commencée en cours de route, moins.",
-    "",
-    `PHASE DE PRÉPARATION — ${phase.label} (objectif dans ${phase.weeksToGoal} semaine(s)). ${phase.guidance}`,
-    "Cette phase prime sur toute autre considération de contenu : la semaine générée doit être cohérente avec elle.",
-    "",
-    "Champ \"objectif\" (obligatoire pour toute séance sport != repos) : explique en 1-2 phrases COURTES (20-30 mots maximum, jamais plus) POURQUOI cette séance précise est programmée maintenant — quelle qualité elle développe et en quoi elle sert l'objectif de l'athlète. Écris directement à l'athlète (\"tu\"), clair et motivant. Respecte STRICTEMENT cette limite de mots, y compris pour un objectif à long terme (ne développe pas plus longuement sous prétexte que l'échéance est lointaine).",
-    "",
-    "Pour toute séance sport != repos, remplis TOUJOURS \"structure\" avec 3 blocs : échauffement, corps de séance, retour au calme. La somme de leurs dureeMin doit être proche de dureeMin total.",
-    "\"cible\" décrit l'intensité concrète du bloc : la zone (Z1 à Z5, nommée) ET la valeur chiffrée correspondante (le renforcement fait exception : il se dose en RPE, voir plus bas). Les zones de l'athlète sont fournies dans le message utilisateur : REPRENDS EXACTEMENT ces valeurs, ne les recalcule pas et n'en invente aucune qui n'y figure pas.",
-    "UNITÉS — chaque discipline a la sienne, ne les mélange jamais. NATATION : temps aux 100 m (ex: 1:44/100m). COURSE À PIED : allure au kilomètre (ex: 4:08/km). VÉLO : la valeur donnée dans les zones ci-dessus — watts si une FTP est connue, sinon fréquence cardiaque, sinon vitesse en km/h assortie de la sensation. Une allure au kilomètre dans un bassin, ou des watts pour quelqu'un qui n'a pas de capteur, sont inexécutables. Cette règle vaut aussi pour le champ \"allure\" de chaque exercice.",
-    "UNE SEULE valeur chiffrée par cible : celle de la discipline. N'ajoute PAS la fréquence cardiaque à une allure de course ou de natation, ni à une puissance — l'athlète a déjà son repère, et deux chiffres qui ne coïncident pas exactement le font douter des deux. La fréquence cardiaque n'est la valeur de la cible que lorsque les zones ci-dessus ne donnent rien d'autre pour cette discipline, à savoir le vélo sans FTP.",
-    "\"corps.exercices\" (uniquement pour le bloc corps de séance, quand la séance comporte du fractionné/intervalles/répétitions) : liste concrète et chiffrée, MAXIMUM 4 lignes (sauf renforcement, voir plus bas), \"nom\" et \"consigne\" réservés au renforcement, ex: [{\"repetitions\":\"6 x 400m\",\"allure\":\"4:10/km (Z4 seuil)\",\"recuperation\":\"90s trot\"}]. Pour une sortie continue sans fractionné (endurance, sortie longue), laisse \"exercices\" vide ou omets-le et décris l'effort dans \"description\".",
-    "Le volume hebdomadaire total doit respecter les heures disponibles indiquées par l'athlète ET la limite de volume donnée dans le message utilisateur.",
-    ...renfoPromptLines(phase.phase),
-    "",
-    "IMPORTANT — sois très concis partout, sans exception : chaque \"description\" (séance et blocs) fait 15 mots maximum, chaque \"objectif\" fait 20-30 mots maximum. La réponse complète doit rester compacte : pas de phrases superflues, va droit à l'essentiel. Ne jamais tronquer le JSON : si tu manques de place, raccourcis encore les textes plutôt que de laisser une réponse incomplète.",
-  ];
+/**
+ * Consignes de construction d'une semaine, les mêmes pour tous les athlètes et
+ * toutes les phases : elles sont mises en cache. La phase, le débrief et tout
+ * ce qui est propre à l'athlète arrivent après.
+ */
+export const CONSIGNES_PLAN = [
+  "Tu es un coach de triathlon expérimenté et bienveillant. Tu construis des semaines d'entraînement personnalisées (natation, vélo, course à pied, renforcement) selon le niveau, l'objectif, le temps disponible, les blessures ou contraintes et l'historique récent de l'athlète.",
+  "",
+  "FORMAT — réponds UNIQUEMENT par un JSON valide, sans texte autour ni balises markdown :",
+  `{"sessions":[{"date":"YYYY-MM-DD","sport":"natation|velo|course|renfo|repos","titre":"string","dureeMin":number,"distanceKm":number|null,"description":"string","objectif":null|"string","structure":null|{"echauffement":{"dureeMin":number,"cible":"string","description":"string"},"corps":{"dureeMin":number,"cible":"string","description":"string","exercices":[{"nom":"string","repetitions":"string","allure":"string","recuperation":"string","consigne":"string"}]},"retourCalme":{"dureeMin":number,"cible":"string","description":"string"}}}]}`,
+  "Une entrée par date demandée dans le message utilisateur, ni plus ni moins, jours de repos compris (sport: repos, dureeMin: 0, objectif: null, structure: null).",
+  "",
+  "SÉANCES (sport != repos) :",
+  "- \"objectif\" : 20 à 30 mots maximum, jamais plus, même pour une échéance lointaine. Écrit à l'athlète (« tu »), clair et motivant : pourquoi cette séance maintenant, quelle qualité elle développe, en quoi elle sert son objectif.",
+  "- \"structure\" toujours remplie de 3 blocs : échauffement, corps de séance, retour au calme ; la somme de leurs dureeMin est proche de dureeMin.",
+  "- \"cible\" : la zone (Z1 à Z5, nommée) ET sa valeur chiffrée, REPRISES EXACTEMENT des zones du message utilisateur, jamais recalculées ni inventées (le renforcement se dose en RPE, voir plus bas).",
+  "- UNITÉS, sans jamais les mélanger : natation en temps aux 100 m (1:44/100m) ; course en allure au km (4:08/km) ; vélo selon les zones fournies — watts si une FTP est connue, sinon fréquence cardiaque, sinon km/h avec la sensation. Une allure au km dans un bassin ou des watts sans capteur sont inexécutables. Vaut aussi pour le champ \"allure\" des exercices.",
+  "- UNE SEULE valeur chiffrée par cible, celle de la discipline : n'ajoute pas la fréquence cardiaque à une allure ou à une puissance, deux chiffres qui ne coïncident pas font douter des deux. La fréquence cardiaque n'est la cible que pour le vélo sans FTP.",
+  "- \"corps.exercices\", seulement pour du fractionné (intervalles, répétitions) : 4 lignes maximum (sauf renforcement), concrètes et chiffrées, ex : [{\"repetitions\":\"6 x 400m\",\"allure\":\"4:10/km (Z4 seuil)\",\"recuperation\":\"90s trot\"}] ; \"nom\" et \"consigne\" sont réservés au renforcement. Sortie continue (endurance, sortie longue) : pas d'exercices, l'effort est décrit dans \"description\".",
+  "- CONCISION partout : chaque \"description\" (séance et blocs) fait 15 mots maximum. Ne tronque jamais le JSON : si la place manque, raccourcis encore les textes.",
+  "",
+  "VOLUME — RÈGLE DE SÉCURITÉ ANTI-BLESSURE, stricte et non négociable : la somme des dureeMin des séances sport != repos respecte les heures disponibles et NE DÉPASSE JAMAIS le « volume maximum autorisé » du message utilisateur, même si l'athlète a déclaré davantage d'heures. Si son ressenti ou ses séances manquées suggèrent de la fatigue, n'augmente pas le volume : maintiens-le ou réduis-le légèrement.",
+  ...renfoReglesLines(),
+  "",
+  "La PHASE DE PRÉPARATION indiquée ci-dessous prime sur toute autre considération de contenu : la semaine doit être cohérente avec elle.",
+].join("\n");
 
+/** Ce qui varie d'une génération à l'autre dans le prompt système : placé après le cache. */
+export function contextePlan(includeDebrief: boolean, phase: Periodization): string {
+  const lignes = [
+    `PHASE DE PRÉPARATION — ${phase.label} (objectif dans ${phase.weeksToGoal} semaine(s)). ${phase.guidance}`,
+    `Renforcement dans cette phase : ${renfoPhaseLigne(phase.phase)}`,
+  ];
   if (includeDebrief) {
-    lines.push(
-      "",
-      "Champ \"debrief\" (obligatoire, en tout premier dans le JSON) : un message écrit directement à l'athlète (\"tu\"), 60-90 mots, qui fait le bilan de LA SEMAINE QUI VIENT DE SE TERMINER (données fournies dans le message utilisateur). Félicite-le pour ses efforts et sa régularité, mentionne 1-2 réussites concrètes (séance clé complétée, régularité, progression de temps/distance/allure si visible), reste honnête et bienveillant si des séances ont été manquées (sans culpabiliser), et termine par une phrase motivante sur la semaine à venir. Ton chaleureux et humain, pas de jargon."
+    lignes.push(
+      "DÉBRIEF : ajoute en tout premier dans le JSON la clé \"debrief\" (string) : un message à l'athlète (« tu »), 60 à 90 mots, qui fait le bilan de LA SEMAINE QUI VIENT DE SE TERMINER (données du message utilisateur). Félicite ses efforts et sa régularité, cite 1 ou 2 réussites concrètes (séance clé, régularité, progrès visible), reste honnête et bienveillant sur les séances manquées sans culpabiliser, et finis par une phrase motivante sur la semaine à venir. Ton chaleureux, sans jargon."
     );
   }
+  return lignes.join("\n");
+}
 
-  lines.push(
-    "",
-    "RÈGLE DE SÉCURITÉ ANTI-BLESSURE (stricte, non négociable) : le volume total de la nouvelle semaine (somme des dureeMin des séances sport != repos) NE DOIT JAMAIS dépasser la limite indiquée dans le message utilisateur (\"volume maximum autorisé\"), même si les heures disponibles déclarées par l'athlète permettraient davantage. Si le ressenti ou le nombre de séances manquées la semaine passée suggère de la fatigue, n'augmente pas le volume — maintiens-le ou réduis-le légèrement plutôt que d'aller jusqu'à la limite."
-  );
-
-  return lines.join("\n");
+/** Le prompt système complet, tel que le modèle le lit. */
+export function buildSystemPrompt(includeDebrief: boolean, phase: Periodization): string {
+  return `${CONSIGNES_PLAN}\n${contextePlan(includeDebrief, phase)}`;
 }
 
 /**
- * Activités réellement effectuées, mesurées par la montre de l'athlète. C'est
- * la donnée la plus fiable dont dispose le coach : elle dit ce qui a été fait,
- * là où le reste du contexte dit ce qui était prévu ou ressenti.
+ * L'entraînement récent de l'athlète, résumé. Les séances ne partent plus une à
+ * une : le volume, la tendance, les points faibles, le ressenti et les séances
+ * clés mesurées en disent l'essentiel, en moins de 300 tokens.
  */
-async function measuredActivityLines(userId: string, since: Date): Promise<string[]> {
-  const activities = await prisma.activity.findMany({
-    where: { userId, startedAt: { gte: since } },
-    orderBy: { startedAt: "asc" },
-    take: 30,
+async function historiqueLines(userId: string, profile: ProfileForPrompt): Promise<string[]> {
+  const resume = await resumeAthlete(userId, {
+    avecProfil: false,
+    refs: { ftpWatts: profile.ftpWatts, fcSeuil: profile.fcSeuil, fcMax: profile.fcMax },
   });
-  if (activities.length === 0) return [];
-
   return [
     "",
-    "Séances réellement effectuées, mesurées (source : montre/Strava). Ces chiffres priment sur toute estimation :",
-    activities.map((a) => `- ${describeActivity(a)}`).join("\n"),
-    "Compare ces données aux allures prévues : si l'athlète court systématiquement plus vite que la zone demandée, dis-le lui et corrige. S'il est plus lent, adapte plutôt que d'insister.",
+    "HISTORIQUE D'ENTRAÎNEMENT (calculé à partir des séances réalisées ; les mesures de la montre priment sur toute estimation) :",
+    resume,
+    "Si ses séances clés montrent qu'il va systématiquement plus vite ou plus lentement que la zone prévue, dis-le-lui et adapte.",
   ];
 }
 
@@ -209,26 +214,15 @@ export function buildFirstWeekPrompt(
   dates: string[],
   phase: Periodization,
   maxVolumeMin: number,
-  recentSessions: { date: Date; sport: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
-  mesurees: string[],
+  historique: string[],
   zones: TrainingZones,
   testLines: string[]
 ): string {
-  const historyLines = recentSessions.length
-    ? recentSessions
-        .map(
-          (s) =>
-            `${formatDate(s.date)} ${s.sport} ${s.dureeMin}min${s.distanceKm ? ` ${s.distanceKm}km` : ""} (${s.status})${s.ressenti ? ` - ressenti: ${s.ressenti}` : ""}`
-        )
-        .join("; ")
-    : "aucun historique disponible";
-
   return [
     ...profileLines(profile, phase, maxVolumeMin, zones),
-    ...mesurees,
+    ...historique,
     ...testLines,
     "",
-    `Séances récentes (pour adapter la charge et les zones) : ${historyLines}`,
     `Génère le programme pour les ${dates.length} jour(s) suivant(s) (dans cet ordre) : ${dates.join(", ")}`,
     ...(dates.length < 7
       ? [
@@ -244,7 +238,7 @@ function buildProgressionPrompt(
   phase: Periodization,
   pastSessions: { date: Date; sport: string; titre: string; dureeMin: number; distanceKm: number | null; status: string; ressenti: string | null }[],
   stats: { plannedVolumeMin: number; realizedVolumeMin: number; completedCount: number; missedCount: number; totalCount: number; maxVolumeMin: number },
-  mesurees: string[],
+  historique: string[],
   zones: TrainingZones,
   testLines: string[]
 ): string {
@@ -259,7 +253,7 @@ function buildProgressionPrompt(
 
   return [
     ...profileLines(profile, phase, stats.maxVolumeMin, zones),
-    ...mesurees,
+    ...historique,
     ...testLines,
     "",
     `Détail de LA SEMAINE QUI VIENT DE SE TERMINER : ${pastLines}`,
@@ -269,17 +263,16 @@ function buildProgressionPrompt(
   ].join("\n");
 }
 
-function buildAdjustmentSystemPrompt(phase: Periodization, joursRestants: string[]): string {
-  return [
-    buildSystemPrompt(false, phase),
-    "",
-    "SITUATION PARTICULIÈRE — RÉAJUSTEMENT EN COURS DE SEMAINE.",
-    `Tu ne régénères PAS la semaine entière : tu produis uniquement les ${joursRestants.length} jour(s) restant(s), à ces dates exactes : ${joursRestants.join(", ")}. N'inclus aucune autre date.`,
-    "Le début de semaine est déjà vécu et ne peut pas être refait : tiens compte de ce qui a été réalisé ou manqué (détaillé dans le message utilisateur) pour redistribuer intelligemment ce qu'il reste.",
-    "Ne cherche pas à rattraper tout le volume perdu : c'est le meilleur moyen de blesser un athlète. Priorise les séances les plus utiles à l'objectif, quitte à en abandonner définitivement certaines. Une semaine allégée assumée vaut mieux qu'une semaine surchargée.",
-    "Si l'athlète explique pourquoi il n'a pas pu s'entraîner (fatigue, maladie, blessure, imprévu), prends-le au sérieux : en cas de douleur ou de maladie, propose du repos ou de la récupération active plutôt que de maintenir l'intensité.",
-  ].join("\n");
-}
+/** Réajustement : les consignes de construction, puis ce qui est propre à cette situation. */
+export const CONSIGNES_AJUSTEMENT = [
+  CONSIGNES_PLAN,
+  "",
+  "SITUATION PARTICULIÈRE — RÉAJUSTEMENT EN COURS DE SEMAINE.",
+  "Tu ne régénères PAS la semaine entière : tu produis uniquement les jours restants, aux dates exactes données dans le message utilisateur, et aucune autre.",
+  "Le début de semaine est déjà vécu : tiens compte de ce qui a été réalisé ou manqué pour redistribuer intelligemment ce qu'il reste.",
+  "Ne cherche pas à rattraper tout le volume perdu : c'est le meilleur moyen de blesser un athlète. Priorise les séances les plus utiles à l'objectif, quitte à en abandonner certaines. Une semaine allégée assumée vaut mieux qu'une semaine surchargée.",
+  "Si l'athlète explique pourquoi il n'a pas pu s'entraîner (fatigue, maladie, blessure, imprévu), prends-le au sérieux : douleur ou maladie appellent du repos ou de la récupération active, pas de l'intensité.",
+].join("\n");
 
 function buildAdjustmentUserPrompt(
   profile: ProfileForPrompt,
@@ -288,7 +281,7 @@ function buildAdjustmentUserPrompt(
   dejaVecu: { date: Date; sport: string; titre: string; dureeMin: number; status: string; ressenti: string | null }[],
   maxVolumeMin: number,
   motif: string | null,
-  mesurees: string[],
+  historique: string[],
   zones: TrainingZones,
   testLines: string[]
 ): string {
@@ -306,7 +299,7 @@ function buildAdjustmentUserPrompt(
 
   return [
     ...profileLines(profile, phase, maxVolumeMin, zones),
-    ...mesurees,
+    ...historique,
     ...testLines,
     "",
     `Début de semaine déjà vécu : ${bilan}`,
@@ -315,7 +308,7 @@ function buildAdjustmentUserPrompt(
       ? `L'athlète explique : « ${motif} »`
       : "L'athlète n'a pas précisé de raison.",
     "",
-    `Réorganise uniquement les jours restants, à ces dates : ${joursRestants.join(", ")}`,
+    `Réorganise uniquement les ${joursRestants.length} jour(s) restant(s), à ces dates et à aucune autre : ${joursRestants.join(", ")}`,
   ].join("\n");
 }
 
@@ -376,7 +369,8 @@ export function parseAiPlan(
 async function runGeneration(
   userId: string,
   kind: AiCallKind,
-  system: string,
+  etiquette: string,
+  prompt: { system: string; contexte: string },
   userPrompt: string,
   allowedDates: string[],
   datesRepos: ReadonlySet<string> = new Set()
@@ -388,9 +382,12 @@ async function runGeneration(
     let raw = "";
     try {
       const response = await askClaude({
-        system,
+        modele: MODELE_PLAN,
+        etiquette,
+        system: prompt.system,
+        contexte: prompt.contexte,
         messages: [{ role: "user", content: userPrompt }],
-        maxTokens: 8192,
+        maxTokens: etiquette === "plan_ajustement" ? MAX_TOKENS.ajustement : MAX_TOKENS.plan,
       });
       raw = response.text;
       const aiPlan = parseAiPlan(raw, allowedDates, datesRepos);
@@ -400,7 +397,7 @@ async function runGeneration(
       return { aiPlan, raw };
     } catch (err) {
       lastError = err;
-      await recordAiCall({ userId, kind, model: MODEL, succeeded: false });
+      await recordAiCall({ userId, kind, model: MODELE_PLAN, succeeded: false });
       console.error(
         `Tentative ${attempt}/${attempts} de génération échouée :`,
         err instanceof Error ? err.message : err,
@@ -553,7 +550,10 @@ const JOB_STALE_MS = 10 * 60 * 1000;
 interface PreparedGeneration {
   weekStart: Date;
   phase: Periodization;
+  /** Consignes communes à tous les athlètes, mises en cache. */
   system: string;
+  /** Partie variable du prompt système : phase, débrief. */
+  contexte: string;
   userPrompt: string;
   aiKind: AiCallKind;
   /** Jours que la génération est autorisée à produire. */
@@ -626,7 +626,8 @@ async function prepareAdjustment(
     zones,
     replaceFrom: debutRestant,
     aiKind: "plan_generation",
-    system: buildAdjustmentSystemPrompt(phase, joursRestants),
+    system: CONSIGNES_AJUSTEMENT,
+    contexte: contextePlan(false, phase),
     userPrompt: buildAdjustmentUserPrompt(
       profile,
       phase,
@@ -634,7 +635,7 @@ async function prepareAdjustment(
       dejaVecu,
       maxVolumeMin,
       motif,
-      await measuredActivityLines(userId, weekStart),
+      await historiqueLines(userId, profile),
       zones,
       [...(test ? testPromptLines(test) : []), ...lignesContexte]
     ),
@@ -736,12 +737,6 @@ async function prepareGeneration(
      * le meilleur moyen de blesser quelqu'un dès son inscription. */
     const volumeSemaine = profile.heuresSemaine * 60 * phase.volumeFactor * facteurContexte;
     const maxVolumeMin = borner(Math.round((volumeSemaine * dates.length) / 7));
-    const recentSessions = await prisma.session.findMany({
-      where: { userId, status: { in: ["faite", "manquee"] } },
-      orderBy: { date: "desc" },
-      take: 10,
-      select: { date: true, sport: true, dureeMin: true, distanceKm: true, status: true, ressenti: true },
-    });
 
     const datesReposFenetre = joursIndisponibles(disponibilites, debut).filter((d) => dates.includes(d));
     const test = await planWeeklyTest(userId, debut, phase, profile, dates, new Set(datesReposFenetre), new Set(disciplinesImposees(disponibilites, debut).keys()));
@@ -753,14 +748,14 @@ async function prepareGeneration(
       datesRepos: datesReposFenetre,
       zones,
       aiKind: "plan_generation",
-      system: buildSystemPrompt(false, phase),
+      system: CONSIGNES_PLAN,
+      contexte: contextePlan(false, phase),
       userPrompt: buildFirstWeekPrompt(
         profile,
         dates,
         phase,
         maxVolumeMin,
-        recentSessions,
-        await measuredActivityLines(userId, addDays(debut, -21)),
+        await historiqueLines(userId, profile),
         zones,
         [...(test ? testPromptLines(test) : []), ...lignesContexte]
       ),
@@ -818,7 +813,8 @@ async function prepareGeneration(
     datesRepos,
     zones,
     aiKind: "plan_progression",
-    system: buildSystemPrompt(true, phase),
+    system: CONSIGNES_PLAN,
+    contexte: contextePlan(true, phase),
     userPrompt: buildProgressionPrompt(profile, weekStart, phase, nonRestSessions, {
       plannedVolumeMin,
       realizedVolumeMin,
@@ -826,7 +822,7 @@ async function prepareGeneration(
       missedCount,
       totalCount: nonRestSessions.length,
       maxVolumeMin,
-    }, await measuredActivityLines(userId, addDays(weekStart, -14)), zones, [
+    }, await historiqueLines(userId, profile), zones, [
     ...(test ? testPromptLines(test) : []),
     ...lignesContexte,
   ]),
@@ -847,7 +843,8 @@ async function processJob(jobId: string, userId: string, prepared: PreparedGener
     const { aiPlan, raw } = await runGeneration(
       userId,
       prepared.aiKind,
-      prepared.system,
+      prepared.replaceFrom ? "plan_ajustement" : prepared.aiKind,
+      { system: prepared.system, contexte: prepared.contexte },
       prepared.userPrompt,
       prepared.allowedDates,
       new Set(prepared.datesRepos)

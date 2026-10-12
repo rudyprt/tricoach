@@ -2,7 +2,10 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { askClaude, isAiConfigured, AiNotConfiguredError, MODEL, type ClaudeMessage } from "../lib/anthropic.js";
+import { askClaude, isAiConfigured, AiNotConfiguredError, type ClaudeMessage } from "../lib/anthropic.js";
+import { MAX_TOKENS, MODELE_CHAT } from "../lib/modeles.js";
+import { resumeAthlete } from "../lib/resumeAthlete.js";
+import { mettreAJourResume, resumePromptLines } from "../lib/resumeChat.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { NOM_OUTIL_SEANCE, enregistrerSeanceDeclaree, outilSeanceFaite } from "../lib/seanceDeclaree.js";
 import {
@@ -21,7 +24,7 @@ import { FENETRE_CHAT, fenetreHistorique } from "../lib/chatHistory.js";
 import { ah, HttpError } from "../lib/http.js";
 import { chatRateLimit } from "../lib/rateLimit.js";
 import { startOfLocalDay, startOfWeek } from "../lib/week.js";
-import { bilanDeCharge, chargePromptLines } from "../lib/trainingLoad.js";
+import { bilanDeCharge } from "../lib/trainingLoad.js";
 import { coursesDeLAthlete, coursesPromptLines } from "../lib/races.js";
 import { pauseEnCours } from "../lib/pause.js";
 import {
@@ -32,10 +35,23 @@ import {
 } from "../lib/disponibilites.js";
 import { computeTrainingZones, formatZonesForPrompt, periodization } from "../lib/training.js";
 import { buildZoneInputs } from "../lib/zoneInputs.js";
-import { describeActivity } from "../lib/activityMatching.js";
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
+
+/**
+ * Consignes du coach, les mêmes pour tous les athlètes : elles sont mises en
+ * cache avec les outils. Tout ce qui est propre à l'athlète arrive après, dans
+ * le contexte.
+ */
+export const CONSIGNES_CHAT = [
+  "Tu es le coach de triathlon personnel de cet athlète, dans un chat continu. Réponds en français, de façon concise, concrète et bienveillante.",
+  "Séance racontée par l'athlète : enregistre-la avec enregistrer_seance (s'il manque la date ou la durée, demande-les d'abord), puis dis-lui en une phrase que c'est noté dans son historique.",
+  "Demande sur la construction de ses programmes (jour d'une discipline, séance à éviter, contrainte passagère) : retiens-la avec retenir_consigne, puis dis-lui qu'elle s'appliquera dès la prochaine semaine générée, et que « Réajuster ma semaine » l'applique à la semaine en cours. S'il la retire ou la remplace, supprime l'ancienne avec oublier_consigne.",
+  "Le contexte ci-dessous résume son profil, son entraînement et vos échanges précédents. Reprends ses zones telles quelles, sans les recalculer. Tiens compte de sa fatigue et de ses jours indisponibles avant de proposer une séance.",
+  "Interruption en cours : ne propose aucune séance tant qu'il n'a pas repris ; parle récupération, et invite-le à consulter si c'est une blessure qui dure.",
+  "Test de terrain programmé : s'il t'interroge dessus, explique le protocole et rappelle qu'il sert à recaler ses zones.",
+].join("\n");
 
 /**
  * Compte les questions posées aujourd'hui, au sens du fuseau de référence.
@@ -174,23 +190,16 @@ chatRouter.post(
       );
     }
 
-    const [profile, recentSessions, recentMessages, recentActivities] = await Promise.all([
+    const [profile, recentMessages, resume] = await Promise.all([
       prisma.athleteProfile.findUnique({ where: { userId: req.userId! } }),
-      prisma.session.findMany({ where: { userId: req.userId! }, orderBy: { date: "desc" }, take: 10 }),
       // Les DERNIERS messages, pas les premiers : trié en ascendant, `take` renvoyait
       // les plus anciens et le coach perdait le fil au bout de quelques échanges.
-      // On en lit un de moins que la fenêtre : la question qu'on vient de poser
-      // occupe la dernière place.
       prisma.chatMessage.findMany({
         where: { userId: req.userId! },
         orderBy: { createdAt: "desc" },
-        take: FENETRE_CHAT - 1,
+        take: FENETRE_CHAT,
       }),
-      prisma.activity.findMany({
-        where: { userId: req.userId!, startedAt: { gte: new Date(Date.now() - 21 * 24 * 3600 * 1000) } },
-        orderBy: { startedAt: "desc" },
-        take: 15,
-      }),
+      prisma.resumeChat.findUnique({ where: { userId: req.userId! }, select: { texte: true, jusquA: true } }),
     ]);
 
     const history = [...recentMessages].reverse();
@@ -215,39 +224,27 @@ chatRouter.post(
       consignesActives(req.userId!, user.timezone),
     ]);
 
-    const system = [
-      "Tu es le coach personnel de triathlon de cet athlète, dans un chat continu.",
-      "Réponds de façon concise, concrète et bienveillante, en français.",
-      "Quand l'athlète raconte une séance qu'il a faite, enregistre-la avec l'outil prévu, puis dis-lui en une phrase que c'est noté dans son historique. S'il manque la date ou la durée, demande-les-lui avant d'enregistrer.",
-      "Quand l'athlète exprime une demande sur la construction de ses programmes (un jour pour une discipline, une séance à éviter, une contrainte passagère), retiens-la avec l'outil retenir_consigne, puis dis-lui qu'elle s'appliquera dès la prochaine semaine générée — et que pour la semaine en cours, il peut utiliser « Réajuster ma semaine ». S'il la retire ou la remplace, supprime l'ancienne avec oublier_consigne.",
-      ...consignesChatLines(consignes),
+    // Ce qui change d'un athlète et d'une question à l'autre. Les séances n'y
+    // figurent plus une à une : un résumé calculé en dit l'essentiel.
+    const contexte = [
+      ...resumePromptLines(resume),
       profile
-        ? `Profil athlète : objectif=${profile.objectif}${profile.objectifFinir ? " (il vise à LA TERMINER, sans chrono : ne lui parle pas d'allure cible de course)" : profile.objectifTemps ? ` (temps visé : ${profile.objectifTemps})` : ""}, date objectif=${profile.objectifDate.toISOString().slice(0, 10)}, heures/semaine=${profile.heuresSemaine}, contraintes=${profile.contraintes || "aucune"}, dernier temps natation=${profile.tempsNatation || "n/a"}, dernier temps vélo=${profile.tempsVelo || "n/a"}, dernier temps course=${profile.tempsCourse || "n/a"}`
+        ? await resumeAthlete(req.userId!, { profil: profile, charge })
         : "L'athlète n'a pas encore rempli son profil.",
-      phase ? `Phase de préparation actuelle : ${phase.label} (objectif dans ${phase.weeksToGoal} semaine(s)). ${phase.guidance}` : "",
-      zones ? `Zones d'entraînement (à reprendre telles quelles) :\n${formatZonesForPrompt(zones)}` : "",
-      recentActivities.length
-        ? `Séances réellement effectuées et mesurées (montre/Strava), les plus fiables :\n${recentActivities
-            .map((a) => `- ${describeActivity(a)}`)
-            .join("\n")}`
-        : "",
-      recentSessions.length
-        ? `Séances planifiées récentes : ${recentSessions
-            .map((s) => `${s.date.toISOString().slice(0, 10)} ${s.sport} ${s.dureeMin}min (${s.status})`)
-            .join("; ")}`
-        : "Aucune séance enregistrée pour le moment.",
-      ...chargePromptLines(charge),
+      phase ? `Phase : ${phase.label}, objectif dans ${phase.weeksToGoal} sem. ${phase.guidance}` : "",
+      zones ? `Zones :\n${formatZonesForPrompt(zones)}` : "",
       ...coursesPromptLines(courses, semaine),
       ...disponibilitesPromptLines(parseDisponibilites(profile?.disponibilites), semaine),
       ...materielPromptLines(parseMateriel(profile?.materiel)),
       interruption
-        ? `ATTENTION : l'athlète a déclaré une interruption d'entraînement (${interruption.raison}${interruption.detail ? ` — « ${interruption.detail} »` : ""}) depuis le ${interruption.debut.toISOString().slice(0, 10)}. Ne lui propose aucune séance d'entraînement tant qu'il n'a pas repris ; parle récupération, et invite-le à consulter s'il s'agit d'une blessure qui dure.`
+        ? `INTERRUPTION EN COURS : ${interruption.raison}${interruption.detail ? ` — « ${interruption.detail} »` : ""}, depuis le ${interruption.debut.toISOString().slice(0, 10)}.`
         : "",
       testsEnCours.length
         ? `Test de terrain programmé : ${testsEnCours
             .map((t) => `${t.kind} le ${t.scheduledFor.toISOString().slice(0, 10)}`)
-            .join(", ")}. S'il t'interroge dessus, explique le protocole et rappelle qu'il sert à recaler ses zones.`
+            .join(", ")}.`
         : "",
+      ...consignesChatLines(consignes),
     ]
       .filter(Boolean)
       .join("\n");
@@ -256,16 +253,23 @@ chatRouter.post(
     let seancesEnregistrees = 0;
     let consignesModifiees = false;
     const outils = [outilSeanceFaite, outilRetenirConsigne, outilOublierConsigne];
+    let resumeAJour: Promise<void> = Promise.resolve();
     try {
       const messages: ClaudeMessage[] = fenetreHistorique([
         ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         { role: "user", content },
       ]);
 
+      // Le résumé rattrape les messages sortis de la fenêtre pendant que le
+      // coach répond : il servira aux questions suivantes, pas à celle-ci.
+      resumeAJour = mettreAJourResume(req.userId!, resume, history[0]?.createdAt ?? null);
       const response = await askClaude({
-        system,
+        modele: MODELE_CHAT,
+        etiquette: "chat",
+        system: CONSIGNES_CHAT,
+        contexte,
         messages,
-        maxTokens: 1000,
+        maxTokens: MAX_TOKENS.chat,
         tools: outils,
       });
       reply = response.text;
@@ -299,24 +303,28 @@ chatRouter.post(
         }
 
         const suite = await askClaude({
-          system,
+          modele: MODELE_CHAT,
+          etiquette: "chat_outil",
+          system: CONSIGNES_CHAT,
+          contexte,
           messages: [
             ...messages,
             { role: "assistant", content: response.content },
             { role: "user", content: resultats },
           ],
-          maxTokens: 1000,
+          maxTokens: MAX_TOKENS.chat,
           tools: outils,
         });
         reply = suite.text;
         await recordAiCall({ userId: req.userId!, kind: "chat", response: suite, succeeded: Boolean(reply.trim()) });
       }
     } catch (err) {
-      await recordAiCall({ userId: req.userId!, kind: "chat", model: MODEL, succeeded: false });
+      await recordAiCall({ userId: req.userId!, kind: "chat", model: MODELE_CHAT, succeeded: false });
       console.error("Réponse du coach IA impossible :", err);
       throw new HttpError(502, "Le coach IA n'a pas pu répondre. Réessayez.");
     }
 
+    await resumeAJour;
     if (!reply.trim()) {
       throw new HttpError(502, "Le coach IA n'a pas pu répondre. Réessayez.");
     }

@@ -1,6 +1,6 @@
 /**
  * Tarification de l'API Anthropic, en dollars par million de tokens.
- * Relevé le 2026-09-08 — à revérifier sur https://www.anthropic.com/pricing
+ * Relevé le 2026-10-12 — à revérifier sur https://www.anthropic.com/pricing
  * avant de communiquer des chiffres à des tiers.
  */
 export interface ModelPricing {
@@ -12,9 +12,12 @@ export interface ModelPricing {
   cacheWritePerMTok: number;
 }
 
-export const PRICING_UPDATED_AT = "2026-09-08";
+export const PRICING_UPDATED_AT = "2026-10-12";
 
 const PRICING: Record<string, ModelPricing> = {
+  "claude-opus-5-5": { inputPerMTok: 4, outputPerMTok: 20, cacheReadPerMTok: 0.2, cacheWritePerMTok: 5 },
+  // Tarif des prompts de 100 000 tokens au plus, seuil que le coach n'approche pas.
+  "claude-haiku-5-5": { inputPerMTok: 0.1, outputPerMTok: 0.5, cacheReadPerMTok: 0.01, cacheWritePerMTok: 0.125 },
   "claude-opus-5": { inputPerMTok: 5, outputPerMTok: 25, cacheReadPerMTok: 0.5, cacheWritePerMTok: 6.25 },
   "claude-sonnet-5": { inputPerMTok: 2, outputPerMTok: 10, cacheReadPerMTok: 0.2, cacheWritePerMTok: 2.5 },
   "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5, cacheReadPerMTok: 0.1, cacheWritePerMTok: 1.25 },
