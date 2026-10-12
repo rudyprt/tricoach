@@ -166,6 +166,26 @@ describeIfDb("import de fichiers", () => {
     expect((await prisma.session.findUniqueOrThrow({ where: { id: session.id } })).status).toBe("faite");
   });
 
+  it("dresse le bilan de la séance importée, sans appel au coach IA", async () => {
+    const { agent, user } = await athlete("bilan@example.com");
+    const session = await seancePrevue(user.id, "course", 60);
+
+    const res = await agent.post("/api/activities/import").attach("fichiers", path.join(fixtures, "course.fit"));
+    // 45 min courues pour 60 prévues : un peu plus courte que prévu.
+    expect(res.body.resultats[0].bilan).toMatchObject({ niveau: "ecart", proposerReajustement: false });
+    expect(res.body.resultats[0].bilan.constats[0].texte).toBe("Un peu plus courte que prévu : 45 min sur 60 prévues.");
+
+    // Le même bilan se relit ensuite depuis la séance.
+    const relu = await agent.get(`/api/sessions/${session.id}/bilan`);
+    expect(relu.body.bilan).toEqual(res.body.resultats[0].bilan);
+  });
+
+  it("n'a pas de bilan pour une séance sans fichier", async () => {
+    const { agent, user } = await athlete("bilan-vide@example.com");
+    const session = await seancePrevue(user.id, "course", 60);
+    expect((await agent.get(`/api/sessions/${session.id}/bilan`)).body).toEqual({ bilan: null });
+  });
+
   it("importe l'archive .zip de Garmin Connect telle quelle", async () => {
     const { agent, user } = await athlete("garmin-zip@example.com");
     const session = await seancePrevue(user.id, "course", 45);

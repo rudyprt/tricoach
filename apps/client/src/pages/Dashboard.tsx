@@ -259,6 +259,16 @@ export function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadPlan]);
 
+  // « Réajuster ma semaine » proposé par le bilan d'une séance importée.
+  useEffect(() => {
+    if (searchParams.get("reajuster") !== "1") return;
+    searchParams.delete("reajuster");
+    setSearchParams(searchParams, { replace: true });
+    setSelectedId(null);
+    void adjustWeek();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   useEffect(() => {
     if (searchParams.get("generate") === "1" && !didAutoGenerate.current) {
       didAutoGenerate.current = true;

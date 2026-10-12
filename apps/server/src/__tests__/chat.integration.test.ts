@@ -379,9 +379,12 @@ describeIfDb("chat", () => {
       return d.toISOString().slice(0, 10);
     };
 
+    /*
+     * Le programme qui couvre HIER, jour des séances racontées : celui de la
+     * semaine en cours ne le couvre pas le lundi, et le test échouait alors.
+     */
     async function avecProgramme(userId: string) {
-      const lundi = new Date();
-      lundi.setUTCHours(0, 0, 0, 0);
+      const lundi = new Date(`${hier()}T00:00:00.000Z`);
       lundi.setUTCDate(lundi.getUTCDate() - ((lundi.getUTCDay() + 6) % 7));
       return prisma.trainingPlan.create({
         data: { userId, weekStart: lundi, rawAiJson: "{}" },
