@@ -61,6 +61,7 @@ model User {
   pauses                 TrainingPause[]
   races                  Race[]
   consignesCoach         ConsigneCoach[]
+  resumeChat             ResumeChat?
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -554,5 +555,17 @@ model GestionInstantane {
   premium   Int
   essais    Int
   actifs30j Int
+  updatedAt DateTime @updatedAt
+}
+
+/// Résumé de la conversation avec le coach, au-delà des derniers messages.
+/// Seuls les plus récents sont renvoyés au modèle à chaque question : ce
+/// résumé garde le fil de ce qui s'est dit avant, en quelques phrases.
+model ResumeChat {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  texte     String
+  /// Date du dernier message pris en compte dans le résumé.
+  jusquA    DateTime
   updatedAt DateTime @updatedAt
 }

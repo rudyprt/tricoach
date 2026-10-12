@@ -5,6 +5,9 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
 import { MAX_FILE_BYTES, formatFromFilename, parseActivityFile } from "../lib/activityFiles.js";
 import { estUneArchive, extraireActivites } from "../lib/archiveZip.js";
+import { bilanSeance, type BilanSeance } from "../lib/bilanSeance.js";
+import { serializeSession } from "../lib/session.js";
+import { zonesActuelles } from "../lib/zoneInputs.js";
 import { findMatchingSession } from "../lib/activityMatching.js";
 import { rateLimit, byUser } from "../lib/rateLimit.js";
 
@@ -60,7 +63,9 @@ activitiesRouter.post(
       throw new HttpError(400, "Aucun fichier reçu. Déposez un fichier .fit, .gpx ou .tcx.");
     }
 
-    const resultats: { fichier: string; statut: string; detail?: string }[] = [];
+    const resultats: { fichier: string; statut: string; detail?: string; sessionId?: string; bilan?: BilanSeance }[] = [];
+    // Zones lues une fois par import : le bilan compare chaque séance à elles.
+    let zones: Awaited<ReturnType<typeof zonesActuelles>> | undefined;
 
     // Une archive Garmin (« Exporter l'original ») est ouverte ici : ce sont
     // les fichiers d'activité qu'elle contient qui sont importés.
@@ -175,10 +180,23 @@ activitiesRouter.post(
           rapprochees += 1;
         }
 
+        // Le bilan compare ce qui a été fait à ce qui était prévu, sans appel au
+        // modèle : il ne coûte rien, et l'athlète le lit dans la foulée.
+        let bilan: BilanSeance | undefined;
+        if (session) {
+          const prevue = await prisma.session.findUnique({ where: { id: session.id } });
+          if (prevue) {
+            if (zones === undefined) zones = await zonesActuelles(req.userId!);
+            bilan = bilanSeance(serializeSession(prevue), activite, zones);
+          }
+        }
+
         resultats.push({
           fichier: nom,
           statut: session ? "importe_et_rattache" : "importe",
           detail: `${format.toUpperCase()} · ${activite.dureeMin} min${activite.distanceKm ? ` · ${activite.distanceKm} km` : ""}`,
+          ...(session ? { sessionId: session.id } : {}),
+          ...(bilan ? { bilan } : {}),
         });
       } catch (err) {
         // Un fichier illisible n'interrompt pas les autres : l'athlète peut en

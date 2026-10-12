@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { askClaude, isAiConfigured } from "../lib/anthropic.js";
-import { buildFirstWeekPrompt, buildSystemPrompt, parseAiPlan } from "../routes/plans.js";
+import { MAX_TOKENS, MODELE_PLAN } from "../lib/modeles.js";
+import { CONSIGNES_PLAN, buildFirstWeekPrompt, contextePlan, parseAiPlan } from "../routes/plans.js";
 import { computeTrainingZones, periodization } from "../lib/training.js";
 import { addDays, startOfWeek, weekDays } from "../lib/week.js";
 import { PROFILS, type ProfilEval } from "./profils.js";
@@ -71,16 +72,24 @@ function preparer(cas: ProfilEval) {
     zones,
     maxVolumeMin,
     jours,
-    system: buildSystemPrompt(false, phase),
-    user: buildFirstWeekPrompt(profil, jours, phase, maxVolumeMin, [], [], zones, []),
+    system: CONSIGNES_PLAN,
+    contexte: contextePlan(false, phase),
+    user: buildFirstWeekPrompt(profil, jours, phase, maxVolumeMin, [], zones, []),
   };
 }
 
 async function passerUnProfil(cas: ProfilEval): Promise<ResultatProfil> {
-  const { system, user, zones, maxVolumeMin, jours } = preparer(cas);
+  const { system, contexte, user, zones, maxVolumeMin, jours } = preparer(cas);
 
   try {
-    const reponse = await askClaude({ system, messages: [{ role: "user", content: user }], maxTokens: 4000 });
+    const reponse = await askClaude({
+      modele: MODELE_PLAN,
+      etiquette: "eval",
+      system,
+      contexte,
+      messages: [{ role: "user", content: user }],
+      maxTokens: MAX_TOKENS.plan,
+    });
     const plan = parseAiPlan(reponse.text, jours);
     return evaluer(plan.sessions as SeanceGeneree[], { profil: cas, zones, maxVolumeMin, jours });
   } catch (erreur) {

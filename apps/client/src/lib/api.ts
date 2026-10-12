@@ -218,6 +218,13 @@ export function isGenerationRunning(job: GenerationJob | null): boolean {
   return job?.status === "en_attente" || job?.status === "en_cours";
 }
 
+/** Ce qui a été fait, comparé à ce qui était prévu — calculé sans IA. */
+export interface BilanSeance {
+  niveau: "conforme" | "ecart" | "alerte";
+  constats: { niveau: "conforme" | "ecart" | "alerte"; texte: string }[];
+  proposerReajustement: boolean;
+}
+
 /** Une demande faite au coach dans le chat, appliquée aux semaines générées. */
 export interface ConsigneCoach {
   id: string;

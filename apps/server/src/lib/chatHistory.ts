@@ -7,10 +7,10 @@
  * qui coûte le plus cher.
  *
  * L'historique complet reste en base et reste affiché : seul l'envoi est
- * tronqué. Douze messages couvrent six échanges, de quoi suivre un fil de
- * discussion sans porter indéfiniment ce qui a été dit le mois dernier — le
- * contexte durable (profil, zones, charge, séances) arrive par le prompt
- * système, pas par l'historique.
+ * tronqué. Six messages couvrent trois échanges, de quoi suivre le fil en
+ * cours ; ce qui s'est dit avant arrive par un résumé tenu à jour (voir
+ * resumeChat.ts), et le contexte durable (profil, zones, charge, séances) par
+ * le prompt système.
  */
 
 export interface MessageModele {
@@ -18,8 +18,8 @@ export interface MessageModele {
   content: string;
 }
 
-/** Nombre de messages envoyés au modèle, le nouveau message compris. */
-export const FENETRE_CHAT = 12;
+/** Messages du fil envoyés au modèle, en plus de la question qu'on vient de poser. */
+export const FENETRE_CHAT = 6;
 
 /**
  * Garde les derniers messages, en commençant par un message de l'athlète.
@@ -32,7 +32,7 @@ export const FENETRE_CHAT = 12;
  * Le dernier message étant toujours la question qu'on vient de poser, le
  * résultat n'est jamais vide.
  */
-export function fenetreHistorique(messages: MessageModele[], taille = FENETRE_CHAT): MessageModele[] {
+export function fenetreHistorique(messages: MessageModele[], taille = FENETRE_CHAT + 1): MessageModele[] {
   const fenetre = messages.slice(-taille);
   const premierTourAthlete = fenetre.findIndex((m) => m.role === "user");
   // Pas un seul tour de l'athlète dans la fenêtre : il n'y a rien d'envoyable.

@@ -139,15 +139,12 @@ describeIfDb("chat", () => {
     expect((await agent.post("/api/chat").send({ content: "Nouvelle question" })).status).toBe(201);
 
     const history = askClaude.mock.calls[0][0].messages as { role: string; content: string }[];
-    // La fenêtre vaut douze messages, question courante comprise. Ici elle
-    // tomberait sur une réponse du coach (message-19) : ce tour est écarté, car
-    // l'API refuse une conversation qui ne commence pas par l'athlète. Onze
-    // messages partent donc, et non douze.
-    expect(history).toHaveLength(11);
+    // Les six derniers messages, soit les trois derniers échanges, puis la question.
+    expect(history).toHaveLength(7);
     expect(history[0].role).toBe("user");
-    expect(history[0].content).toBe("message-20");
-    expect(history[9].content).toBe("message-29");
-    expect(history[10].content).toBe("Nouvelle question");
+    expect(history[0].content).toBe("message-24");
+    expect(history[5].content).toBe("message-29");
+    expect(history[6].content).toBe("Nouvelle question");
     // L'historique complet reste en base : seul l'envoi est tronqué.
     expect(await prisma.chatMessage.count({ where: { userId: user.id } })).toBe(32);
   });
@@ -172,7 +169,7 @@ describeIfDb("chat", () => {
 
     const { FENETRE_CHAT } = await import("../lib/chatHistory.js");
     const history = askClaude.mock.calls[0][0].messages as { role: string }[];
-    expect(history.length).toBeLessThanOrEqual(FENETRE_CHAT);
+    expect(history.length).toBeLessThanOrEqual(FENETRE_CHAT + 1);
     expect(history[0].role).toBe("user");
   });
 
@@ -192,6 +189,85 @@ describeIfDb("chat", () => {
 
     const history = askClaude.mock.calls[0][0].messages as { content: string }[];
     expect(history.map((m) => m.content)).toEqual(["premier", "deuxieme", "troisieme", "quatrieme"]);
+  });
+
+  /** Un fil déjà ancien, daté de l'avant-veille pour ne pas consommer le quota du jour. */
+  async function filAncien(userId: string, nombre: number) {
+    const base = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    await prisma.chatMessage.createMany({
+      data: Array.from({ length: nombre }, (_, i) => ({
+        userId,
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: `message-${i}`,
+        createdAt: new Date(base + i * 1000),
+      })),
+    });
+  }
+
+  type Appel = { etiquette: string; contexte?: string; messages: { content: string }[] };
+  const appels = (etiquette: string) =>
+    askClaude.mock.calls.map(([p]) => p as Appel).filter((p) => p.etiquette === etiquette);
+
+  it("résume ce qui sort de la fenêtre, et le transmet aux questions suivantes", async () => {
+    const { agent, user } = await signUp("resume@example.com");
+    await filAncien(user.id, 30);
+    askClaude.mockImplementation(async (p: Appel) =>
+      claudeReply(p.etiquette === "chat_resume" ? "L'athlète a mal au genou droit." : "Réponse.")
+    );
+
+    expect((await agent.post("/api/chat").send({ content: "Nouvelle question" })).status).toBe(201);
+
+    // Tout ce qui précède les six derniers messages est résumé, rien de ce qui y figure.
+    const [resume] = appels("chat_resume");
+    expect(resume.messages[0].content).toContain("message-0");
+    expect(resume.messages[0].content).toContain("message-23");
+    expect(resume.messages[0].content).not.toContain("message-24");
+    expect((await prisma.resumeChat.findUnique({ where: { userId: user.id } }))?.texte).toBe(
+      "L'athlète a mal au genou droit."
+    );
+
+    askClaude.mockClear();
+    await agent.post("/api/chat").send({ content: "Et maintenant ?" });
+    expect(appels("chat")[0].contexte).toContain("L'athlète a mal au genou droit.");
+    // Deux messages seulement sont sortis de la fenêtre depuis : le résumé attend.
+    expect(appels("chat_resume")).toHaveLength(0);
+  });
+
+  it("ne résume rien tant que le fil tient dans la fenêtre", async () => {
+    const { agent, user } = await signUp("sans-resume@example.com");
+    await filAncien(user.id, 6);
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+
+    await agent.post("/api/chat").send({ content: "Question" });
+
+    expect(appels("chat_resume")).toHaveLength(0);
+    expect(await prisma.resumeChat.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("transmet un résumé de l'entraînement, pas la liste des séances", async () => {
+    const { agent, user } = await signUp("resume-seances@example.com");
+    await prisma.athleteProfile.create({
+      data: { userId: user.id, objectif: "Half Ironman", objectifDate: new Date(Date.now() + 120 * 24 * 3600 * 1000), heuresSemaine: 8 },
+    });
+    await prisma.activity.createMany({
+      data: Array.from({ length: 15 }, (_, i) => ({
+        userId: user.id,
+        externalId: `act-${i}`,
+        sport: ["course", "velo", "natation"][i % 3],
+        name: `Activité ${i}`,
+        startedAt: new Date(Date.now() - (i + 1) * 36 * 3600 * 1000),
+        dureeMin: 45 + i,
+      })),
+    });
+    askClaude.mockResolvedValue(claudeReply("Réponse."));
+
+    await agent.post("/api/chat").send({ content: "Comment je progresse ?" });
+
+    const contexte = appels("chat")[0].contexte ?? "";
+    expect(contexte).toContain("Volume 4 sem :");
+    expect(contexte).toContain("Séances clés :");
+    // Trois séances clés, pas quinze lignes d'activité.
+    expect(contexte.match(/\d+min/g)!.length).toBeLessThanOrEqual(4);
   });
 
   /** Sème des questions déjà posées aujourd'hui, sans passer par la route. */
@@ -379,9 +455,12 @@ describeIfDb("chat", () => {
       return d.toISOString().slice(0, 10);
     };
 
+    /*
+     * Le programme qui couvre HIER, jour des séances racontées : celui de la
+     * semaine en cours ne le couvre pas le lundi, et le test échouait alors.
+     */
     async function avecProgramme(userId: string) {
-      const lundi = new Date();
-      lundi.setUTCHours(0, 0, 0, 0);
+      const lundi = new Date(`${hier()}T00:00:00.000Z`);
       lundi.setUTCDate(lundi.getUTCDate() - ((lundi.getUTCDay() + 6) % 7));
       return prisma.trainingPlan.create({
         data: { userId, weekStart: lundi, rawAiJson: "{}" },
@@ -511,7 +590,7 @@ describeIfDb("chat", () => {
         .mockResolvedValueOnce(claudeReply("Retirée."));
       await agent.post("/api/chat").send({ content: "Finalement le lundi ne me va plus" });
 
-      expect(askClaude.mock.calls[0][0].system).toContain(`[${consigne.id}] Renforcement le lundi.`);
+      expect(askClaude.mock.calls[0][0].contexte).toContain(`[${consigne.id}] Renforcement le lundi.`);
       expect(await prisma.consigneCoach.count({ where: { userId: user.id } })).toBe(0);
     });
 

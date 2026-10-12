@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
-import { api, apiErrorMessage, type Session, type SessionBlock } from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import { api, apiErrorMessage, type BilanSeance as Bilan, type Session, type SessionBlock } from "../lib/api";
+import { BilanSeance } from "./BilanSeance";
 import { Dialog } from "../ui/Dialog";
 import { Bouton } from "../ui/Bouton";
 import { SeanceGuidee } from "./SeanceGuidee";
@@ -98,6 +99,22 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   const [guidee, setGuidee] = useState(false);
   const [importEnCours, setImportEnCours] = useState(false);
   const [retourImport, setRetourImport] = useState<{ ok: boolean; texte: string } | null>(null);
+  /** Bilan de la séance faite, d'après le fichier de la montre. */
+  const [bilan, setBilan] = useState<Bilan | null>(null);
+
+  useEffect(() => {
+    if (session.status !== "faite") return;
+    let actif = true;
+    api
+      .get<{ bilan: Bilan | null }>(`/sessions/${session.id}/bilan`)
+      .then(({ data }) => {
+        if (actif) setBilan(data.bilan);
+      })
+      .catch(() => undefined);
+    return () => {
+      actif = false;
+    };
+  }, [session.id, session.status]);
   const fichierRef = useRef<HTMLInputElement>(null);
   const isRestDay = session.sport === "repos";
 
@@ -119,7 +136,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
       const corps = new FormData();
       corps.append("fichiers", fichier);
       corps.append("sessionId", session.id);
-      const { data } = await api.post<{ resultats: { statut: string; detail?: string }[] }>(
+      const { data } = await api.post<{ resultats: { statut: string; detail?: string; bilan?: Bilan }[] }>(
         "/activities/import",
         corps
       );
@@ -128,6 +145,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
         setRetourImport({ ok: true, texte: "Ce fichier a déjà été importé." });
       } else if (premier?.statut?.startsWith("importe")) {
         setRetourImport({ ok: true, texte: `Séance enregistrée — ${premier.detail ?? "importée"}.` });
+        if (premier.bilan) setBilan(premier.bilan);
         await onUpdate(session.id, "faite", ressenti || undefined, dureeCorrigee());
       } else {
         setRetourImport({ ok: false, texte: premier?.detail ?? "Fichier non reconnu." });
@@ -304,6 +322,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
                 {retourImport.texte}
               </p>
             )}
+            {bilan && <BilanSeance bilan={bilan} />}
           </div>
         )}
 

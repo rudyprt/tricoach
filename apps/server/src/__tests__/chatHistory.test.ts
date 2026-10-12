@@ -20,7 +20,8 @@ function fil(nombre: number): MessageModele[] {
 
 describe("fenêtre d'historique du chat", () => {
   it("n'envoie jamais plus que la fenêtre", () => {
-    expect(fenetreHistorique(fil(200)).length).toBeLessThanOrEqual(FENETRE_CHAT);
+    // Les derniers messages du fil, plus la question qu'on vient de poser.
+    expect(fenetreHistorique(fil(200)).length).toBeLessThanOrEqual(FENETRE_CHAT + 1);
   });
 
   it("garde les messages les plus récents, pas les plus anciens", () => {
@@ -47,8 +48,20 @@ describe("fenêtre d'historique du chat", () => {
     expect(fenetreHistorique(fil(50), 4)).toHaveLength(4);
   });
 
-  it("douze messages, soit six échanges", () => {
+  it("six messages, soit trois échanges complets", () => {
     // Si cette valeur change, le coût par message change avec elle.
-    expect(FENETRE_CHAT).toBe(12);
+    expect(FENETRE_CHAT).toBe(6);
+    // Un fil d'échanges complets suivi d'une question : les trois derniers
+    // échanges partent en entier, sans tour perdu à la coupe.
+    const envoyes = fenetreHistorique([...fil(40), { role: "user", content: "question" }]);
+    expect(envoyes.map((m) => m.content)).toEqual([
+      "message 34",
+      "message 35",
+      "message 36",
+      "message 37",
+      "message 38",
+      "message 39",
+      "question",
+    ]);
   });
 });

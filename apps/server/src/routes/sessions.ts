@@ -6,6 +6,7 @@ import { serializeSession } from "../lib/session.js";
 import { ah, HttpError } from "../lib/http.js";
 import { zonesActuelles } from "../lib/zoneInputs.js";
 import { ajouterFrequencesCardiaques, rafraichirCibles } from "../lib/cibles.js";
+import { bilanSeance } from "../lib/bilanSeance.js";
 import { construireFitWorkout, nomFichierFit } from "../lib/fitWorkout.js";
 import { parseMateriel } from "../lib/disponibilites.js";
 
@@ -154,6 +155,27 @@ sessionsRouter.post(
  * passé depuis a pu déplacer les seuils, et c'est le fichier emporté sur la
  * montre qui doit en tenir compte.
  */
+/**
+ * Bilan d'une séance faite à partir du fichier de la montre : ce qui a été
+ * fait, comparé à ce qui était prévu. Calcul pur, sans appel au modèle.
+ */
+sessionsRouter.get(
+  "/:id/bilan",
+  ah(async (req: AuthedRequest, res) => {
+    const seance = await prisma.session.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+    if (!seance) throw new HttpError(404, "Séance introuvable.");
+    const activite = await prisma.activity.findFirst({
+      where: { sessionId: seance.id, userId: req.userId! },
+      orderBy: { importedAt: "desc" },
+    });
+    if (!activite) {
+      res.json({ bilan: null });
+      return;
+    }
+    res.json({ bilan: bilanSeance(serializeSession(seance), activite, await zonesActuelles(req.userId!)) });
+  })
+);
+
 sessionsRouter.get(
   "/:id/workout.fit",
   ah(async (req: AuthedRequest, res) => {

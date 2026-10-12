@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
-import { api, apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage, type BilanSeance as Bilan } from "../lib/api";
+import { BilanSeance } from "./BilanSeance";
 import { Spinner } from "./Spinner";
 
 interface ResultatFichier {
   fichier: string;
   statut: "importe" | "importe_et_rattache" | "deja_importe" | "ignore" | "erreur";
   detail?: string;
+  bilan?: Bilan;
 }
 
 const LIBELLES: Record<ResultatFichier["statut"], string> = {
@@ -100,10 +102,17 @@ export function ImportSeances({ onImport }: { onImport?: () => void }) {
       {resultats && (
         <ul className="mt-3 space-y-1">
           {resultats.map((r, i) => (
-            <li key={`${r.fichier}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-xs">
-              <span className="truncate text-doux">{r.fichier}</span>
-              <span className={COULEURS[r.statut]}>{LIBELLES[r.statut]}</span>
-              {r.detail && <span className="text-tres-doux">{r.detail}</span>}
+            <li key={`${r.fichier}-${i}`} className="text-xs">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="truncate text-doux">{r.fichier}</span>
+                <span className={COULEURS[r.statut]}>{LIBELLES[r.statut]}</span>
+                {r.detail && <span className="text-tres-doux">{r.detail}</span>}
+              </div>
+              {r.bilan && (
+                <div className="mt-1.5">
+                  <BilanSeance bilan={r.bilan} />
+                </div>
+              )}
             </li>
           ))}
         </ul>

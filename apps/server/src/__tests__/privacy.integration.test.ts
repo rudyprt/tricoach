@@ -134,6 +134,9 @@ describeIfDb("données personnelles", () => {
         heuresSemaine: 8,
       });
       await prisma.chatMessage.create({ data: { userId: user.id, role: "user", content: "Bonjour coach" } });
+      await prisma.resumeChat.create({
+        data: { userId: user.id, texte: "L'athlète signale une douleur au genou.", jusquA: new Date() },
+      });
       await prisma.trainingPlan.create({
         data: {
           userId: user.id,
@@ -166,6 +169,8 @@ describeIfDb("données personnelles", () => {
       expect(data.compte.profile.contraintes).toBe("douleur au genou droit");
       expect(data.seances[0].ressenti).toBe("jambes lourdes");
       expect(data.conversationsCoach[0].content).toBe("Bonjour coach");
+      // Le résumé tenu par le coach en dérive, et peut contenir des données de santé.
+      expect(data.resumeConversationCoach.texte).toBe("L'athlète signale une douleur au genou.");
       expect(data.zonesDEntrainement.course).toHaveLength(5);
     });
 
