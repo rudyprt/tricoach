@@ -80,6 +80,9 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
       .catch(() => setEdition(true));
   }, [course.id]);
 
+  /** Épreuve d'une seule discipline : un temps, une FC, pas de transitions. */
+  const unique = course.discipline && course.discipline !== "triathlon" ? course.discipline : null;
+
   if (!user?.isPremium) {
     return (
       <div className="rounded-2xl border border-rose-900/50 bg-rose-950/20 p-4">
@@ -106,7 +109,7 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
     setBusy(true);
     setError(null);
     const dist =
-      course.format === "autre"
+      !unique && course.format === "autre"
         ? {
             distances: Object.fromEntries(
               Object.entries(distances)
@@ -118,6 +121,8 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
     try {
       const { data } = await api.post<AnalyseCourseReponse>(`/races/${course.id}/analyse`, {
         ...saisie,
+        // Une seule discipline : son temps est le temps total.
+        ...(unique ? { [unique]: saisie.total } : {}),
         ...dist,
         fcNatation: nombreOuNull(fc.natation),
         fcVelo: nombreOuNull(fc.velo),
@@ -149,6 +154,33 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
 
       {edition ? (
         <form onSubmit={analyser} className="space-y-3">
+          {unique ? (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-xs text-doux">
+                Votre temps (h:mm:ss ou mm:ss)
+                <input
+                  required
+                  value={saisie.total}
+                  onChange={(e) => setSaisie({ ...saisie, total: e.target.value })}
+                  placeholder="44:30"
+                  inputMode="numeric"
+                  className={`mt-0.5 ${champ}`}
+                />
+              </label>
+              <label className="block text-xs text-doux">
+                FC moyenne (bpm)
+                <input
+                  type="number"
+                  min={80}
+                  max={230}
+                  value={fc[unique]}
+                  onChange={(e) => setFc({ ...fc, [unique]: e.target.value })}
+                  className={`mt-0.5 ${champ}`}
+                />
+              </label>
+            </div>
+          ) : (
+          <>
           <div>
             <p className="mb-1.5 text-xs font-semibold text-zinc-300">Vos temps (h:mm:ss ou mm:ss)</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -220,6 +252,8 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
               ))}
             </div>
           </div>
+          </>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <label className="block text-xs text-doux">

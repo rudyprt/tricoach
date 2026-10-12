@@ -168,7 +168,9 @@ privacyRouter.get(
         select: {
           nom: true,
           date: true,
+          discipline: true,
           format: true,
+          distanceKm: true,
           priorite: true,
           lieu: true,
           objectifTemps: true,

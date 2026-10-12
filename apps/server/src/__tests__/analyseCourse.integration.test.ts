@@ -127,6 +127,42 @@ describeIfDb("analyse de course", () => {
     expect(await prisma.aiCall.count({ where: { kind: "analyse_course" } })).toBe(1);
   });
 
+  it("analyse aussi une épreuve de course à pied seule", async () => {
+    const { agent, user } = await athlete("dix-km@example.com", "premium");
+    const date = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    // Inscrite par l'API : la distance remplace le format de triathlon.
+    await prisma.race.create({
+      data: { userId: user.id, nom: "10 km de Paris", date: new Date(`${date}T00:00:00.000Z`), discipline: "course", distanceKm: 10 },
+    });
+    const course = await prisma.race.findFirstOrThrow({ where: { userId: user.id, discipline: "course" } });
+    askClaude.mockResolvedValue(reponse(JSON.stringify({ ...ANALYSE, segments: [ANALYSE.segments[1]] })));
+
+    const res = await agent.post(`/api/races/${course.id}/analyse`).send({ total: "44:30", fcCourse: 174 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.chiffres.segments).toHaveLength(1);
+    const prompt = askClaude.mock.calls[0][0].messages[0].content as string;
+    expect(prompt).toContain("Course à pied — 10 km");
+    expect(prompt).toContain("Course à pied : 44:30");
+    expect(prompt).toContain("4:27/km, FC moyenne 174");
+    expect(prompt).toContain("pas de transitions");
+    expect(prompt).not.toContain("plan de course");
+  });
+
+  it("inscrit une épreuve d'une seule discipline avec sa distance, sans plan de triathlon", async () => {
+    const { agent } = await athlete("cyclo@example.com", "premium");
+    const dans30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+    expect((await agent.post("/api/races").send({ nom: "Cyclo", date: dans30, discipline: "velo" })).status).toBe(400);
+    const res = await agent
+      .post("/api/races")
+      .send({ nom: "L'Étape du Tour", date: dans30, discipline: "velo", distanceKm: 168, format: "ironman", priorite: "B" });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ discipline: "velo", distanceKm: 168, format: "autre", formatLabel: "Vélo — 168 km" });
+    expect((await agent.post(`/api/races/${res.body.id}/plan`)).status).toBe(400);
+  });
+
   it("est réservée à l'offre Premium", async () => {
     const { agent, course } = await athlete("standard@example.com", "standard");
 

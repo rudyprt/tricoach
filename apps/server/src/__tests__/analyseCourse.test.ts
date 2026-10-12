@@ -7,7 +7,7 @@ describe("chiffres d'une course", () => {
   it("calcule durées, parts du total et allures sur les distances du format", () => {
     const c = chiffresCourse(
       resultat({ natation: "25:00", t1: "1:30", velo: "1:05:00", t2: "1:00", course: "45:00" }),
-      "olympique",
+      { format: "olympique" },
       ""
     );
     expect(c.total).toBe("2:17:30");
@@ -19,23 +19,47 @@ describe("chiffres d'une course", () => {
   });
 
   it("préfère le temps officiel à la somme des segments", () => {
-    const c = chiffresCourse(resultat({ velo: "35:00", total: "1:10:12" }), "sprint", "");
+    const c = chiffresCourse(resultat({ velo: "35:00", total: "1:10:12" }), { format: "sprint" }, "");
     expect(c.total).toBe("1:10:12");
     expect(c.segments).toHaveLength(1);
   });
 
   it("ne totalise pas des segments incomplets", () => {
-    expect(chiffresCourse(resultat({ natation: "25:00", velo: "1:05:00" }), "olympique", "").total).toBeNull();
+    expect(chiffresCourse(resultat({ natation: "25:00", velo: "1:05:00" }), { format: "olympique" }, "").total).toBeNull();
   });
 
   it("prend les distances saisies quand le format n'en a pas", () => {
-    const c = chiffresCourse(resultat({ course: "50:00", distances: { courseKm: 10 } }), "autre", "");
+    const c = chiffresCourse(resultat({ course: "50:00", distances: { courseKm: 10 } }), { format: "autre" }, "");
     expect(c.segments[0].allure).toBe("5:00/km");
   });
 
   it("mesure l'écart au temps visé", () => {
-    const c = chiffresCourse(resultat({ total: "2:36:00" }), "olympique", "sub 2h30");
+    const c = chiffresCourse(resultat({ total: "2:36:00" }), { format: "olympique" }, "sub 2h30");
     expect(c.ecartObjectifS).toBe(360);
+  });
+});
+
+describe("épreuve d'une seule discipline", () => {
+  it("donne l'allure d'un 10 km à partir du seul temps saisi", () => {
+    const c = chiffresCourse(resultat({ total: "44:30" }), { format: "autre", discipline: "course", distanceKm: 10 }, "45min");
+    expect(c.segments).toEqual([expect.objectContaining({ segment: "course", duree: "44:30", allure: "4:27/km" })]);
+    expect(c.total).toBe("44:30");
+  });
+
+  it("donne la vitesse d'une cyclosportive et le temps aux 100 m d'une traversée", () => {
+    expect(
+      chiffresCourse(resultat({ velo: "4:00:00" }), { format: "autre", discipline: "velo", distanceKm: 120 }, "").segments[0]
+        .allure
+    ).toBe("30.0 km/h");
+    expect(
+      chiffresCourse(resultat({ total: "1:00:00" }), { format: "autre", discipline: "natation", distanceKm: 3 }, "")
+        .segments[0].allure
+    ).toBe("2:00/100m");
+  });
+
+  it("ignore les autres segments", () => {
+    const c = chiffresCourse(resultat({ course: "44:30", velo: "1:00:00" }), { format: "autre", discipline: "course", distanceKm: 10 }, "");
+    expect(c.segments.map((x) => x.segment)).toEqual(["course"]);
   });
 });
 

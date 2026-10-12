@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIBELLES_FORMAT, type FormatCourse } from "./races.js";
+import type { FormatCourse } from "./races.js";
 import { formatZonesForPrompt, type TrainingZones } from "./training.js";
 import type { RacePlan } from "./racePlan.js";
 
@@ -130,14 +130,47 @@ export interface ChiffresCourse {
   distances: Distances | null;
 }
 
-export function chiffresCourse(resultat: Resultat, format: string, objectifTemps: string): ChiffresCourse {
-  const distances = { ...(DISTANCES_FORMAT[format as FormatCourse] ?? {}), ...(resultat.distances ?? {}) };
+/** L'épreuve, telle que l'analyse en a besoin. */
+export interface EpreuveAnalysee {
+  format: string;
+  discipline?: string | null;
+  distanceKm?: number | null;
+}
+
+/** Le segment unique d'une épreuve d'une seule discipline, ou null pour un triathlon. */
+export function segmentUnique(epreuve: EpreuveAnalysee): Segment | null {
+  const d = epreuve.discipline ?? "triathlon";
+  return d === "course" || d === "velo" || d === "natation" ? d : null;
+}
+
+function distancesEpreuve(epreuve: EpreuveAnalysee): Distances {
+  const unique = segmentUnique(epreuve);
+  const km = epreuve.distanceKm ?? undefined;
+  if (unique === "course") return { courseKm: km };
+  if (unique === "velo") return { veloKm: km };
+  if (unique === "natation") return { natationM: km ? km * 1000 : undefined };
+  return DISTANCES_FORMAT[epreuve.format as FormatCourse] ?? {};
+}
+
+export function chiffresCourse(resultat: Resultat, epreuve: EpreuveAnalysee, objectifTemps: string): ChiffresCourse {
+  const unique = segmentUnique(epreuve);
+  const saisis = Object.fromEntries(
+    Object.entries(resultat.distances ?? {}).filter(([, v]) => v !== undefined)
+  ) as Distances;
+  const distances = Object.fromEntries(
+    Object.entries({ ...distancesEpreuve(epreuve), ...saisis }).filter(([, v]) => v !== undefined)
+  ) as Distances;
+  // Une seule discipline : son temps est le temps total, et réciproquement.
+  if (unique) {
+    resultat = { ...resultat, [unique]: resultat[unique] || resultat.total, total: resultat.total || resultat[unique] };
+  }
+  const segmentsAttendus = unique ? [unique] : SEGMENTS;
   const aDistances = Object.keys(distances).length > 0;
-  const durees = SEGMENTS.map((s) => [s, enSecondes(resultat[s])] as const).filter(
+  const durees = segmentsAttendus.map((s) => [s, enSecondes(resultat[s])] as const).filter(
     (x): x is readonly [Segment, number] => x[1] !== null && x[1] > 0
   );
   const somme = durees.reduce((t, [, d]) => t + d, 0);
-  const totalS = enSecondes(resultat.total) ?? (durees.length === SEGMENTS.length ? somme : null);
+  const totalS = enSecondes(resultat.total) ?? (durees.length === segmentsAttendus.length ? somme : null);
   const base = totalS ?? (somme || null);
 
   const allure = (segment: Segment, d: number): string | null => {
@@ -237,6 +270,7 @@ export const CONSIGNES_ANALYSE = [
   "- \"axesProgres\" : 2 à 3 axes, du plus rentable au moins rentable. \"travail\" décrit le type de séance qui le développe (ex : « sorties vélo longues finies par 20 min à allure course, puis 15 min de course à pied enchaînée »).",
   "- \"prochaineCourse\" : la stratégie à changer pour sa prochaine course.",
   "- Les conditions (chaleur, vent, eau froide, parcours) expliquent une partie des écarts : tiens-en compte avant de conclure à une faiblesse.",
+  "- Épreuve d'une seule discipline (course à pied, vélo ou natation) : un seul segment. Analyse la gestion de l'allure et de la FC au regard de ses zones et de ses chronos, la nutrition et le ressenti ; ignore transitions et enchaînements, et adapte \"travail\" à cette discipline.",
   "Tu n'es pas médecin : une douleur ou un malaise signalés appellent à consulter, sans diagnostic.",
   "Chaque champ texte fait 50 mots maximum.",
 ].join("\n");
@@ -244,7 +278,9 @@ export const CONSIGNES_ANALYSE = [
 export interface ContexteAnalyse {
   nom: string;
   date: Date;
-  format: string;
+  /** « Olympique (1,5 km / 40 km / 10 km) » ou « Course à pied — 10 km ». */
+  libelle: string;
+  discipline: string;
   priorite: string;
   objectifTemps: string;
   resultat: Resultat;
@@ -260,11 +296,15 @@ export interface ContexteAnalyse {
 
 export function buildAnalyseUserPrompt(ctx: ContexteAnalyse): string {
   const { resultat: r, chiffres: c } = ctx;
-  const format = LIBELLES_FORMAT[ctx.format as FormatCourse] ?? ctx.format;
   const d = c.distances;
+  const triathlon = ctx.discipline === "triathlon";
   return [
-    `Course : « ${ctx.nom} », ${format}, le ${ctx.date.toISOString().slice(0, 10)}, priorité ${ctx.priorite}.`,
-    d ? `Distances : natation ${d.natationM ?? "?"} m, vélo ${d.veloKm ?? "?"} km, course ${d.courseKm ?? "?"} km.` : "Distances inconnues.",
+    `Course : « ${ctx.nom} », ${ctx.libelle}, le ${ctx.date.toISOString().slice(0, 10)}, priorité ${ctx.priorite}.`,
+    triathlon
+      ? d
+        ? `Distances : natation ${d.natationM ?? "?"} m, vélo ${d.veloKm ?? "?"} km, course ${d.courseKm ?? "?"} km.`
+        : "Distances inconnues."
+      : "Épreuve d'une seule discipline : pas de transitions.",
     ctx.objectifTemps ? `Temps visé : ${ctx.objectifTemps}.` : "Aucun temps visé annoncé.",
     "",
     "RÉSULTAT (chiffres calculés) :",
@@ -284,7 +324,9 @@ export function buildAnalyseUserPrompt(ctx: ContexteAnalyse): string {
     "",
     `Chronos de référence : ${ctx.chronos.join(" ; ") || "non renseignés"}`,
     ctx.zones ? `Zones de l'athlète :\n${formatZonesForPrompt(ctx.zones)}` : "Zones inconnues.",
-    ctx.plan
+    !triathlon
+      ? ""
+      : ctx.plan
       ? `Son plan de course prévoyait : natation « ${ctx.plan.natation.allure} » ; vélo « ${ctx.plan.velo.allure} » ; course « ${ctx.plan.course.allure} ».`
       : "Pas de plan de course préparé dans l'application.",
     "",

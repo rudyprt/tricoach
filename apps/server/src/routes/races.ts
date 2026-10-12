@@ -30,12 +30,12 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
 import {
+  DISCIPLINES_COURSE,
   FORMATS,
-  LIBELLES_FORMAT,
   LIBELLES_PRIORITE,
+  libelleCourse,
   PRIORITES,
   synchroniserObjectif,
-  type FormatCourse,
   type PrioriteCourse,
 } from "../lib/races.js";
 
@@ -46,7 +46,10 @@ racesRouter.use(athleteWriteRateLimit);
 const courseSchema = z.object({
   nom: z.string().trim().min(1, "Donnez un nom à votre course.").max(120, "Nom trop long."),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format AAAA-MM-JJ."),
+  discipline: z.enum(DISCIPLINES_COURSE).default("triathlon"),
   format: z.enum(FORMATS).default("autre"),
+  /** Distance d'une épreuve d'une seule discipline, en kilomètres. */
+  distanceKm: z.number().min(0.1, "Distance trop courte.").max(1000, "Distance trop longue.").nullable().optional(),
   priorite: z.enum(PRIORITES).default("A"),
   lieu: z.string().trim().max(120, "Lieu trop long.").default(""),
   objectifTemps: z.string().trim().max(40, "Temps visé trop long.").default(""),
@@ -61,6 +64,8 @@ function serialize({
   nom: string;
   date: Date;
   format: string;
+  discipline: string;
+  distanceKm: number | null;
   priorite: string;
   lieu: string;
   objectifTemps: string;
@@ -72,7 +77,7 @@ function serialize({
     // Le détail se lit sur sa propre route : la liste dit seulement s'il existe.
     analysee: Boolean(analyse),
     date: course.date.toISOString().slice(0, 10),
-    formatLabel: LIBELLES_FORMAT[course.format as FormatCourse] ?? course.format,
+    formatLabel: libelleCourse(course),
     prioriteLabel: LIBELLES_PRIORITE[course.priorite as PrioriteCourse] ?? course.priorite,
   };
 }
@@ -106,7 +111,21 @@ racesRouter.post(
     const date = new Date(`${parsed.data.date}T00:00:00.000Z`);
     if (Number.isNaN(date.getTime())) throw new HttpError(400, "Date invalide.");
 
-    const course = await prisma.race.create({ data: { ...parsed.data, date, userId } });
+    // Une épreuve d'une seule discipline n'a pas de format de triathlon, mais
+    // une distance : c'est elle qui donne les allures de l'analyse.
+    const { discipline, distanceKm } = parsed.data;
+    if (discipline !== "triathlon" && !distanceKm) {
+      throw new HttpError(400, "Indiquez la distance de l'épreuve.");
+    }
+    const course = await prisma.race.create({
+      data: {
+        ...parsed.data,
+        format: discipline === "triathlon" ? parsed.data.format : "autre",
+        distanceKm: discipline === "triathlon" ? null : distanceKm,
+        date,
+        userId,
+      },
+    });
     await synchroniserObjectif(userId);
 
     res.status(201).json(serialize(course));
@@ -171,6 +190,9 @@ racesRouter.post(
 
     const course = await prisma.race.findFirst({ where: { id: req.params.id, userId } });
     if (!course) throw new HttpError(404, "Course introuvable.");
+    if (course.discipline !== "triathlon") {
+      throw new HttpError(400, "Le plan de course est prévu pour les triathlons.");
+    }
 
     const profile = await prisma.athleteProfile.findUnique({ where: { userId } });
     const zones = profile ? computeTrainingZones(await buildZoneInputs(userId, profile)) : null;
@@ -258,14 +280,22 @@ racesRouter.get(
   ah(async (req: AuthedRequest, res) => {
     const course = await prisma.race.findFirst({
       where: { id: req.params.id, userId: req.userId! },
-      select: { format: true, objectifTemps: true, resultat: true, analyse: true, analyseLe: true },
+      select: {
+        format: true,
+        discipline: true,
+        distanceKm: true,
+        objectifTemps: true,
+        resultat: true,
+        analyse: true,
+        analyseLe: true,
+      },
     });
     if (!course) throw new HttpError(404, "Course introuvable.");
 
     const resultat = parseResultat(course.resultat);
     res.json({
       resultat,
-      chiffres: resultat ? chiffresCourse(resultat, course.format, course.objectifTemps) : null,
+      chiffres: resultat ? chiffresCourse(resultat, course, course.objectifTemps) : null,
       analyse: parseAnalyse(course.analyse),
       genereLe: course.analyseLe?.toISOString() ?? null,
     });
@@ -313,11 +343,12 @@ racesRouter.post(
       }),
     ]);
 
-    const chiffres = chiffresCourse(resultat, course.format, course.objectifTemps);
+    const chiffres = chiffresCourse(resultat, course, course.objectifTemps);
     const userPrompt = buildAnalyseUserPrompt({
       nom: course.nom,
       date: course.date,
-      format: course.format,
+      libelle: libelleCourse(course),
+      discipline: course.discipline,
       priorite: course.priorite,
       objectifTemps: course.objectifTemps,
       resultat,

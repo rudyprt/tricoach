@@ -548,12 +548,17 @@ export interface EtatEntrainement {
 /** Une course inscrite au calendrier. La priorité décide de l'affûtage. */
 export type PrioriteCourse = "A" | "B" | "C";
 export type FormatCourse = "sprint" | "olympique" | "half" | "ironman" | "autre";
+/** Un triathlon, ou une épreuve d'une seule discipline (10 km, cyclosportive, traversée). */
+export type DisciplineCourse = "triathlon" | "course" | "velo" | "natation";
 
 export interface Course {
   id: string;
   nom: string;
   date: string;
   format: FormatCourse;
+  discipline?: DisciplineCourse;
+  /** Distance d'une épreuve d'une seule discipline, en kilomètres. */
+  distanceKm?: number | null;
   priorite: PrioriteCourse;
   lieu: string;
   objectifTemps: string;

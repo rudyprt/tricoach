@@ -84,6 +84,24 @@ describe("analyse de course", () => {
     expect(screen.getByText("Enchaînements")).toBeInTheDocument();
   });
 
+  it("ne demande qu'un temps et une FC pour une épreuve d'une seule discipline", async () => {
+    get.mockResolvedValue({ data: { resultat: null, chiffres: null, analyse: null, genereLe: null } });
+    post.mockResolvedValue({ data: { resultat: null, chiffres: null, analyse: ANALYSE, genereLe: null } });
+    render(
+      <MemoryRouter>
+        <AnalyseCourseCard course={{ ...COURSE, discipline: "course", distanceKm: 10, format: "autre" }} />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(await screen.findByLabelText(/Votre temps/), { target: { value: "44:30" } });
+    fireEvent.change(screen.getByLabelText("FC moyenne (bpm)"), { target: { value: "174" } });
+    expect(screen.queryByLabelText("T1")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Analyser ma course" }));
+
+    expect(await screen.findByText(ANALYSE.resume)).toBeInTheDocument();
+    expect(post.mock.calls[0][1]).toMatchObject({ total: "44:30", course: "44:30", fcCourse: 174 });
+  });
+
   it("reprend une analyse déjà faite", async () => {
     get.mockResolvedValue({ data: { resultat: { velo: "1:10:00" }, chiffres: null, analyse: ANALYSE, genereLe: null } });
     afficher();

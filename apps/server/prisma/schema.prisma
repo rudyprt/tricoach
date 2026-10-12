@@ -418,8 +418,14 @@ model Race {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   nom           String
   date          DateTime
-  /// "sprint" | "olympique" | "half" | "ironman" | "autre"
+  /// "triathlon" | "course" | "velo" | "natation" : une épreuve d'une seule
+  /// discipline (10 km, cyclosportive, traversée) se prépare et s'analyse
+  /// autrement qu'un triathlon.
+  discipline    String    @default("triathlon")
+  /// "sprint" | "olympique" | "half" | "ironman" | "autre" (triathlon seulement)
   format        String    @default("autre")
+  /// Distance d'une épreuve d'une seule discipline, en kilomètres.
+  distanceKm    Float?
   /// "A" : objectif principal, affûtage complet.
   /// "B" : objectif secondaire, affûtage court.
   /// "C" : course d'entraînement, aucun allègement.

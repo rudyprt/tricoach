@@ -15,7 +15,7 @@ const PREMIUM_FEATURES = [
   "Tout ce qui est inclus dans Standard",
   "Répartition de votre temps par zone d'intensité",
   "Détection de surentraînement",
-  "Analyse de vos courses de triathlon par le coach IA",
+  "Analyse de vos courses par le coach IA : triathlon, course à pied, vélo ou natation",
   "30 messages par jour avec le coach IA (10 en Standard)",
 ];
 
