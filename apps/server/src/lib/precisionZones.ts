@@ -95,13 +95,21 @@ export async function precisionDesZones(
     };
   } else if (profil.fcSeuil) {
     fc = { discipline: "frequenceCardiaque", niveau: "saisie", source: "FC au seuil que vous avez saisie.", test: "course", aRefaire: false };
+  } else if (inputs.fcSeuilsCourses?.course) {
+    fc = {
+      discipline: "frequenceCardiaque",
+      niveau: "estimee",
+      source: `FC au seuil estimée à ${inputs.fcSeuilsCourses.course} bpm d'après la FC moyenne de votre course de référence : plus juste qu'un pourcentage de FC max, moins qu'un test.`,
+      test: "course",
+      aRefaire: false,
+    };
   } else if (inputs.fcMax) {
     fc = {
       discipline: "frequenceCardiaque",
       niveau: "estimee",
       source: profil.fcMax
         ? `FC au seuil estimée à 92 % de votre FC max (${inputs.fcMax} bpm) : l'écart réel peut atteindre 10 battements.`
-        : `FC au seuil estimée depuis la FC max relevée sur vos séances (${inputs.fcMax} bpm).`,
+        : `FC au seuil estimée depuis la FC max relevée sur vos séances ou vos courses (${inputs.fcMax} bpm).`,
       test: "course",
       aRefaire: false,
     };

@@ -49,6 +49,13 @@ export interface AthleteProfile {
   /** FC au seuil à vélo : quelques battements sous celle de course. */
   fcSeuilVelo: number | null;
   fcMax: number | null;
+  /** FC moyenne et max de la course de référence, par discipline. */
+  fcMoyNatation?: number | null;
+  fcMaxNatation?: number | null;
+  fcMoyVelo?: number | null;
+  fcMaxVelo?: number | null;
+  fcMoyCourse?: number | null;
+  fcMaxCourse?: number | null;
   disponibilites: Disponibilites | null;
   materiel: Materiel | null;
 }

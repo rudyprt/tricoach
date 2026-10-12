@@ -6,6 +6,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropic.js";
 import { MAX_TOKENS, MODELE_PLAN } from "../lib/modeles.js";
 import { resumeAthlete } from "../lib/resumeAthlete.js";
+import { fcCourseTexte } from "../lib/fcCourses.js";
 import { recordAiCall, type AiCallKind } from "../lib/aiUsage.js";
 import { serializeSession, sessionStructureSchema } from "../lib/session.js";
 import { hasStandardAccess } from "../lib/subscription.js";
@@ -79,6 +80,12 @@ export interface ProfileForPrompt {
   heuresSemaine: number;
   contraintes: string;
   ftpWatts: number | null;
+  fcMoyNatation?: number | null;
+  fcMaxNatation?: number | null;
+  fcMoyVelo?: number | null;
+  fcMaxVelo?: number | null;
+  fcMoyCourse?: number | null;
+  fcMaxCourse?: number | null;
   seuilCourseSecParKm: number | null;
   cssSecPer100m: number | null;
   fcSeuil: number | null;
@@ -174,9 +181,9 @@ function profileLines(
         ? `Temps visé sur cette course : ${profile.objectifTemps}. Oriente les séances spécifiques vers cette allure, et dis-lui quand une séance sert directement cet objectif.`
         : "Aucun temps visé renseigné : ne suppose pas de chrono, et reste sur une progression générale.",
     `Phase de préparation : ${phase.label}`,
-    `Dernier temps natation : ${profile.tempsNatation || "non renseigné"}`,
-    `Dernier temps vélo : ${profile.tempsVelo || "non renseigné"}`,
-    `Dernier temps course à pied : ${profile.tempsCourse || "non renseigné"}`,
+    `Dernier temps natation : ${profile.tempsNatation || "non renseigné"}${fcCourseTexte(profile.fcMoyNatation, profile.fcMaxNatation)}`,
+    `Dernier temps vélo : ${profile.tempsVelo || "non renseigné"}${fcCourseTexte(profile.fcMoyVelo, profile.fcMaxVelo)}`,
+    `Dernier temps course à pied : ${profile.tempsCourse || "non renseigné"}${fcCourseTexte(profile.fcMoyCourse, profile.fcMaxCourse)}`,
     `Heures disponibles cette semaine : ${profile.heuresSemaine}h`,
     `Volume maximum autorisé pour cette semaine : ${maxVolumeMin} minutes (limite stricte, anti-blessure).`,
     `Blessures / contraintes : ${profile.contraintes || "aucune"}`,

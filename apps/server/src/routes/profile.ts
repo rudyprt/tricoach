@@ -15,6 +15,9 @@ import { libererJoursIndisponibles } from "../lib/reposDeclare.js";
 export const profileRouter = Router();
 profileRouter.use(requireAuth);
 
+/** Une fréquence cardiaque relevée en course : bornes larges, fautes de frappe écartées. */
+const fcCourse = z.number().int().min(80, "FC trop basse.").max(230, "FC trop haute.").nullable().optional();
+
 const profileSchema = z.object({
   objectif: z.string().trim().min(1, "Indiquez votre objectif.").max(200),
   objectifDate: z
@@ -40,6 +43,13 @@ const profileSchema = z.object({
   // Mesurée à vélo : elle tourne quelques battements sous celle de course.
   fcSeuilVelo: z.number().int().min(100).max(220).nullable().optional(),
   fcMax: z.number().int().min(120).max(230).nullable().optional(),
+  // FC moyenne et max de la course de référence, discipline par discipline.
+  fcMoyNatation: fcCourse,
+  fcMaxNatation: fcCourse,
+  fcMoyVelo: fcCourse,
+  fcMaxVelo: fcCourse,
+  fcMoyCourse: fcCourse,
+  fcMaxCourse: fcCourse,
   disponibilites: disponibilitesSchema,
   materiel: materielSchema,
 });
@@ -55,7 +65,18 @@ profileRouter.get(
 profileRouter.put(
   "/",
   ah(async (req: AuthedRequest, res) => {
-    const parsed = profileSchema.safeParse(req.body);
+    const parsed = profileSchema.superRefine((p, ctx) => {
+      // Une moyenne au-dessus du maximum de la même course est une faute de saisie.
+      for (const [moy, max] of [
+        [p.fcMoyNatation, p.fcMaxNatation],
+        [p.fcMoyVelo, p.fcMaxVelo],
+        [p.fcMoyCourse, p.fcMaxCourse],
+      ]) {
+        if (moy && max && moy > max) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La FC moyenne d'une course ne peut pas dépasser sa FC max." });
+        }
+      }
+    }).safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Données invalides." });
       return;

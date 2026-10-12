@@ -2,6 +2,7 @@ import { prisma } from "./prisma.js";
 import { computeTrainingZones, type TrainingZones, type ZoneInputs } from "./training.js";
 import { parseZoneOverrides } from "./zoneOverrides.js";
 import { parseMateriel } from "./disponibilites.js";
+import { fcMaxDesCourses, seuilsDepuisCourses } from "./fcCourses.js";
 
 /** Profil, tel que stocké, avec les champs utiles au calcul des zones. */
 export interface ProfileZoneFields {
@@ -15,6 +16,13 @@ export interface ProfileZoneFields {
   fcSeuilVelo?: number | null;
   fcSeuilNatation?: number | null;
   fcMax: number | null;
+  /** FC moyenne et max de la course de référence, par discipline. */
+  fcMoyNatation?: number | null;
+  fcMaxNatation?: number | null;
+  fcMoyVelo?: number | null;
+  fcMaxVelo?: number | null;
+  fcMoyCourse?: number | null;
+  fcMaxCourse?: number | null;
   customZones: unknown;
   /** Matériel et accès déclarés, dont le bassin où l'athlète nage. */
   materiel?: unknown;
@@ -43,7 +51,10 @@ export async function buildZoneInputs(userId: string, profile: ProfileZoneFields
       },
       _max: { fcMax: true },
     });
-    fcMax = observee._max.fcMax ?? null;
+    // La FC max relevée en course est elle aussi une mesure : le vrai
+    // maximum est au moins la plus haute des deux.
+    const valeurs = [observee._max.fcMax, fcMaxDesCourses(profile)].filter((v): v is number => Boolean(v));
+    fcMax = valeurs.length ? Math.max(...valeurs) : null;
   }
 
   return {
@@ -57,6 +68,7 @@ export async function buildZoneInputs(userId: string, profile: ProfileZoneFields
     fcSeuilVelo: profile.fcSeuilVelo ?? null,
     fcSeuilNatation: profile.fcSeuilNatation ?? null,
     fcMax,
+    fcSeuilsCourses: seuilsDepuisCourses(profile),
     // Le milieu où l'athlète nage change le temps aux 100 m à effort égal :
     // une allure calculée en bassin est inatteignable en eau libre.
     bassin: parseMateriel(profile.materiel)?.piscine ?? null,

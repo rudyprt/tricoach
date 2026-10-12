@@ -349,6 +349,42 @@ describeIfDb("API", () => {
       expect(zones.body.periodization.phase).toBe("base");
     });
 
+    it("estime le seuil cardiaque depuis la FC moyenne de la course de référence", async () => {
+      const { agent } = await signUp("fc-course@example.com");
+      const put = await agent.put("/api/profile").send({
+        objectif: "Triathlon M",
+        objectifDate: "2027-06-01",
+        tempsCourse: "10km en 45min",
+        fcMoyCourse: 172,
+        fcMaxCourse: 186,
+        tempsVelo: "40km en 1h05",
+        fcMoyVelo: 160,
+        heuresSemaine: 6,
+      });
+      expect(put.status).toBe(200);
+      expect(put.body).toMatchObject({ fcMoyCourse: 172, fcMaxCourse: 186, fcMoyVelo: 160, fcMaxVelo: null });
+
+      const zones = await agent.get("/api/profile/zones");
+      // Sans FC max saisie, celle de la course sert de borne haute.
+      expect(zones.body.zones.frequenceCardiaque).not.toBeNull();
+      expect(zones.body.zones.notes.join(" ")).toContain("estimée à 172 bpm d'après la FC moyenne");
+      expect(zones.body.zones.notes.join(" ")).toContain("à vélo : estimée à 160 bpm");
+    });
+
+    it("refuse une FC moyenne au-dessus de la FC max de la même course", async () => {
+      const { agent } = await signUp("fc-incoherente@example.com");
+      const put = await agent.put("/api/profile").send({
+        objectif: "Triathlon M",
+        objectifDate: "2027-06-01",
+        tempsCourse: "10km en 45min",
+        fcMoyCourse: 190,
+        fcMaxCourse: 180,
+        heuresSemaine: 6,
+      });
+      expect(put.status).toBe(400);
+      expect(put.body.error).toContain("FC moyenne");
+    });
+
     it("enregistre une correction de zone et la fait primer sur le calcul", async () => {
       const { agent } = await signUp("zones-perso@example.com");
       await agent.put("/api/profile").send({

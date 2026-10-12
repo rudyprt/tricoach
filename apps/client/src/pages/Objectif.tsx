@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { api, apiErrorMessage, type AthleteProfile, type Disponibilites, type Materiel } from "../lib/api";
 import { allureVersSecondes, secondesVersAllure } from "../lib/formats";
 import { CreneauxForm } from "../components/CreneauxForm";
+import { FcCourseChamps } from "../components/FcCourseChamps";
+import { FC_COURSES_VIDES, fcCoursesDepuisProfil, fcCoursesPourApi, type FcCourses } from "../lib/fcCourses";
 import { MaterielForm, MATERIEL_PAR_DEFAUT } from "../components/MaterielForm";
 import { Spinner } from "../components/Spinner";
 import { CalendrierCourses } from "../components/CalendrierCourses";
@@ -28,6 +30,7 @@ export function Objectif() {
     tempsVelo: "",
     tempsCourse: "",
   });
+  const [fc, setFc] = useState<FcCourses>(FC_COURSES_VIDES);
   const [heuresSemaine, setHeuresSemaine] = useState(6);
   const [disponibilites, setDisponibilites] = useState<Disponibilites>({});
   const [materiel, setMateriel] = useState<Materiel>(MATERIEL_PAR_DEFAUT);
@@ -60,6 +63,7 @@ export function Objectif() {
           tempsVelo: data.tempsVelo,
           tempsCourse: data.tempsCourse,
         });
+        setFc(fcCoursesDepuisProfil(data));
         setHeuresSemaine(data.heuresSemaine);
         setDisponibilites(data.disponibilites ?? {});
         setMateriel(data.materiel ?? MATERIEL_PAR_DEFAUT);
@@ -95,6 +99,7 @@ export function Objectif() {
         objectifTemps,
         objectifFinir,
         ...temps,
+        ...fcCoursesPourApi(fc),
         heuresSemaine,
         contraintes,
         consentSante,
@@ -227,6 +232,9 @@ export function Objectif() {
 
         <div className="space-y-2">
           <label className="text-sm text-zinc-300">Temps de référence, par discipline (facultatif)</label>
+          <p className="text-xs text-doux">
+            La FC moyenne et la FC max de ces courses affinent vos zones cardiaques tant que vous n'avez pas fait de test.
+          </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {DISCIPLINES.map((d) => (
               <div
@@ -243,6 +251,7 @@ export function Objectif() {
                   onChange={(e) => setTemps((prev) => ({ ...prev, [d.key]: e.target.value }))}
                   className="w-full rounded-md border border-bordure bg-zinc-950 px-2.5 py-1.5 text-sm text-white outline-none transition-colors focus:border-rose-500"
                 />
+                <FcCourseChamps discipline={d.key} label={d.label} valeur={fc} onChange={setFc} />
               </div>
             ))}
           </div>

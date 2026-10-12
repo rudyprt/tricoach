@@ -1,6 +1,7 @@
 import { prisma } from "./prisma.js";
 import { chargeSeance, type BilanDeCharge, type ReferencesAthlete } from "./trainingLoad.js";
 import { formatAllure } from "./activityMatching.js";
+import { fcCourseTexte } from "./fcCourses.js";
 
 /**
  * Ce que le coach doit savoir de l'entraînement de l'athlète, en quelques lignes.
@@ -29,6 +30,12 @@ export interface ProfilResume {
   tempsNatation: string;
   tempsVelo: string;
   tempsCourse: string;
+  fcMoyNatation?: number | null;
+  fcMaxNatation?: number | null;
+  fcMoyVelo?: number | null;
+  fcMaxVelo?: number | null;
+  fcMoyCourse?: number | null;
+  fcMaxCourse?: number | null;
 }
 
 export interface ActiviteResume {
@@ -100,7 +107,7 @@ export function construireResumeAthlete(donnees: {
     const intention = p.objectifFinir ? "vise à finir, sans chrono" : p.objectifTemps ? `vise ${couper(p.objectifTemps, 20)}` : "pas de temps visé";
     lignes.push(
       `Athlète : ${couper(p.objectif, 40)} le ${p.objectifDate.toISOString().slice(0, 10)} (${semaines} sem), ${intention} ; ${p.heuresSemaine} h/sem ; contraintes : ${couper(p.contraintes, 80) || "aucune"}`,
-      `Chronos : nat ${couper(p.tempsNatation, 25) || "n/r"} · vélo ${couper(p.tempsVelo, 25) || "n/r"} · càp ${couper(p.tempsCourse, 25) || "n/r"}`
+      `Chronos : nat ${couper(p.tempsNatation, 25) || "n/r"}${fcCourseTexte(p.fcMoyNatation, p.fcMaxNatation)} · vélo ${couper(p.tempsVelo, 25) || "n/r"}${fcCourseTexte(p.fcMoyVelo, p.fcMaxVelo)} · càp ${couper(p.tempsCourse, 25) || "n/r"}${fcCourseTexte(p.fcMoyCourse, p.fcMaxCourse)}`
     );
   }
 

@@ -3,6 +3,8 @@ import { ConsentementSante } from "../components/ConsentementSante";
 import { useNavigate } from "react-router-dom";
 import { api, apiErrorMessage, type Disponibilites, type Materiel } from "../lib/api";
 import { CreneauxForm } from "../components/CreneauxForm";
+import { FcCourseChamps } from "../components/FcCourseChamps";
+import { FC_COURSES_VIDES, fcCoursesPourApi, type FcCourses } from "../lib/fcCourses";
 import { MaterielForm, MATERIEL_PAR_DEFAUT } from "../components/MaterielForm";
 import { useAuth } from "../lib/AuthContext";
 
@@ -25,6 +27,7 @@ export function Onboarding() {
     tempsVelo: "",
     tempsCourse: "",
   });
+  const [fc, setFc] = useState<FcCourses>(FC_COURSES_VIDES);
   const [heuresSemaine, setHeuresSemaine] = useState(6);
   const [debutant, setDebutant] = useState(false);
   const [disponibilites, setDisponibilites] = useState<Disponibilites>({});
@@ -48,6 +51,7 @@ export function Onboarding() {
         objectifTemps,
         objectifFinir,
         ...temps,
+        ...fcCoursesPourApi(fc),
         heuresSemaine,
         // Un débutant complet ne peut pas donner de temps de référence. Le dire
         // explicitement au coach vaut mieux que de le laisser deviner à partir
@@ -160,6 +164,9 @@ export function Onboarding() {
           {!debutant && (
           <div className="space-y-2">
             <label className="text-sm text-zinc-300">Temps sur votre dernière course, par discipline (facultatif)</label>
+            <p className="text-xs text-doux">
+              Ajoutez la FC moyenne et la FC max relevées sur cette course si vous les avez : vos zones cardiaques seront plus justes.
+            </p>
             <div className="grid gap-3 sm:grid-cols-3">
               {DISCIPLINES.map((d) => (
                 <div
@@ -176,6 +183,7 @@ export function Onboarding() {
                     onChange={(e) => setTemps((prev) => ({ ...prev, [d.key]: e.target.value }))}
                     className="w-full rounded-md border border-bordure bg-zinc-950 px-2.5 py-1.5 text-sm text-white outline-none transition-colors focus:border-rose-500"
                   />
+                  <FcCourseChamps discipline={d.key} label={d.label} valeur={fc} onChange={setFc} />
                 </div>
               ))}
             </div>

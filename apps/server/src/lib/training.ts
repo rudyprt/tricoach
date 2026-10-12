@@ -379,6 +379,11 @@ export interface ZoneInputs {
   fcSeuilNatation?: number | null;
   /** Fréquence cardiaque maximale observée ou testée. */
   fcMax?: number | null;
+  /**
+   * FC au seuil déduites de la FC moyenne des courses de référence. Elles ne
+   * servent qu'à défaut d'une valeur testée ou saisie.
+   */
+  fcSeuilsCourses?: { course?: number | null; velo?: number | null; natation?: number | null } | null;
   /** Corrections saisies par l'athlète, prioritaires sur le calcul. */
   overrides?: ZoneOverrides | null;
 }
@@ -610,6 +615,11 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     notes.push(
       `Fréquence cardiaque : zones calculées sur votre FC au seuil de ${seuilFc} bpm.`
     );
+  } else if (inputs.fcSeuilsCourses?.course) {
+    seuilFc = inputs.fcSeuilsCourses.course;
+    notes.push(
+      `Fréquence cardiaque : FC au seuil estimée à ${seuilFc} bpm d'après la FC moyenne de votre course de référence en course à pied. Un test de 30 minutes donnerait une valeur plus juste.`
+    );
   } else if (inputs.fcMax && inputs.fcMax > 120) {
     // Approximation usuelle en l'absence de test de seuil. Signalée comme telle :
     // la FC au seuil varie sensiblement d'un athlète à l'autre.
@@ -652,12 +662,23 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
    */
   const bandesFc = (seuil: number) => zonesCardiaques(seuil, inputs.fcMax);
 
-  const fcDiscipline = (mesuree: number | null | undefined, ecart: number, nom: string) => {
-    if (!seuilFc) return null;
+  const fcDiscipline = (
+    mesuree: number | null | undefined,
+    depuisCourse: number | null | undefined,
+    ecart: number,
+    nom: string
+  ) => {
     if (mesuree && mesuree > 100) {
       notes.push(`Fréquence cardiaque ${nom} : mesurée à ${mesuree} bpm.`);
       return bandesFc(mesuree);
     }
+    if (depuisCourse) {
+      notes.push(
+        `Fréquence cardiaque ${nom} : estimée à ${depuisCourse} bpm d'après la FC moyenne de votre course de référence.`
+      );
+      return bandesFc(depuisCourse);
+    }
+    if (!seuilFc) return null;
     const estimee = seuilFc - ecart;
     notes.push(
       `Fréquence cardiaque ${nom} : estimée à ${estimee} bpm, soit ${ecart} battements sous votre seuil en course. Un test dans cette discipline donnerait une valeur plus juste.`
@@ -665,8 +686,13 @@ export function computeTrainingZones(inputs: ZoneInputs): TrainingZones {
     return bandesFc(estimee);
   };
 
-  const fcVelo = fcDiscipline(inputs.fcSeuilVelo, ECART_FC_VELO, "à vélo");
-  const fcNatation = fcDiscipline(inputs.fcSeuilNatation, ECART_FC_NATATION, "en natation");
+  const fcVelo = fcDiscipline(inputs.fcSeuilVelo, inputs.fcSeuilsCourses?.velo, ECART_FC_VELO, "à vélo");
+  const fcNatation = fcDiscipline(
+    inputs.fcSeuilNatation,
+    inputs.fcSeuilsCourses?.natation,
+    ECART_FC_NATATION,
+    "en natation"
+  );
 
   const joindre = (ranges: ZoneRange[] | null, source: ZoneRange[] | null): ZoneRange[] | null => {
     if (!ranges || !source) return ranges;
