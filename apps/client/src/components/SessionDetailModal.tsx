@@ -4,6 +4,7 @@ import { BilanSeance } from "./BilanSeance";
 import { Dialog } from "../ui/Dialog";
 import { Bouton } from "../ui/Bouton";
 import { SeanceGuidee } from "./SeanceGuidee";
+import { RavitaillementCard } from "./RavitaillementCard";
 import { FaPlay, FaDownload, FaUpload } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
@@ -336,6 +337,8 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
         ) : (
           session.description && <p className="mb-4 text-sm leading-relaxed text-zinc-300">{session.description}</p>
         )}
+
+        {!isRestDay && <RavitaillementCard session={session} />}
 
         {!isRestDay && (
           <div className="mb-4 space-y-1">

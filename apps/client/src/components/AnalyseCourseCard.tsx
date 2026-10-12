@@ -95,7 +95,7 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
           vos axes de progrès, repris ensuite dans vos semaines d'entraînement.
         </p>
         <Link
-          to="/plans"
+          to="/abonnement"
           className="inline-block rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-black transition-colors hover:bg-rose-400"
         >
           Découvrir Premium

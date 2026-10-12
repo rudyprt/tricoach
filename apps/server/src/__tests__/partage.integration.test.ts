@@ -105,6 +105,21 @@ describeIfDb("partage d'une semaine", () => {
     expect(JSON.stringify(vue.body)).not.toContain("Martin");
   });
 
+  it("garde privé le journal de ravitaillement", async () => {
+    const { agent, user } = await athleteAvecSemaine("journal@example.com");
+    await prisma.session.updateMany({
+      where: { userId: user.id },
+      data: { nutritionPrise: { glucidesG: 90, boissonMl: 0, tolerance: "troubles", note: "nausées" } },
+    });
+    const creation = await agent.post("/api/partage").send({});
+    const token = creation.body.url.split("/").pop();
+
+    const vue = await request(app).get(`/api/partage/${token}`);
+
+    expect(vue.body.sessions[0].nutritionPrise).toBeNull();
+    expect(JSON.stringify(vue.body)).not.toContain("nausées");
+  });
+
   it("ne stocke jamais le jeton en clair", async () => {
     const { agent } = await athleteAvecSemaine("hash@example.com");
     const creation = await agent.post("/api/partage").send({});

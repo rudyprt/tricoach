@@ -114,7 +114,7 @@ describe("analyse de course", () => {
     get.mockResolvedValue({ data: { resultat: null, chiffres: null, analyse: null, genereLe: null } });
     afficher();
     expect(screen.getByText("Analyse de course — offre Premium")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Découvrir Premium" })).toHaveAttribute("href", "/plans");
+    expect(screen.getByRole("link", { name: "Découvrir Premium" })).toHaveAttribute("href", "/abonnement");
     expect(post).not.toHaveBeenCalled();
   });
 });

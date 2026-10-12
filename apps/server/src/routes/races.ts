@@ -16,6 +16,8 @@ import { localCalendarDate } from "../lib/week.js";
 import { describeActivity } from "../lib/activityMatching.js";
 import { fcCourseTexte } from "../lib/fcCourses.js";
 import { resumeAthlete } from "../lib/resumeAthlete.js";
+import { reperesCourse } from "../lib/nutrition.js";
+import { chargerProfilRavito, nutritionPromptLigne } from "../lib/nutritionDonnees.js";
 import { recordAiCall } from "../lib/aiUsage.js";
 import { computeTrainingZones } from "../lib/training.js";
 import { buildZoneInputs } from "../lib/zoneInputs.js";
@@ -203,8 +205,15 @@ racesRouter.post(
       where: { userId, format: course.format, date: { lt: new Date() }, id: { not: course.id } },
     });
 
+    // Ce que l'athlète a mesuré et toléré à l'entraînement (offre Premium) :
+    // le plan de course reprend ses doses plutôt que des moyennes.
+    const profilRavito = await chargerProfilRavito(userId);
+    const reperes = reperesCourse(profilRavito, course);
+    const personnel = nutritionPromptLigne(profilRavito);
+
     const system = buildRacePlanSystemPrompt();
-    const userPrompt = buildRacePlanUserPrompt({
+    const userPrompt = [
+      buildRacePlanUserPrompt({
       nom: course.nom,
       date: course.date,
       format: course.format,
@@ -214,7 +223,15 @@ racesRouter.post(
       zones,
       contraintes: profile?.contraintes ?? "",
       premiereFois: dejaCourue === 0,
-    });
+      }),
+      ...(personnel
+        ? [
+            "",
+            personnel,
+            `REPÈRES NUTRITION PERSONNELS, calculés — reprends ces chiffres tels quels dans "nutrition", "hydratation" et "reperes" : vélo ${reperes.velo.glucidesGH} g de glucides/h, ${reperes.velo.boissonMlH} ml/h, ${reperes.velo.sodiumMgH} mg de sodium/h ; course à pied ${reperes.course.glucidesGH} g/h, ${reperes.course.boissonMlH} ml/h, ${reperes.course.sodiumMgH} mg/h.${reperes.teste ? " Ces doses ont été tolérées à l'entraînement." : " La tolérance n'est pas encore vérifiée : rappelle-lui de les tester sur ses sorties longues."}`,
+          ]
+        : []),
+    ].join("\n");
 
     let plan;
     try {

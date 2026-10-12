@@ -708,3 +708,58 @@ export interface BilanRegularite {
   jalons: Jalon[];
   records: RecordPersonnel[];
 }
+
+/* ------------------------------------------------------------------ */
+/* Nutrition (offre Premium)                                           */
+/* ------------------------------------------------------------------ */
+
+export type FormatRavito = "boisson" | "gel" | "barre" | "solide";
+
+export interface Ravitaillement {
+  avant: string[];
+  pendant: {
+    glucidesGH: number;
+    fourchetteGH: [number, number];
+    boissonMlH: number;
+    sodiumMgH: number;
+    exemple: string | null;
+    conseils: string[];
+  } | null;
+  apres: string[];
+  entrainementDigestif: string | null;
+  sources: string[];
+}
+
+export interface JournalNutrition {
+  glucidesG: number;
+  boissonMl: number;
+  tolerance: "bien" | "gene" | "troubles";
+  note: string;
+}
+
+export interface ProfilNutrition {
+  poidsKg: number | null;
+  formats: FormatRavito[];
+  cafeine: boolean;
+  sueurSalee: boolean;
+}
+
+export interface TestSudation {
+  id: string;
+  date: string;
+  sport: "course" | "velo" | "natation";
+  dureeMin: number;
+  poidsAvantKg: number;
+  poidsApresKg: number;
+  boissonMl: number;
+  temperatureC: number | null;
+  tauxMlH: number;
+}
+
+export interface NutritionResume {
+  profil: ProfilNutrition;
+  tests: TestSudation[];
+  sudation: { course: number | null; velo: number | null; natation: number | null; global: number | null };
+  toleranceGH: number | null;
+  limiteGH: number | null;
+}

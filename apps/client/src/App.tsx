@@ -20,6 +20,7 @@ import { Objectif } from "./pages/Objectif";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
 const Zones = lazy(() => import("./pages/Zones").then((m) => ({ default: m.Zones })));
+const Nutrition = lazy(() => import("./pages/Nutrition").then((m) => ({ default: m.Nutrition })));
 const Admin = lazy(() => import("./pages/Admin").then((m) => ({ default: m.Admin })));
 const Compte = lazy(() => import("./pages/Compte").then((m) => ({ default: m.Compte })));
 const StravaReturn = lazy(() => import("./pages/StravaReturn").then((m) => ({ default: m.StravaReturn })));
@@ -98,6 +99,7 @@ function AppShell() {
           <Route path="/abonnement" element={<Plans />} />
           <Route path="/objectif" element={<Objectif />} />
           <Route path="/zones" element={<Zones />} />
+          <Route path="/nutrition" element={<Nutrition />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/compte" element={<Compte />} />
         </Route>

@@ -213,6 +213,16 @@ export function TopBar() {
                 </span>
               )}
             </button>
+            {/* La barre du bas est pleine : la nutrition s'ouvre d'ici sur téléphone. */}
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/nutrition");
+              }}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm text-zinc-300 transition-colors hover:bg-zinc-900"
+            >
+              Ma nutrition
+            </button>
             <button
               onClick={() => {
                 setOpen(false);
