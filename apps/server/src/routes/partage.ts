@@ -68,8 +68,9 @@ partageRouter.get(
       athlete: partage.user.name.split(" ")[0],
       weekStart: partage.weekStart.toISOString().slice(0, 10),
       expiresAt: partage.expiresAt.toISOString(),
-      // Le journal de ravitaillement (tolérance digestive, notes) reste privé.
-      sessions: sessions.map(({ nutritionPrise: _prive, ...seance }) => serializeSession({ ...seance, nutritionPrise: null })),
+      // Le ressenti et le journal de ravitaillement (douleurs, tolérance
+      // digestive) restent privés : le lien montre le programme, pas l'athlète.
+      sessions: sessions.map((seance) => serializeSession({ ...seance, ressenti: null, nutritionPrise: null })),
     });
   })
 );
