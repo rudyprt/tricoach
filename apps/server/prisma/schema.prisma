@@ -431,6 +431,13 @@ model Race {
   /// Généré à la demande, puis conservé — l'athlète le relit la veille.
   planCourse    Json?
   planGenereLe  DateTime?
+  /// Résultat saisi après la course : temps par segment, classement,
+  /// conditions, ressenti. Sert d'entrée à l'analyse.
+  resultat      Json?
+  /// Analyse de la course par le coach (offre Premium) : constats par segment,
+  /// points forts, axes de progrès, repris ensuite dans les semaines générées.
+  analyse       Json?
+  analyseLe     DateTime?
   createdAt     DateTime  @default(now())
 
   @@index([userId, date])

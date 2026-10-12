@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropic.js";
 import { MAX_TOKENS, MODELE_PLAN } from "../lib/modeles.js";
 import { resumeAthlete } from "../lib/resumeAthlete.js";
+import { analysePromptLines } from "../lib/analyseCourse.js";
 import { fcCourseTexte } from "../lib/fcCourses.js";
 import { recordAiCall, type AiCallKind } from "../lib/aiUsage.js";
 import { serializeSession, sessionStructureSchema } from "../lib/session.js";
@@ -721,6 +722,14 @@ async function prepareGeneration(
     // Ce que l'athlète a demandé au coach dans le chat : sans ces lignes, la
     // génération ignorait tout ce qui s'y disait.
     ...consignesPromptLines(await consignesActives(userId, user.timezone)),
+    // Ce que la dernière course a révélé : l'entraînement s'y attaque.
+    ...analysePromptLines(
+      await prisma.race.findFirst({
+        where: { userId, analyse: { not: Prisma.DbNull }, date: { gte: addDays(weekStart, -56), lt: weekStart } },
+        orderBy: { date: "desc" },
+        select: { nom: true, date: true, analyse: true },
+      })
+    ),
   ];
 
   /** Applique le plafond des créneaux au volume calculé par la périodisation. */

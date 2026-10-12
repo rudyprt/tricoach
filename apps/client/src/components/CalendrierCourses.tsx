@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { FaFlagCheckered, FaPlus, FaTrash } from "react-icons/fa6";
 import { api, apiErrorMessage, type Course, type FormatCourse, type PrioriteCourse } from "../lib/api";
 import { PlanCourseCard } from "./PlanCourseCard";
+import { AnalyseCourseCard } from "./AnalyseCourseCard";
 import { formatJourCourt } from "../lib/formats";
 
 const FORMATS: { valeur: FormatCourse; label: string }[] = [
@@ -51,6 +52,9 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [ouvert, setOuvert] = useState(false);
   const [planOuvert, setPlanOuvert] = useState<string | null>(null);
+  const [analyseOuverte, setAnalyseOuverte] = useState<string | null>(null);
+  /** Une course dont la date est passée ne se prépare plus : elle s'analyse. */
+  const aujourdHui = new Date().toLocaleDateString("fr-CA");
   const [nom, setNom] = useState("");
   const [date, setDate] = useState("");
   const [format, setFormat] = useState<FormatCourse>("olympique");
@@ -138,7 +142,17 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
                   {course.objectifTemps && ` · objectif ${course.objectifTemps}`}
                 </p>
               </div>
-              {course.priorite !== "C" && (
+              {course.date <= aujourdHui ? (
+                <button
+                  onClick={() => {
+                    setPlanOuvert(null);
+                    setAnalyseOuverte(analyseOuverte === course.id ? null : course.id);
+                  }}
+                  className="shrink-0 rounded-full border border-rose-900/50 px-2 py-1 text-[11px] font-semibold text-rose-300 transition-colors hover:border-rose-700"
+                >
+                  {course.analysee ? "Analyse ✓" : "Analyser"}
+                </button>
+              ) : course.priorite !== "C" && (
                 <button
                   onClick={() => setPlanOuvert(planOuvert === course.id ? null : course.id)}
                   className="shrink-0 rounded-full border border-emerald-900/50 px-2 py-1 text-[11px] font-semibold text-emerald-300 transition-colors hover:border-emerald-700"
@@ -161,6 +175,12 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
       {planOuvert && courses.some((c) => c.id === planOuvert) && (
         <div className="mb-3">
           <PlanCourseCard course={courses.find((c) => c.id === planOuvert)!} />
+        </div>
+      )}
+
+      {analyseOuverte && courses.some((c) => c.id === analyseOuverte) && (
+        <div className="mb-3">
+          <AnalyseCourseCard course={courses.find((c) => c.id === analyseOuverte)!} onAnalysee={() => void load()} />
         </div>
       )}
 

@@ -143,7 +143,7 @@ privacyRouter.get(
     });
     if (!user) throw new HttpError(404, "Utilisateur introuvable.");
 
-    const [plans, sessions, messages, aiCalls, consignes, resumeConversation] = await Promise.all([
+    const [plans, sessions, messages, aiCalls, consignes, resumeConversation, courses] = await Promise.all([
       prisma.trainingPlan.findMany({
         where: { userId: user.id },
         orderBy: { weekStart: "asc" },
@@ -162,6 +162,21 @@ privacyRouter.get(
         select: { texte: true, jusquAu: true, createdAt: true },
       }),
       prisma.resumeChat.findUnique({ where: { userId: user.id }, select: { texte: true, updatedAt: true } }),
+      prisma.race.findMany({
+        where: { userId: user.id },
+        orderBy: { date: "asc" },
+        select: {
+          nom: true,
+          date: true,
+          format: true,
+          priorite: true,
+          lieu: true,
+          objectifTemps: true,
+          planCourse: true,
+          resultat: true,
+          analyse: true,
+        },
+      }),
     ]);
 
     const zones = user.profile
@@ -187,6 +202,7 @@ privacyRouter.get(
           seances: sessions.map(serializeSession),
           conversationsCoach: messages,
           resumeConversationCoach: resumeConversation,
+          courses,
           consignesAuCoach: consignes,
           appelsAuCoachIa: aiCalls,
         },

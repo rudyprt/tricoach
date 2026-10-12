@@ -22,6 +22,7 @@ export const MAX_TOKENS = {
   plan: 16000,
   ajustement: 12000,
   planCourse: 3500,
+  analyseCourse: 3000,
 } as const;
 
 /** Modèles dont la réflexion est permanente : `thinking: disabled` y est refusé. */

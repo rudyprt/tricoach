@@ -559,6 +559,57 @@ export interface Course {
   objectifTemps: string;
   formatLabel: string;
   prioriteLabel: string;
+  /** Une analyse de la course existe (offre Premium). */
+  analysee?: boolean;
+}
+
+/** Ce que l'athlète saisit après sa course. Durées au format h:mm:ss ou mm:ss. */
+export interface ResultatCourse {
+  natation: string;
+  t1: string;
+  velo: string;
+  t2: string;
+  course: string;
+  total: string;
+  distances?: { natationM?: number; veloKm?: number; courseKm?: number };
+  fcNatation?: number | null;
+  fcVelo?: number | null;
+  fcCourse?: number | null;
+  classementGeneral: string;
+  classementCategorie: string;
+  conditions: string;
+  ressenti: string;
+}
+
+export type SegmentCourse = "natation" | "t1" | "velo" | "t2" | "course";
+
+/** Chiffres calculés par le serveur à partir du résultat. */
+export interface ChiffresCourse {
+  segments: {
+    segment: SegmentCourse;
+    libelle: string;
+    duree: string;
+    part: number | null;
+    allure: string | null;
+    fcMoyenne: number | null;
+  }[];
+  total: string | null;
+  ecartObjectifS: number | null;
+}
+
+export interface AnalyseCourse {
+  resume: string;
+  segments: { segment: SegmentCourse; constat: string; conseil: string }[];
+  pointsForts: string[];
+  axesProgres: { titre: string; pourquoi: string; travail: string }[];
+  prochaineCourse: string;
+}
+
+export interface AnalyseCourseReponse {
+  resultat: ResultatCourse | null;
+  chiffres: ChiffresCourse | null;
+  analyse: AnalyseCourse | null;
+  genereLe: string | null;
 }
 
 /** Charge d'entraînement : condition acquise, fatigue récente et fraîcheur. */
