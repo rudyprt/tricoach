@@ -232,6 +232,16 @@ model AthleteProfile {
   fcSeuilNatation     Int?
   /// Fréquence cardiaque maximale connue.
   fcMax               Int?
+  /// Fréquences cardiaques moyenne et maximale relevées sur la course de
+  /// référence de chaque discipline (celle des champs tempsXxx). Faute de test,
+  /// la moyenne d'un effort de course donne une estimation du seuil bien plus
+  /// proche que 92 % de la FC max.
+  fcMoyNatation       Int?
+  fcMaxNatation       Int?
+  fcMoyVelo           Int?
+  fcMaxVelo           Int?
+  fcMoyCourse         Int?
+  fcMaxCourse         Int?
   /// Zones corrigées à la main par l'athlète : { course: { Z2: "5:30/km" }, ... }.
   /// Une valeur saisie ici prime sur le calcul automatique.
   customZones         Json?
