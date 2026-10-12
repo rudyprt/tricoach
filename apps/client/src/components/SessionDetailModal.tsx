@@ -5,6 +5,7 @@ import { Dialog } from "../ui/Dialog";
 import { Bouton } from "../ui/Bouton";
 import { SeanceGuidee } from "./SeanceGuidee";
 import { RavitaillementCard } from "./RavitaillementCard";
+import { CaptureSeance } from "./CaptureSeance";
 import { FaPlay, FaDownload, FaUpload } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
@@ -315,6 +316,15 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
             >
               J'ai fait la séance — importer mon fichier
             </Bouton>
+            <CaptureSeance
+              session={session}
+              onValidee={async (bilanCapture, dureeMin) => {
+                setRetourImport({ ok: true, texte: `Séance enregistrée depuis la capture — ${dureeMin} min.` });
+                if (bilanCapture) setBilan(bilanCapture);
+                setDureeReelle(String(dureeMin));
+                await onUpdate(session.id, "faite", ressenti || undefined, dureeMin);
+              }}
+            />
             {retourImport && (
               <p
                 role="status"
