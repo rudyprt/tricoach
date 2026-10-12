@@ -15,6 +15,23 @@ export const LIBELLES_FORMAT: Record<FormatCourse, string> = {
   autre: "Autre",
 };
 
+export const DISCIPLINES_COURSE = ["triathlon", "course", "velo", "natation"] as const;
+export type DisciplineCourse = (typeof DISCIPLINES_COURSE)[number];
+
+const LIBELLES_DISCIPLINE: Record<Exclude<DisciplineCourse, "triathlon">, string> = {
+  course: "Course à pied",
+  velo: "Vélo",
+  natation: "Natation",
+};
+
+/** « Olympique (1,5 km / 40 km / 10 km) », ou « Course à pied — 10 km ». */
+export function libelleCourse(course: { discipline?: string | null; format: string; distanceKm?: number | null }): string {
+  const discipline = (course.discipline ?? "triathlon") as DisciplineCourse;
+  if (discipline === "triathlon") return LIBELLES_FORMAT[course.format as FormatCourse] ?? course.format;
+  const libelle = LIBELLES_DISCIPLINE[discipline] ?? discipline;
+  return course.distanceKm ? `${libelle} — ${String(course.distanceKm).replace(".", ",")} km` : libelle;
+}
+
 export const LIBELLES_PRIORITE: Record<PrioriteCourse, string> = {
   A: "Objectif principal",
   B: "Objectif secondaire",
@@ -26,6 +43,8 @@ export interface CourseInscrite {
   nom: string;
   date: Date;
   format: string;
+  discipline?: string;
+  distanceKm?: number | null;
   priorite: string;
   lieu: string;
   objectifTemps: string;
@@ -71,9 +90,7 @@ export function facteurVolumeCourses(courses: CourseInscrite[], weekStart: Date)
   return null;
 }
 
-function formatLisible(format: string): string {
-  return LIBELLES_FORMAT[format as FormatCourse] ?? format;
-}
+const formatLisible = libelleCourse;
 
 /**
  * Consignes transmises au coach à propos des courses inscrites. Sans elles, une
@@ -96,15 +113,15 @@ export function coursesPromptLines(courses: CourseInscrite[], weekStart: Date): 
     const jour = formatDate(course.date);
     if (course.priorite === "A") {
       lignes.push(
-        `- ${jour} — « ${course.nom} », ${formatLisible(course.format)}. OBJECTIF PRINCIPAL, couru cette semaine : la séance de ce jour EST la course.`
+        `- ${jour} — « ${course.nom} », ${formatLisible(course)}. OBJECTIF PRINCIPAL, couru cette semaine : la séance de ce jour EST la course.`
       );
     } else if (course.priorite === "B") {
       lignes.push(
-        `- ${jour} — « ${course.nom} », ${formatLisible(course.format)}. Objectif SECONDAIRE couru cette semaine : allège les trois jours qui précèdent (affûtage court), fais-en la séance du jour, et prévois une journée facile le lendemain. Ne construis pas un affûtage complet : la forme doit continuer de monter pour l'objectif principal.`
+        `- ${jour} — « ${course.nom} », ${formatLisible(course)}. Objectif SECONDAIRE couru cette semaine : allège les trois jours qui précèdent (affûtage court), fais-en la séance du jour, et prévois une journée facile le lendemain. Ne construis pas un affûtage complet : la forme doit continuer de monter pour l'objectif principal.`
       );
     } else {
       lignes.push(
-        `- ${jour} — « ${course.nom} », ${formatLisible(course.format)}. Course d'ENTRAÎNEMENT : elle remplace la séance intensive du jour, sans allègement des jours précédents. L'athlète la court en préparation, pas pour la performance.`
+        `- ${jour} — « ${course.nom} », ${formatLisible(course)}. Course d'ENTRAÎNEMENT : elle remplace la séance intensive du jour, sans allègement des jours précédents. L'athlète la court en préparation, pas pour la performance.`
       );
     }
     if (course.objectifTemps) lignes.push(`  Temps visé : ${course.objectifTemps}.`);
@@ -126,7 +143,17 @@ export async function coursesDeLAthlete(userId: string, weekStart: Date): Promis
   return prisma.race.findMany({
     where: { userId, date: { gte: addDays(weekStart, -14) } },
     orderBy: { date: "asc" },
-    select: { id: true, nom: true, date: true, format: true, priorite: true, lieu: true, objectifTemps: true },
+    select: {
+      id: true,
+      nom: true,
+      date: true,
+      format: true,
+      discipline: true,
+      distanceKm: true,
+      priorite: true,
+      lieu: true,
+      objectifTemps: true,
+    },
     take: 50,
   });
 }
@@ -151,7 +178,17 @@ export async function synchroniserObjectif(userId: string): Promise<void> {
   const courses = await prisma.race.findMany({
     where: { userId },
     orderBy: { date: "asc" },
-    select: { id: true, nom: true, date: true, format: true, priorite: true, lieu: true, objectifTemps: true },
+    select: {
+      id: true,
+      nom: true,
+      date: true,
+      format: true,
+      discipline: true,
+      distanceKm: true,
+      priorite: true,
+      lieu: true,
+      objectifTemps: true,
+    },
   });
 
   const principale = prochaineCourseA(courses, maintenant);

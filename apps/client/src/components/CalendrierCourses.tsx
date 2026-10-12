@@ -1,7 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { FaFlagCheckered, FaPlus, FaTrash } from "react-icons/fa6";
-import { api, apiErrorMessage, type Course, type FormatCourse, type PrioriteCourse } from "../lib/api";
+import {
+  api,
+  apiErrorMessage,
+  type Course,
+  type DisciplineCourse,
+  type FormatCourse,
+  type PrioriteCourse,
+} from "../lib/api";
 import { PlanCourseCard } from "./PlanCourseCard";
+import { AnalyseCourseCard } from "./AnalyseCourseCard";
 import { formatJourCourt } from "../lib/formats";
 
 const FORMATS: { valeur: FormatCourse; label: string }[] = [
@@ -10,6 +18,13 @@ const FORMATS: { valeur: FormatCourse; label: string }[] = [
   { valeur: "half", label: "Half / 70.3" },
   { valeur: "ironman", label: "Ironman" },
   { valeur: "autre", label: "Autre" },
+];
+
+const DISCIPLINES: { valeur: DisciplineCourse; label: string; exemple: string }[] = [
+  { valeur: "triathlon", label: "Triathlon", exemple: "" },
+  { valeur: "course", label: "Course à pied", exemple: "10" },
+  { valeur: "velo", label: "Vélo", exemple: "120" },
+  { valeur: "natation", label: "Natation", exemple: "3" },
 ];
 
 const PRIORITES: { valeur: PrioriteCourse; titre: string; explication: string; couleur: string }[] = [
@@ -51,9 +66,14 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [ouvert, setOuvert] = useState(false);
   const [planOuvert, setPlanOuvert] = useState<string | null>(null);
+  const [analyseOuverte, setAnalyseOuverte] = useState<string | null>(null);
+  /** Une course dont la date est passée ne se prépare plus : elle s'analyse. */
+  const aujourdHui = new Date().toLocaleDateString("fr-CA");
   const [nom, setNom] = useState("");
   const [date, setDate] = useState("");
+  const [discipline, setDiscipline] = useState<DisciplineCourse>("triathlon");
   const [format, setFormat] = useState<FormatCourse>("olympique");
+  const [distanceKm, setDistanceKm] = useState("");
   const [priorite, setPriorite] = useState<PrioriteCourse>("A");
   const [objectifTemps, setObjectifTemps] = useState("");
   const [busy, setBusy] = useState(false);
@@ -77,8 +97,16 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/races", { nom, date, format, priorite, objectifTemps });
+      await api.post("/races", {
+        nom,
+        date,
+        discipline,
+        priorite,
+        objectifTemps,
+        ...(discipline === "triathlon" ? { format } : { distanceKm: Number(distanceKm.replace(",", ".")) }),
+      });
       setNom("");
+      setDistanceKm("");
       setDate("");
       setObjectifTemps("");
       setOuvert(false);
@@ -134,11 +162,23 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
                 <p className="truncate text-sm font-medium text-white">{course.nom}</p>
                 <p className="text-xs text-doux">
                   {formatJourCourt(course.date)}
-                  {course.format !== "autre" && ` · ${FORMATS.find((f) => f.valeur === course.format)?.label}`}
+                  {(course.discipline ?? "triathlon") !== "triathlon"
+                    ? ` · ${course.formatLabel}`
+                    : course.format !== "autre" && ` · ${FORMATS.find((f) => f.valeur === course.format)?.label}`}
                   {course.objectifTemps && ` · objectif ${course.objectifTemps}`}
                 </p>
               </div>
-              {course.priorite !== "C" && (
+              {course.date <= aujourdHui ? (
+                <button
+                  onClick={() => {
+                    setPlanOuvert(null);
+                    setAnalyseOuverte(analyseOuverte === course.id ? null : course.id);
+                  }}
+                  className="shrink-0 rounded-full border border-rose-900/50 px-2 py-1 text-[11px] font-semibold text-rose-300 transition-colors hover:border-rose-700"
+                >
+                  {course.analysee ? "Analyse ✓" : "Analyser"}
+                </button>
+              ) : course.priorite !== "C" && (course.discipline ?? "triathlon") === "triathlon" && (
                 <button
                   onClick={() => setPlanOuvert(planOuvert === course.id ? null : course.id)}
                   className="shrink-0 rounded-full border border-emerald-900/50 px-2 py-1 text-[11px] font-semibold text-emerald-300 transition-colors hover:border-emerald-700"
@@ -164,6 +204,12 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
         </div>
       )}
 
+      {analyseOuverte && courses.some((c) => c.id === analyseOuverte) && (
+        <div className="mb-3">
+          <AnalyseCourseCard course={courses.find((c) => c.id === analyseOuverte)!} onAnalysee={() => void load()} />
+        </div>
+      )}
+
       {ouvert ? (
         <form onSubmit={ajouter} className="space-y-2 border-t border-bordure pt-3">
           <input
@@ -173,15 +219,39 @@ export function CalendrierCourses({ onChange }: { onChange?: () => void }) {
             placeholder="Nom de la course"
             className={champ}
           />
+          <select
+            aria-label="Discipline"
+            value={discipline}
+            onChange={(e) => setDiscipline(e.target.value as DisciplineCourse)}
+            className={champ}
+          >
+            {DISCIPLINES.map((d) => (
+              <option key={d.valeur} value={d.valeur}>
+                {d.label}
+              </option>
+            ))}
+          </select>
           <div className="grid grid-cols-2 gap-2">
             <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className={champ} />
-            <select value={format} onChange={(e) => setFormat(e.target.value as FormatCourse)} className={champ}>
-              {FORMATS.map((f) => (
-                <option key={f.valeur} value={f.valeur}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
+            {discipline === "triathlon" ? (
+              <select value={format} onChange={(e) => setFormat(e.target.value as FormatCourse)} className={champ}>
+                {FORMATS.map((f) => (
+                  <option key={f.valeur} value={f.valeur}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                required
+                aria-label="Distance en km"
+                inputMode="decimal"
+                value={distanceKm}
+                onChange={(e) => setDistanceKm(e.target.value)}
+                placeholder={`Distance en km (ex : ${DISCIPLINES.find((d) => d.valeur === discipline)?.exemple})`}
+                className={champ}
+              />
+            )}
           </div>
           <input
             value={objectifTemps}

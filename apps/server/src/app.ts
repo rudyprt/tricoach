@@ -21,6 +21,7 @@ import { racesRouter } from "./routes/races.js";
 import { pushRouter } from "./routes/push.js";
 import { partageRouter } from "./routes/partage.js";
 import { consignesRouter } from "./routes/consignes.js";
+import { nutritionRouter } from "./routes/nutrition.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
 import { env, isProduction } from "./lib/env.js";
 
@@ -99,6 +100,7 @@ export function createApp() {
   app.use("/api/push", pushRouter);
   app.use("/api/partage", partageRouter);
   app.use("/api/consignes", consignesRouter);
+  app.use("/api/nutrition", nutritionRouter);
 
   /*
    * La version déployée, lisible sans outil ni connexion.

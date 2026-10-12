@@ -9,7 +9,7 @@ export function moisParis(date: Date): string {
     .slice(0, 7);
 }
 
-export type AiCallKind = "plan_generation" | "plan_progression" | "chat" | "chat_resume" | "plan_course";
+export type AiCallKind = "plan_generation" | "plan_progression" | "chat" | "chat_resume" | "plan_course" | "analyse_course";
 
 /**
  * Enregistre la consommation d'un appel au modèle. L'écriture ne doit jamais

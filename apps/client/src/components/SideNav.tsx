@@ -8,6 +8,7 @@ import {
   FaGear,
   FaRightFromBracket,
   FaShieldHalved,
+  FaUtensils,
 } from "react-icons/fa6";
 import { useAuth } from "../lib/AuthContext";
 import { avatarUrl } from "../lib/api";
@@ -17,6 +18,7 @@ const ENTREES = [
   { to: "/historique", label: "Historique", Icone: FaChartLine },
   { to: "/chat", label: "Coach IA", Icone: FaComments },
   { to: "/zones", label: "Zones", Icone: FaBolt },
+  { to: "/nutrition", label: "Nutrition", Icone: FaUtensils },
   { to: "/objectif", label: "Objectif", Icone: FaFlagCheckered },
 ];
 

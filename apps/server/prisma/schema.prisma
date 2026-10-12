@@ -62,6 +62,8 @@ model User {
   races                  Race[]
   consignesCoach         ConsigneCoach[]
   resumeChat             ResumeChat?
+  profilNutrition        ProfilNutrition?
+  testsSudation          TestSudation[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -289,6 +291,9 @@ model Session {
   /// l'athlète n'a rien corrigé : c'est alors `dureeMin` qui fait foi.
   dureeReelleMin Int?
   ressenti       String?
+  /// Journal de ravitaillement (offre Premium) : glucides et boisson pris,
+  /// tolérance digestive. Sert à doser les séances suivantes.
+  nutritionPrise Json?
   completedAt    DateTime?
 
   @@index([userId, date])
@@ -418,8 +423,14 @@ model Race {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   nom           String
   date          DateTime
-  /// "sprint" | "olympique" | "half" | "ironman" | "autre"
+  /// "triathlon" | "course" | "velo" | "natation" : une épreuve d'une seule
+  /// discipline (10 km, cyclosportive, traversée) se prépare et s'analyse
+  /// autrement qu'un triathlon.
+  discipline    String    @default("triathlon")
+  /// "sprint" | "olympique" | "half" | "ironman" | "autre" (triathlon seulement)
   format        String    @default("autre")
+  /// Distance d'une épreuve d'une seule discipline, en kilomètres.
+  distanceKm    Float?
   /// "A" : objectif principal, affûtage complet.
   /// "B" : objectif secondaire, affûtage court.
   /// "C" : course d'entraînement, aucun allègement.
@@ -431,6 +442,13 @@ model Race {
   /// Généré à la demande, puis conservé — l'athlète le relit la veille.
   planCourse    Json?
   planGenereLe  DateTime?
+  /// Résultat saisi après la course : temps par segment, classement,
+  /// conditions, ressenti. Sert d'entrée à l'analyse.
+  resultat      Json?
+  /// Analyse de la course par le coach (offre Premium) : constats par segment,
+  /// points forts, axes de progrès, repris ensuite dans les semaines générées.
+  analyse       Json?
+  analyseLe     DateTime?
   createdAt     DateTime  @default(now())
 
   @@index([userId, date])
@@ -578,4 +596,39 @@ model ResumeChat {
   /// Date du dernier message pris en compte dans le résumé.
   jusquA    DateTime
   updatedAt DateTime @updatedAt
+}
+
+/// Préférences de ravitaillement (offre Premium). Rien n'y est obligatoire :
+/// chaque information affine les doses calculées pour chaque séance.
+model ProfilNutrition {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Sert à doser glucides, protéines et caféine par kilo.
+  poidsKg    Float?
+  /// Formats que l'athlète utilise : "boisson", "gel", "barre", "solide".
+  formats    String[] @default([])
+  cafeine    Boolean  @default(false)
+  /// Sueur salée (traces blanches) : sodium plus élevé.
+  sueurSalee Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+}
+
+/// Test de sudation : pesée avant et après une séance. Un kilo perdu vaut un
+/// litre de sueur ; la boisson bue s'y ajoute.
+model TestSudation {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date         DateTime
+  sport        String
+  dureeMin     Int
+  poidsAvantKg Float
+  poidsApresKg Float
+  boissonMl    Int      @default(0)
+  temperatureC Int?
+  /// Calculé à l'enregistrement, en ml par heure.
+  tauxMlH      Int
+  createdAt    DateTime @default(now())
+
+  @@index([userId, date])
 }

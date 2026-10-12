@@ -548,17 +548,73 @@ export interface EtatEntrainement {
 /** Une course inscrite au calendrier. La priorité décide de l'affûtage. */
 export type PrioriteCourse = "A" | "B" | "C";
 export type FormatCourse = "sprint" | "olympique" | "half" | "ironman" | "autre";
+/** Un triathlon, ou une épreuve d'une seule discipline (10 km, cyclosportive, traversée). */
+export type DisciplineCourse = "triathlon" | "course" | "velo" | "natation";
 
 export interface Course {
   id: string;
   nom: string;
   date: string;
   format: FormatCourse;
+  discipline?: DisciplineCourse;
+  /** Distance d'une épreuve d'une seule discipline, en kilomètres. */
+  distanceKm?: number | null;
   priorite: PrioriteCourse;
   lieu: string;
   objectifTemps: string;
   formatLabel: string;
   prioriteLabel: string;
+  /** Une analyse de la course existe (offre Premium). */
+  analysee?: boolean;
+}
+
+/** Ce que l'athlète saisit après sa course. Durées au format h:mm:ss ou mm:ss. */
+export interface ResultatCourse {
+  natation: string;
+  t1: string;
+  velo: string;
+  t2: string;
+  course: string;
+  total: string;
+  distances?: { natationM?: number; veloKm?: number; courseKm?: number };
+  fcNatation?: number | null;
+  fcVelo?: number | null;
+  fcCourse?: number | null;
+  classementGeneral: string;
+  classementCategorie: string;
+  conditions: string;
+  ressenti: string;
+}
+
+export type SegmentCourse = "natation" | "t1" | "velo" | "t2" | "course";
+
+/** Chiffres calculés par le serveur à partir du résultat. */
+export interface ChiffresCourse {
+  segments: {
+    segment: SegmentCourse;
+    libelle: string;
+    duree: string;
+    part: number | null;
+    allure: string | null;
+    fcMoyenne: number | null;
+  }[];
+  total: string | null;
+  ecartObjectifS: number | null;
+}
+
+export interface AnalyseCourse {
+  resume: string;
+  segments: { segment: SegmentCourse; constat: string; conseil: string }[];
+  pointsForts: string[];
+  axesProgres: { titre: string; pourquoi: string; travail: string }[];
+  prochaineCourse: string;
+}
+
+export interface AnalyseCourseReponse {
+  resultat: ResultatCourse | null;
+  chiffres: ChiffresCourse | null;
+  analyse: AnalyseCourse | null;
+  genereLe: string | null;
 }
 
 /** Charge d'entraînement : condition acquise, fatigue récente et fraîcheur. */
@@ -651,4 +707,59 @@ export interface BilanRegularite {
   totalHeures: number;
   jalons: Jalon[];
   records: RecordPersonnel[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Nutrition (offre Premium)                                           */
+/* ------------------------------------------------------------------ */
+
+export type FormatRavito = "boisson" | "gel" | "barre" | "solide";
+
+export interface Ravitaillement {
+  avant: string[];
+  pendant: {
+    glucidesGH: number;
+    fourchetteGH: [number, number];
+    boissonMlH: number;
+    sodiumMgH: number;
+    exemple: string | null;
+    conseils: string[];
+  } | null;
+  apres: string[];
+  entrainementDigestif: string | null;
+  sources: string[];
+}
+
+export interface JournalNutrition {
+  glucidesG: number;
+  boissonMl: number;
+  tolerance: "bien" | "gene" | "troubles";
+  note: string;
+}
+
+export interface ProfilNutrition {
+  poidsKg: number | null;
+  formats: FormatRavito[];
+  cafeine: boolean;
+  sueurSalee: boolean;
+}
+
+export interface TestSudation {
+  id: string;
+  date: string;
+  sport: "course" | "velo" | "natation";
+  dureeMin: number;
+  poidsAvantKg: number;
+  poidsApresKg: number;
+  boissonMl: number;
+  temperatureC: number | null;
+  tauxMlH: number;
+}
+
+export interface NutritionResume {
+  profil: ProfilNutrition;
+  tests: TestSudation[];
+  sudation: { course: number | null; velo: number | null; natation: number | null; global: number | null };
+  toleranceGH: number | null;
+  limiteGH: number | null;
 }

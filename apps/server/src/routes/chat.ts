@@ -19,7 +19,8 @@ import {
   retenirConsigne,
 } from "../lib/consignesCoach.js";
 import { recordAiCall } from "../lib/aiUsage.js";
-import { FUSEAU_QUOTA, hasStandardAccess, quotaChatQuotidien } from "../lib/subscription.js";
+import { FUSEAU_QUOTA, hasStandardAccess, isPremium, quotaChatQuotidien } from "../lib/subscription.js";
+import { chargerProfilRavito, nutritionPromptLigne } from "../lib/nutritionDonnees.js";
 import { FENETRE_CHAT, fenetreHistorique } from "../lib/chatHistory.js";
 import { ah, HttpError } from "../lib/http.js";
 import { chatRateLimit } from "../lib/rateLimit.js";
@@ -223,6 +224,9 @@ chatRouter.post(
       }),
       consignesActives(req.userId!, user.timezone),
     ]);
+    // Offre Premium : ce que l'athlète a mesuré de sa nutrition, pour des
+    // conseils de ravitaillement à ses doses.
+    const nutrition = isPremium(user) ? nutritionPromptLigne(await chargerProfilRavito(req.userId!)) : "";
 
     // Ce qui change d'un athlète et d'une question à l'autre. Les séances n'y
     // figurent plus une à une : un résumé calculé en dit l'essentiel.
@@ -244,6 +248,7 @@ chatRouter.post(
             .map((t) => `${t.kind} le ${t.scheduledFor.toISOString().slice(0, 10)}`)
             .join(", ")}.`
         : "",
+      nutrition,
       ...consignesChatLines(consignes),
     ]
       .filter(Boolean)
