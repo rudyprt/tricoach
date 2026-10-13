@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { harmoniserDistances } from "../lib/distanceSeance.js";
+import { harmoniserDistances, titreAjuste } from "../lib/distanceSeance.js";
 import { computeTrainingZones } from "../lib/training.js";
 
 /**
@@ -146,5 +146,45 @@ describe("distance d'une séance", () => {
   it("ne touche ni au renforcement ni à une séance sans plan", () => {
     const renfo = { sport: "renfo", dureeMin: 40, distanceKm: null, structure: null };
     expect(harmoniserDistances([renfo], zones)[0]).toBe(renfo);
+  });
+});
+
+describe("titre de la séance", () => {
+  it("suit la distance calculée, dans l'unité du coach", () => {
+    expect(titreAjuste("Sortie longue 18 km", 15.5)).toBe("Sortie longue 15,5 km");
+    expect(titreAjuste("Natation 2500 m", 1.4)).toBe("Natation 1400 m");
+    expect(titreAjuste("Footing 10km", 8.9)).toBe("Footing 8,9km");
+    expect(titreAjuste("Endurance 12.5 km", 11)).toBe("Endurance 11 km");
+  });
+
+  it("ne touche ni aux répétitions ni aux titres qui citent plusieurs distances", () => {
+    expect(titreAjuste("Fractionné 6 x 800 m", 10.2)).toBe("Fractionné 6 x 800 m");
+    expect(titreAjuste("Seuil 2 x (4 x 200 m)", 6)).toBe("Seuil 2 x (4 x 200 m)");
+    expect(titreAjuste("Sortie 12 km dont 4 km au seuil", 10)).toBe("Sortie 12 km dont 4 km au seuil");
+    expect(titreAjuste("Footing récupération", 6)).toBe("Footing récupération");
+  });
+
+  it("laisse un écart d'arrondi", () => {
+    expect(titreAjuste("Footing 9 km", 8.9)).toBe("Footing 9 km");
+  });
+
+  it("est réécrit avec la distance de la séance", () => {
+    const [s] = harmoniserDistances(
+      [
+        {
+          sport: "natation",
+          titre: "Technique 2500 m",
+          dureeMin: 45,
+          distanceKm: 2.5,
+          structure: {
+            echauffement: bloc(10, "Z1 — 2:15/100m", "400 m crawl souple"),
+            corps: bloc(28, "Z3 — 1:55/100m", "Séries", [{ repetitions: "8 x 100m", allure: "1:55/100m" }]),
+            retourCalme: bloc(7, "Z1", "200 m dos"),
+          },
+        },
+      ],
+      zones
+    );
+    expect(s.titre).toBe("Technique 1400 m");
   });
 });

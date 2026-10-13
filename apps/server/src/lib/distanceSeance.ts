@@ -34,6 +34,7 @@ interface Bloc {
 
 interface SeanceDistance {
   sport: string;
+  titre?: string;
   distanceKm?: number | null;
   structure?: { echauffement?: Bloc; corps?: Bloc; retourCalme?: Bloc } | null;
 }
@@ -204,10 +205,38 @@ export function harmoniserDistances<T extends SeanceDistance & { dureeMin: numbe
       const bloc = structure[nom];
       if (bloc) structure[nom] = { ...bloc, distanceKm: Math.round(arrondir(distances[i] as number, pasBloc) * 1000) / 1000 };
     });
+    const distanceKm = Math.round(arrondir(total, PAS_KM[sport]) * 100) / 100;
     return {
       ...seance,
+      ...(seance.titre !== undefined ? { titre: titreAjuste(seance.titre, distanceKm) } : {}),
       structure,
-      distanceKm: Math.round(arrondir(total, PAS_KM[sport]) * 100) / 100,
+      distanceKm,
     };
   });
+}
+
+/**
+ * Le titre suit la distance : « Sortie longue 18 km » ne peut pas annoncer
+ * 15,5 km de plan. Seule une distance totale est réécrite — une mention unique
+ * hors répétitions —, dans l'unité choisie par le coach. Un titre qui cite
+ * plusieurs distances (« 12 km dont 4 km au seuil ») ou des répétitions
+ * (« 6 x 800 m ») parle d'autre chose que du total : il est laissé tel quel.
+ */
+export function titreAjuste(titre: string, distanceKm: number): string {
+  // Une distance précédée de « 6 x » est une répétition, pas le total.
+  const mentions = [...titre.matchAll(/(?<![x×]\s*\(?\s*|[\d.,])(\d+(?:[.,]\d+)?)\s*(km|m)\b/gi)];
+  if (mentions.length !== 1) return titre;
+
+  const [texte, valeur, unite] = mentions[0];
+  const position = mentions[0].index ?? 0;
+  const annonceeKm = unite.toLowerCase() === "km" ? Number(valeur.replace(",", ".")) : Number(valeur) / 1000;
+  // Un écart d'arrondi ne justifie pas de réécrire ce qu'a écrit le coach.
+  if (Math.abs(annonceeKm - distanceKm) <= Math.max(0.05, distanceKm * 0.03)) return titre;
+
+  const espace = /\s/.test(texte) ? " " : "";
+  const remplacement =
+    unite.toLowerCase() === "m"
+      ? `${Math.round(distanceKm * 1000)}${espace}m`
+      : `${String(Math.round(distanceKm * 10) / 10).replace(".", valeur.includes(".") ? "." : ",")}${espace}km`;
+  return titre.slice(0, position) + remplacement + titre.slice(position + texte.length);
 }

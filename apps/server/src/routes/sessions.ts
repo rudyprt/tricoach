@@ -201,7 +201,8 @@ sessionsRouter.get(
     const bassin = parseMateriel(profil?.materiel)?.piscine ?? null;
 
     const serialisee = serializeSession(seance);
-    const [aJour] = ajouterFrequencesCardiaques(rafraichirCibles([serialisee], zones).seances, zones);
+    // Même titre et même distance que dans l'application.
+    const [aJour] = harmoniserDistances(ajouterFrequencesCardiaques(rafraichirCibles([serialisee], zones).seances, zones), zones);
 
     const fichier = construireFitWorkout(aJour, zones, bassin);
     if (!fichier) {
