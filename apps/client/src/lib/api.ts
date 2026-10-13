@@ -172,6 +172,8 @@ export interface SessionBlock {
   exercices?: SessionExercise[];
   /** Fréquence cardiaque de la zone visée, calculée sur les zones de l'athlète. */
   fc?: string;
+  /** Distance du bloc ; la distance de la séance en est la somme. */
+  distanceKm?: number;
 }
 
 export interface SessionStructure {

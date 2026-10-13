@@ -12,12 +12,22 @@ import {
 import { useAuth } from "../lib/AuthContext";
 import { useConfirmation } from "../ui/Confirmation";
 import { ConsignesCoach } from "../components/ConsignesCoach";
+import { FaCamera, FaXmark } from "react-icons/fa6";
+import { reduireImage } from "../lib/images";
+
+/** Au plus trois photos par message, comme le serveur. */
+const MAX_PHOTOS = 3;
+
+/** Un message tout juste envoyé garde l'aperçu de ses photos ; le fil enregistré, leur mention. */
+type MessageAffiche = ChatMessage & { apercus?: string[] };
 
 export function Chat() {
   const { user } = useAuth();
   const { demander } = useConfirmation();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<MessageAffiche[]>([]);
   const [input, setInput] = useState("");
+  const [photos, setPhotos] = useState<{ fichier: File; apercu: string }[]>([]);
+  const choixPhotos = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quota, setQuota] = useState<ChatQuota | null>(null);
@@ -41,25 +51,44 @@ export function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  function ajouterPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const choisies = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    setPhotos((prev) =>
+      [...prev, ...choisies.map((fichier) => ({ fichier, apercu: URL.createObjectURL(fichier) }))].slice(0, MAX_PHOTOS)
+    );
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() && photos.length === 0) return;
     setError(null);
 
-    const optimistic: ChatMessage = {
+    const jointes = photos;
+    const optimistic: MessageAffiche = {
       id: `tmp-${Date.now()}`,
       role: "user",
       content: input,
       createdAt: new Date().toISOString(),
+      apercus: jointes.map((p) => p.apercu),
     };
     setMessages((prev) => [...prev, optimistic]);
     setInput("");
+    setPhotos([]);
     setSending(true);
 
     try {
-      const { data } = await api.post<ChatMessage & { consignesModifiees?: boolean }>("/chat", {
-        content: optimistic.content,
-      });
+      let corps: FormData | { content: string } = { content: optimistic.content };
+      if (jointes.length) {
+        const formulaire = new FormData();
+        formulaire.append("content", optimistic.content);
+        for (const photo of jointes) {
+          const reduite = await reduireImage(photo.fichier);
+          formulaire.append("photos", reduite, photo.fichier.name.replace(/\.[^.]+$/, "") + ".jpg");
+        }
+        corps = formulaire;
+      }
+      const { data } = await api.post<ChatMessage & { consignesModifiees?: boolean }>("/chat", corps);
       setMessages((prev) => [...prev, data]);
       if (data.consignesModifiees) setVersionConsignes((v) => v + 1);
       // Le compteur suit l'envoi accepté : le serveur n'enregistre la question
@@ -75,6 +104,7 @@ export function Chat() {
       // retire le message affiché pour rester fidèle à ce qui est conservé.
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setInput(optimistic.content);
+      setPhotos(jointes);
       // L'état a pu changer depuis l'ouverture de l'écran : c'est le serveur
       // qui dit lequel des deux murs on vient de heurter.
       if (isChatQuotaError(err)) setBloque("quota");
@@ -140,6 +170,13 @@ export function Chat() {
                 m.role === "user" ? "bg-rose-500 text-black" : "bg-zinc-900 text-zinc-100"
               }`}
             >
+              {m.apercus && m.apercus.length > 0 && (
+                <div className="mb-1.5 flex flex-wrap gap-1.5">
+                  {m.apercus.map((src) => (
+                    <img key={src} src={src} alt="Photo envoyée au coach" className="h-20 w-20 rounded-md object-cover" />
+                  ))}
+                </div>
+              )}
               {m.content}
             </div>
           </div>
@@ -189,7 +226,36 @@ export function Chat() {
         </div>
       )}
 
+      {photos.length > 0 && (
+        <div className="mt-3 flex gap-2">
+          {photos.map((p) => (
+            <div key={p.apercu} className="relative">
+              <img src={p.apercu} alt="Photo à envoyer" className="h-14 w-14 rounded-md object-cover" />
+              <button
+                type="button"
+                aria-label="Retirer la photo"
+                onClick={() => setPhotos((prev) => prev.filter((x) => x.apercu !== p.apercu))}
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-black p-1 text-zinc-300"
+              >
+                <FaXmark size={9} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
+        <input ref={choixPhotos} type="file" accept="image/*" multiple className="hidden" onChange={ajouterPhotos} />
+        <button
+          type="button"
+          aria-label="Joindre une photo"
+          title="Joindre une photo (capture de séance, parcours, repas, matériel...)"
+          onClick={() => choixPhotos.current?.click()}
+          disabled={bloque !== null || photos.length >= MAX_PHOTOS}
+          className="rounded-lg border border-bordure px-3 py-2 text-doux transition-colors hover:text-zinc-200 disabled:opacity-50"
+        >
+          <FaCamera size={14} />
+        </button>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}

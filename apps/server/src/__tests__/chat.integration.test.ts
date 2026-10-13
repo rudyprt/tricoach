@@ -191,6 +191,57 @@ describeIfDb("chat", () => {
     expect(history.map((m) => m.content)).toEqual(["premier", "deuxieme", "troisieme", "quatrieme"]);
   });
 
+  // Un PNG d'un pixel : le modèle est simulé, seul le transport compte.
+  const PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "base64"
+  );
+
+  it("transmet les photos au coach sans les conserver", async () => {
+    const { agent, user } = await signUp("photo@example.com");
+    askClaude.mockResolvedValue(claudeReply("Belle position sur le vélo."));
+
+    const res = await agent
+      .post("/api/chat")
+      .field("content", "Ma position est bonne ?")
+      .attach("photos", PNG, "velo.png")
+      .attach("photos", PNG, "profil.png");
+
+    expect(res.status).toBe(201);
+    const derniere = askClaude.mock.calls[0][0].messages.at(-1);
+    expect(derniere.content.map((b: { type: string }) => b.type)).toEqual(["image", "image", "text"]);
+    expect(derniere.content[2].text).toBe("Ma position est bonne ?");
+    // Le fil garde la mention des photos, pas les images.
+    const question = await prisma.chatMessage.findFirstOrThrow({ where: { userId: user.id, role: "user" } });
+    expect(question.content).toBe("Ma position est bonne ?\n\n📷 2 photos jointes");
+  });
+
+  it("accepte une photo seule, et refuse un message vraiment vide", async () => {
+    const { agent } = await signUp("photo-seule@example.com");
+    askClaude.mockResolvedValue(claudeReply("Je vois un plat de pâtes."));
+
+    expect((await agent.post("/api/chat").attach("photos", PNG, "repas.png")).status).toBe(201);
+    expect((await agent.post("/api/chat").send({ content: "  " })).status).toBe(400);
+  });
+
+  it("refuse une photo dans un format illisible", async () => {
+    const { agent } = await signUp("heic-chat@example.com");
+    const res = await agent
+      .post("/api/chat")
+      .field("content", "Regarde")
+      .attach("photos", Buffer.from("x"), { filename: "photo.heic", contentType: "image/heic" });
+    expect(res.status).toBe(400);
+    expect(askClaude).not.toHaveBeenCalled();
+  });
+
+  it("efface aussi le résumé quand l'athlète efface la conversation", async () => {
+    const { agent, user } = await signUp("effacer@example.com");
+    await prisma.resumeChat.create({ data: { userId: user.id, texte: "Douleur au genou.", jusquA: new Date() } });
+
+    expect((await agent.delete("/api/chat")).status).toBe(200);
+    expect(await prisma.resumeChat.count({ where: { userId: user.id } })).toBe(0);
+  });
+
   /** Un fil déjà ancien, daté de l'avant-veille pour ne pas consommer le quota du jour. */
   async function filAncien(userId: string, nombre: number) {
     const base = Date.now() - 2 * 24 * 60 * 60 * 1000;

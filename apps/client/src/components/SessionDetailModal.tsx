@@ -30,12 +30,30 @@ const BLOCKS: { key: keyof NonNullable<Session["structure"]>; label: string; col
   { key: "retourCalme", label: "Retour au calme", color: "border-emerald-800 bg-emerald-950/30" },
 ];
 
-function BlockCard({ label, block, color }: { label: string; block: SessionBlock; color: string }) {
+/** « 400 m » dans un bassin, « 2,4 km » ailleurs. */
+function distanceLisible(km: number, sport: Session["sport"]): string {
+  return sport === "natation" || km < 1 ? `${Math.round(km * 1000)} m` : `${String(Math.round(km * 10) / 10).replace(".", ",")} km`;
+}
+
+function BlockCard({
+  label,
+  block,
+  color,
+  sport,
+}: {
+  label: string;
+  block: SessionBlock;
+  color: string;
+  sport: Session["sport"];
+}) {
   return (
     <div className={`rounded-xl border p-3 ${color}`}>
       <div className="mb-1 flex items-center justify-between">
         <p className="text-sm font-semibold text-white">{label}</p>
-        <span className="text-xs text-doux">{block.dureeMin} min</span>
+        <span className="text-xs text-doux">
+          {block.dureeMin} min
+          {block.distanceKm ? ` · ${distanceLisible(block.distanceKm, sport)}` : ""}
+        </span>
       </div>
       <p className="mb-1 text-xs font-medium text-zinc-300">{block.cible}</p>
       {block.fc && (
@@ -229,7 +247,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
           {!isRestDay && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-doux">
               <span>{session.dureeMin} min</span>
-              {session.distanceKm != null && <span>{session.distanceKm} km</span>}
+              {session.distanceKm != null && <span>{distanceLisible(session.distanceKm, session.sport)}</span>}
             </div>
           )}
         </div>
@@ -341,7 +359,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
           <div className="mb-4 space-y-2">
             <p className="text-xs font-bold uppercase tracking-wide text-doux">Détail de la séance</p>
             {BLOCKS.map(({ key, label, color }) => (
-              <BlockCard key={key} label={label} block={session.structure![key]} color={color} />
+              <BlockCard key={key} label={label} block={session.structure![key]} color={color} sport={session.sport} />
             ))}
           </div>
         ) : (

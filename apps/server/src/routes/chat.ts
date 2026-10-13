@@ -1,4 +1,6 @@
 import { Router } from "express";
+import multer from "multer";
+import { MAX_OCTETS_CAPTURE, TYPES_IMAGE } from "../lib/captureSeance.js";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -52,6 +54,7 @@ export const CONSIGNES_CHAT = [
   "Le contexte ci-dessous résume son profil, son entraînement et vos échanges précédents. Reprends ses zones telles quelles, sans les recalculer. Tiens compte de sa fatigue et de ses jours indisponibles avant de proposer une séance.",
   "Interruption en cours : ne propose aucune séance tant qu'il n'a pas repris ; parle récupération, et invite-le à consulter si c'est une blessure qui dure.",
   "Test de terrain programmé : s'il t'interroge dessus, explique le protocole et rappelle qu'il sert à recaler ses zones.",
+  "Photos jointes : décris brièvement ce que tu y vois d'utile (capture de séance, parcours, repas, matériel, position) avant de conseiller. Photo d'une blessure ou d'une partie du corps : aucun diagnostic ; s'il y a douleur, gonflement, plaie ou rougeur, invite-le à consulter.",
 ].join("\n");
 
 /**
@@ -136,18 +139,36 @@ chatRouter.get(
 chatRouter.delete(
   "/",
   ah(async (req: AuthedRequest, res) => {
-    await prisma.chatMessage.deleteMany({ where: { userId: req.userId! } });
+    // Le résumé du fil part avec lui : sinon le coach se souviendrait d'une
+    // conversation que l'athlète a effacée.
+    await prisma.$transaction([
+      prisma.chatMessage.deleteMany({ where: { userId: req.userId! } }),
+      prisma.resumeChat.deleteMany({ where: { userId: req.userId! } }),
+    ]);
     res.json({ ok: true });
   })
 );
 
 const sendSchema = z.object({
-  content: z.string().trim().min(1, "Message vide.").max(4000, "Message trop long (4000 caractères maximum)."),
+  content: z.string().trim().max(4000, "Message trop long (4000 caractères maximum).").default(""),
 });
+
+/** Photos jointes au message : lues par le coach, jamais conservées. */
+const MAX_PHOTOS = 3;
+const photosUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_OCTETS_CAPTURE, files: MAX_PHOTOS },
+});
+
+/** Ce qui reste d'une photo dans le fil enregistré : une mention, pas l'image. */
+export function mentionPhotos(nombre: number): string {
+  return nombre === 1 ? "📷 Photo jointe" : `📷 ${nombre} photos jointes`;
+}
 
 chatRouter.post(
   "/",
   chatRateLimit,
+  photosUpload.array("photos", MAX_PHOTOS),
   ah(async (req: AuthedRequest, res) => {
     if (!isAiConfigured()) {
       throw new HttpError(503, new AiNotConfiguredError().message);
@@ -158,7 +179,17 @@ chatRouter.post(
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Message invalide." });
       return;
     }
-    const content = parsed.data.content;
+    const photos = (req.files as Express.Multer.File[] | undefined) ?? [];
+    if (!parsed.data.content && photos.length === 0) {
+      res.status(400).json({ error: "Message vide." });
+      return;
+    }
+    const refusee = photos.find((p) => !(TYPES_IMAGE as readonly string[]).includes(p.mimetype));
+    if (refusee) {
+      throw new HttpError(400, "Cette photo n'est pas dans un format lisible (JPEG, PNG ou WebP).");
+    }
+    // Le fil enregistré garde le texte et la mention des photos, pas les images.
+    const content = [parsed.data.content, photos.length ? mentionPhotos(photos.length) : ""].filter(Boolean).join("\n\n");
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
@@ -260,10 +291,31 @@ chatRouter.post(
     const outils = [outilSeanceFaite, outilRetenirConsigne, outilOublierConsigne];
     let resumeAJour: Promise<void> = Promise.resolve();
     try {
-      const messages: ClaudeMessage[] = fenetreHistorique([
+      const fenetre: ClaudeMessage[] = fenetreHistorique([
         ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         { role: "user", content },
       ]);
+      // La question du jour porte ses photos : le modèle les voit, le fil
+      // enregistré n'en garde que la mention.
+      const messages: ClaudeMessage[] = photos.length
+        ? [
+            ...fenetre.slice(0, -1),
+            {
+              role: "user",
+              content: [
+                ...photos.map((photo) => ({
+                  type: "image" as const,
+                  source: {
+                    type: "base64" as const,
+                    media_type: photo.mimetype as (typeof TYPES_IMAGE)[number],
+                    data: photo.buffer.toString("base64"),
+                  },
+                })),
+                { type: "text" as const, text: parsed.data.content || "Voici une photo." },
+              ],
+            },
+          ]
+        : fenetre;
 
       // Le résumé rattrape les messages sortis de la fenêtre pendant que le
       // coach répond : il servira aux questions suivantes, pas à celle-ci.

@@ -20,6 +20,8 @@ export const sessionBlockSchema = z.object({
   exercices: z.array(sessionExerciseSchema).optional(),
   /** Fréquence cardiaque de la zone visée, ajoutée au service : jamais stockée. */
   fc: z.string().optional(),
+  /** Distance du bloc, calculée à partir de son contenu et des zones. */
+  distanceKm: z.number().optional(),
 });
 
 export const sessionStructureSchema = z.object({
