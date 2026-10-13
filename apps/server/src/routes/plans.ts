@@ -7,6 +7,7 @@ import { askClaude, isAiConfigured, AiNotConfiguredError } from "../lib/anthropi
 import { MAX_TOKENS, MODELE_PLAN } from "../lib/modeles.js";
 import { resumeAthlete } from "../lib/resumeAthlete.js";
 import { analysePromptLines } from "../lib/analyseCourse.js";
+import { harmoniserDistances } from "../lib/distanceSeance.js";
 import { fcCourseTexte } from "../lib/fcCourses.js";
 import { recordAiCall, type AiCallKind } from "../lib/aiUsage.js";
 import { serializeSession, sessionStructureSchema } from "../lib/session.js";
@@ -115,6 +116,7 @@ export const CONSIGNES_PLAN = [
   "- UNITÉS, sans jamais les mélanger : natation en temps aux 100 m (1:44/100m) ; course en allure au km (4:08/km) ; vélo selon les zones fournies — watts si une FTP est connue, sinon fréquence cardiaque, sinon km/h avec la sensation. Une allure au km dans un bassin ou des watts sans capteur sont inexécutables. Vaut aussi pour le champ \"allure\" des exercices.",
   "- UNE SEULE valeur chiffrée par cible, celle de la discipline : n'ajoute pas la fréquence cardiaque à une allure ou à une puissance, deux chiffres qui ne coïncident pas font douter des deux. La fréquence cardiaque n'est la cible que pour le vélo sans FTP.",
   "- \"corps.exercices\", seulement pour du fractionné (intervalles, répétitions) : 4 lignes maximum (sauf renforcement), concrètes et chiffrées, ex : [{\"repetitions\":\"6 x 400m\",\"allure\":\"4:10/km (Z4 seuil)\",\"recuperation\":\"90s trot\"}] ; \"nom\" et \"consigne\" sont réservés au renforcement. Sortie continue (endurance, sortie longue) : pas d'exercices, l'effort est décrit dans \"description\".",
+  "- \"distanceKm\" est la somme des distances des trois blocs, à l'allure de leurs zones. En natation, chiffre chaque bloc en mètres dans sa description (ex : \"400 m crawl souple\") pour que le total tombe juste.",
   "- CONCISION partout : chaque \"description\" (séance et blocs) fait 15 mots maximum. Ne tronque jamais le JSON : si la place manque, raccourcis encore les textes.",
   "",
   "VOLUME — RÈGLE DE SÉCURITÉ ANTI-BLESSURE, stricte et non négociable : la somme des dureeMin des séances sport != repos respecte les heures disponibles et NE DÉPASSE JAMAIS le « volume maximum autorisé » du message utilisateur, même si l'athlète a déclaré davantage d'heures. Si son ressenti ou ses séances manquées suggèrent de la fatigue, n'augmente pas le volume : maintiens-le ou réduis-le légèrement.",
@@ -541,7 +543,9 @@ function planPayload(
   const sessions = plan.sessions.map(serializeSession);
   return {
     ...plan,
-    sessions: zones ? ajouterFrequencesCardiaques(rafraichirCibles(sessions, zones).seances, zones) : sessions,
+    sessions: zones
+      ? harmoniserDistances(ajouterFrequencesCardiaques(rafraichirCibles(sessions, zones).seances, zones), zones)
+      : sessions,
     periodization: { phase: phase.phase, label: phase.label, weeksToGoal: phase.weeksToGoal },
   };
 }
@@ -869,7 +873,9 @@ async function processJob(jobId: string, userId: string, prepared: PreparedGener
     // Le modèle mélange parfois les unités d'une discipline à l'autre. Le
     // serveur connaît la bonne valeur pour chaque zone : il la rétablit plutôt
     // que de livrer à l'athlète une allure au kilomètre dans un bassin.
-    const { seances, corrections } = corrigerCibles(aiPlan.sessions, prepared.zones);
+    const { seances: corrigees, corrections } = corrigerCibles(aiPlan.sessions, prepared.zones);
+    // La distance enregistrée est celle que le plan décrit, bloc par bloc.
+    const seances = harmoniserDistances(corrigees, prepared.zones);
     if (corrections.length > 0) {
       console.warn(
         `[cibles] ${corrections.length} unité(s) rétablie(s) pour ${userId} :`,

@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { serializeSession } from "../lib/session.js";
 import { ah, HttpError } from "../lib/http.js";
+import { harmoniserDistances } from "../lib/distanceSeance.js";
 import { zonesActuelles } from "../lib/zoneInputs.js";
 import { ajouterFrequencesCardiaques, rafraichirCibles } from "../lib/cibles.js";
 import { bilanSeance } from "../lib/bilanSeance.js";
@@ -61,7 +62,10 @@ sessionsRouter.get(
     const serialisees = page.map(serializeSession);
 
     res.json({
-      sessions: zones ? ajouterFrequencesCardiaques(rafraichirCibles(serialisees, zones).seances, zones) : serialisees,
+      // La distance totale est la somme des blocs : annonce et plan ne divergent plus.
+      sessions: zones
+        ? harmoniserDistances(ajouterFrequencesCardiaques(rafraichirCibles(serialisees, zones).seances, zones), zones)
+        : serialisees,
       nextCursor: hasMore ? page[page.length - 1]?.id : null,
     });
   })

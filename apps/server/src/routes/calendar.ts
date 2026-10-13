@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah } from "../lib/http.js";
 import { serializeSession } from "../lib/session.js";
+import { harmoniserDistances } from "../lib/distanceSeance.js";
 import { zonesActuelles } from "../lib/zoneInputs.js";
 import { ajouterFrequencesCardiaques, rafraichirCibles } from "../lib/cibles.js";
 
@@ -64,7 +65,9 @@ calendarRouter.get(
     // celles calculées le jour où la séance a été écrite.
     const zones = await zonesActuelles(req.userId!);
     const brutes = sessions.map(serializeSession);
-    const serialisees = zones ? ajouterFrequencesCardiaques(rafraichirCibles(brutes, zones).seances, zones) : brutes;
+    const serialisees = zones
+      ? harmoniserDistances(ajouterFrequencesCardiaques(rafraichirCibles(brutes, zones).seances, zones), zones)
+      : brutes;
 
     for (const session of serialisees) {
       const sport = SPORT_LABELS[session.sport] ?? session.sport;
