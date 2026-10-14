@@ -6,6 +6,7 @@ import { Bouton } from "../ui/Bouton";
 import { SeanceGuidee } from "./SeanceGuidee";
 import { RavitaillementCard } from "./RavitaillementCard";
 import { CaptureSeance } from "./CaptureSeance";
+import { FelicitationsSeance } from "./FelicitationsSeance";
 import { FaPlay, FaDownload, FaUpload } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
@@ -29,6 +30,12 @@ const BLOCKS: { key: keyof NonNullable<Session["structure"]>; label: string; col
   { key: "corps", label: "Corps de séance", color: "border-rose-800 bg-rose-950/30" },
   { key: "retourCalme", label: "Retour au calme", color: "border-emerald-800 bg-emerald-950/30" },
 ];
+
+/** Faite hier ou aujourd'hui : ses conseils de récupération valent encore. */
+function recente(date: string): boolean {
+  const jour = new Date(`${date.slice(0, 10)}T12:00:00`);
+  return Date.now() - jour.getTime() < 2 * 24 * 3600 * 1000;
+}
 
 /** « 400 m » dans un bassin, « 2,4 km » ailleurs. */
 function distanceLisible(km: number, sport: Session["sport"]): string {
@@ -115,6 +122,8 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
     session.dureeReelleMin != null ? String(session.dureeReelleMin) : ""
   );
   const [saving, setSaving] = useState(false);
+  /** Séance validée à l'instant : la fenêtre reste ouverte sur le message du coach. */
+  const [justeFaite, setJusteFaite] = useState(false);
   const [reorganizing, setReorganizing] = useState(false);
   const [guidee, setGuidee] = useState(false);
   const [importEnCours, setImportEnCours] = useState(false);
@@ -167,6 +176,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
         setRetourImport({ ok: true, texte: `Séance enregistrée — ${premier.detail ?? "importée"}.` });
         if (premier.bilan) setBilan(premier.bilan);
         await onUpdate(session.id, "faite", ressenti || undefined, dureeCorrigee());
+        setJusteFaite(true);
       } else {
         setRetourImport({ ok: false, texte: premier?.detail ?? "Fichier non reconnu." });
       }
@@ -188,7 +198,9 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
     setSaving(true);
     try {
       await onUpdate(session.id, status, ressenti || undefined, dureeCorrigee());
-      onClose();
+      // Une séance faite mérite un mot : la fenêtre reste ouverte sur le bravo.
+      if (status === "faite") setJusteFaite(true);
+      else onClose();
     } finally {
       setSaving(false);
     }
@@ -251,6 +263,12 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
             </div>
           )}
         </div>
+
+        {/* Juste après la séance, ou dans les deux jours qui suivent : la
+            récupération est encore d'actualité. */}
+        {!isRestDay && session.status === "faite" && (justeFaite || recente(session.date)) && (
+          <FelicitationsSeance sessionId={session.id} status={session.status} />
+        )}
 
         {!isRestDay && session.objectif && (
           <div className="mb-4 rounded-xl border border-rose-900/50 bg-gradient-to-br from-rose-950/40 to-black p-3.5">
@@ -341,6 +359,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
                 if (bilanCapture) setBilan(bilanCapture);
                 setDureeReelle(String(dureeMin));
                 await onUpdate(session.id, "faite", ressenti || undefined, dureeMin);
+                setJusteFaite(true);
               }}
             />
             {retourImport && (

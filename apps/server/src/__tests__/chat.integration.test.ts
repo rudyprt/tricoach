@@ -566,6 +566,66 @@ describeIfDb("chat", () => {
       expect(seance.titre).toBe("Sortie imprévue");
     });
 
+    it("remplace la séance prévue quand l'athlète a fait autre chose ce jour-là", async () => {
+      const { agent, user } = await signUp("declare-remplace@example.com");
+      const plan = await avecProgramme(user.id);
+      const prevue = await prisma.session.create({
+        data: { planId: plan.id, userId: user.id, date: new Date(`${hier()}T00:00:00.000Z`), sport: "course", titre: "Seuil", dureeMin: 50 },
+      });
+
+      askClaude
+        .mockResolvedValueOnce(claudeOutilSeance({ date: hier(), sport: "velo", dureeMin: 90, distanceKm: 35 }))
+        .mockResolvedValueOnce(claudeReply("Noté, à la place du seuil."));
+
+      await agent.post("/api/chat").send({ content: "Hier j'ai fait 1h30 de vélo au lieu du seuil." });
+
+      // Une seule séance ce jour-là : celle réellement faite.
+      const duJour = await prisma.session.findMany({ where: { userId: user.id } });
+      expect(duJour).toHaveLength(1);
+      expect(duJour[0]).toMatchObject({ id: prevue.id, sport: "velo", status: "faite", dureeMin: 90, distanceKm: 35, structure: null });
+      expect(duJour[0].description).toContain("à la place de « Seuil »");
+      const resultat = askClaude.mock.calls[1][0].messages.at(-1).content[0];
+      expect(resultat.content).toContain("à la place de « Seuil »");
+    });
+
+    it("remplace un jour de repos plutôt que d'y ajouter une séance", async () => {
+      const { agent, user } = await signUp("declare-repos@example.com");
+      const plan = await avecProgramme(user.id);
+      await prisma.session.create({
+        data: { planId: plan.id, userId: user.id, date: new Date(`${hier()}T00:00:00.000Z`), sport: "repos", titre: "Repos", dureeMin: 0 },
+      });
+
+      askClaude
+        .mockResolvedValueOnce(claudeOutilSeance({ date: hier(), sport: "natation", dureeMin: 40 }))
+        .mockResolvedValueOnce(claudeReply("Noté."));
+
+      await agent.post("/api/chat").send({ content: "J'ai nagé 40 min hier finalement." });
+
+      const duJour = await prisma.session.findMany({ where: { userId: user.id } });
+      expect(duJour).toHaveLength(1);
+      expect(duJour[0]).toMatchObject({ sport: "natation", status: "faite", titre: "Natation libre" });
+    });
+
+    it("met à jour une séance racontée deux fois au lieu de la dupliquer", async () => {
+      const { agent, user } = await signUp("declare-deux-fois@example.com");
+      await avecProgramme(user.id);
+
+      askClaude
+        .mockResolvedValueOnce(claudeOutilSeance({ date: hier(), sport: "course", dureeMin: 45 }))
+        .mockResolvedValueOnce(claudeReply("Noté."))
+        .mockResolvedValueOnce(claudeOutilSeance({ date: hier(), sport: "course", dureeMin: 50, ressenti: "jambes lourdes" }))
+        .mockResolvedValueOnce(claudeReply("Corrigé."));
+
+      await agent.post("/api/chat").send({ content: "J'ai couru 45 min hier." });
+      await agent.post("/api/chat").send({ content: "En fait c'était 50 min, jambes lourdes." });
+
+      const seances = await prisma.session.findMany({ where: { userId: user.id } });
+      expect(seances).toHaveLength(1);
+      expect(seances[0]).toMatchObject({ dureeReelleMin: 50, ressenti: "jambes lourdes" });
+      const resultat = askClaude.mock.calls[3][0].messages.at(-1).content[0];
+      expect(resultat.content).toContain("pas dupliquée");
+    });
+
     it("refuse une date future et le dit au modèle", async () => {
       const { agent, user } = await signUp("declare-futur@example.com");
       await avecProgramme(user.id);

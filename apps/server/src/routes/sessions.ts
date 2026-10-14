@@ -10,6 +10,11 @@ import { ajouterFrequencesCardiaques, rafraichirCibles } from "../lib/cibles.js"
 import { bilanSeance } from "../lib/bilanSeance.js";
 import { construireFitWorkout, nomFichierFit } from "../lib/fitWorkout.js";
 import { parseMateriel } from "../lib/disponibilites.js";
+import { redigerFelicitations } from "../lib/felicitations.js";
+import { calculerRavitaillement, intensiteSeance } from "../lib/nutrition.js";
+import { chargerProfilRavito } from "../lib/nutritionDonnees.js";
+import { isPremium } from "../lib/subscription.js";
+import { addDays } from "../lib/week.js";
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
@@ -163,6 +168,69 @@ sessionsRouter.post(
  * Bilan d'une séance faite à partir du fichier de la montre : ce qui a été
  * fait, comparé à ce qui était prévu. Calcul pur, sans appel au modèle.
  */
+/**
+ * Le message qui suit une séance faite : bravo, ce qu'elle a été, comment en
+ * récupérer. L'offre Premium y ajoute la nutrition de récupération dosée.
+ */
+sessionsRouter.get(
+  "/:id/felicitations",
+  ah(async (req: AuthedRequest, res) => {
+    const userId = req.userId!;
+    const seance = await prisma.session.findFirst({ where: { id: req.params.id, userId } });
+    if (!seance) throw new HttpError(404, "Séance introuvable.");
+    if (seance.status !== "faite" || seance.sport === "repos") {
+      res.json({ felicitations: null });
+      return;
+    }
+
+    const [user, activite, prochaine] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { plan: true } }),
+      prisma.activity.findFirst({ where: { sessionId: seance.id, userId }, orderBy: { importedAt: "desc" } }),
+      prisma.session.findFirst({
+        where: { userId, date: { gt: seance.date, lte: addDays(seance.date, 2) }, sport: { not: "repos" } },
+        orderBy: { date: "asc" },
+      }),
+    ]);
+    const zones = await zonesActuelles(userId);
+    const serialisee = serializeSession(seance);
+    const premium = Boolean(user && isPremium(user));
+
+    let nutritionApres: string[] | null = null;
+    if (premium) {
+      const ravito = calculerRavitaillement(
+        { sport: seance.sport, titre: seance.titre, dureeMin: seance.dureeReelleMin ?? seance.dureeMin, structure: serialisee.structure },
+        await chargerProfilRavito(userId),
+        { seanceLeLendemain: Boolean(prochaine && prochaine.date <= addDays(seance.date, 1)) }
+      );
+      nutritionApres = ravito?.apres ?? null;
+    }
+
+    res.json({
+      felicitations: redigerFelicitations(
+        { ...serialisee, structure: serialisee.structure },
+        {
+          mesures: activite,
+          niveauBilan: activite ? bilanSeance(serialisee, activite, zones).niveau : null,
+          prochaine: prochaine
+            ? {
+                titre: prochaine.titre,
+                dansJours: Math.round((prochaine.date.getTime() - seance.date.getTime()) / 86400000),
+                intense: intensiteSeance({
+                  sport: prochaine.sport,
+                  titre: prochaine.titre,
+                  dureeMin: prochaine.dureeMin,
+                  structure: serializeSession(prochaine).structure,
+                }).max >= 4,
+              }
+            : null,
+          nutritionApres,
+        }
+      ),
+      premium,
+    });
+  })
+);
+
 sessionsRouter.get(
   "/:id/bilan",
   ah(async (req: AuthedRequest, res) => {

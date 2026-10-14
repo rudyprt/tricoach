@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "./prisma.js";
 import { addDays, localCalendarDate } from "./week.js";
@@ -25,6 +26,13 @@ export const FENETRE_DECLARATION_JOURS = 14;
 
 export const NOM_OUTIL_SEANCE = "enregistrer_seance";
 
+const LIBELLE_SPORT: Record<(typeof SPORTS_DECLARABLES)[number], string> = {
+  natation: "Natation",
+  velo: "Vélo",
+  course: "Course",
+  renfo: "Renforcement",
+};
+
 export const outilSeanceFaite: Anthropic.Tool = {
   name: NOM_OUTIL_SEANCE,
   description:
@@ -34,7 +42,8 @@ export const outilSeanceFaite: Anthropic.Tool = {
     "N'appelle pas cet outil pour une séance à venir, pour une séance qu'il " +
     "dit avoir manquée, ni quand il se contente de poser une question sur une " +
     "séance. En cas de doute sur la date ou la durée, demande-lui plutôt que " +
-    "de deviner.",
+    "de deviner. La séance prévue ce jour-là est mise à jour ou remplacée par " +
+    "celle-ci, jamais dupliquée : appelle l'outil une seule fois par séance.",
   input_schema: {
     type: "object",
     properties: {
@@ -72,13 +81,20 @@ export interface ResultatDeclaration {
 }
 
 /**
- * Enregistre la séance déclarée.
+ * Enregistre la séance déclarée, sans jamais doubler une séance du jour.
  *
- * Une séance déjà au programme ce jour-là est marquée faite plutôt que
- * dupliquée : l'athlète raconte le plus souvent ce que son coach lui avait
- * demandé. Sinon, une séance est ajoutée à la semaine correspondante — à
- * condition qu'un programme la couvre, car une séance appartient toujours à un
- * programme.
+ * L'athlète raconte le plus souvent ce que son coach lui avait demandé, ou ce
+ * qu'il a fait à la place. Ajouter une séance à côté laissait deux, parfois
+ * trois séances le même jour : celle du programme, toujours « à faire », et
+ * celle racontée — ou la même racontée deux fois. Dans l'ordre :
+ *
+ * 1. une séance du même sport ce jour-là est mise à jour (déjà faite : corrigée
+ *    plutôt que dupliquée ; prévue ou manquée : marquée faite) ;
+ * 2. sinon, la séance prévue ce jour-là est remplacée par celle réellement
+ *    faite — y compris un jour de repos. Avec plusieurs séances prévues, celle
+ *    dont la durée est la plus proche ;
+ * 3. sinon seulement, une séance est ajoutée à la semaine correspondante — à
+ *    condition qu'un programme la couvre.
  */
 export async function enregistrerSeanceDeclaree(
   userId: string,
@@ -108,24 +124,54 @@ export async function enregistrerSeanceDeclaree(
 
   const jour = new Date(`${date}T00:00:00.000Z`);
   const lendemain = addDays(jour, 1);
-
-  const existante = await prisma.session.findFirst({
-    where: { userId, date: { gte: jour, lt: lendemain }, sport, status: { not: "faite" } },
+  const duJour = await prisma.session.findMany({
+    where: { userId, date: { gte: jour, lt: lendemain } },
     orderBy: { date: "asc" },
   });
 
-  if (existante) {
+  const realise = {
+    status: "faite",
+    dureeReelleMin: dureeMin,
+    ...(distanceKm ? { distanceKm } : {}),
+    ...(ressenti ? { ressenti } : {}),
+    completedAt: new Date(),
+  };
+
+  // 1. Même sport ce jour-là : la séance prévue de préférence, sinon celle déjà
+  //    enregistrée (la même séance racontée une seconde fois).
+  const memeSport =
+    duJour.find((s) => s.sport === sport && s.status !== "faite") ?? duJour.find((s) => s.sport === sport);
+  if (memeSport) {
+    const dejaFaite = memeSport.status === "faite";
+    await prisma.session.update({ where: { id: memeSport.id }, data: realise });
+    return {
+      message: dejaFaite
+        ? `La séance du ${date} (${sport}) était déjà enregistrée : elle a été mise à jour (${dureeMin} min), pas dupliquée.`
+        : `Séance du ${date} (${sport}) marquée comme faite, ${dureeMin} min. Elle était déjà au programme.`,
+      enregistree: true,
+    };
+  }
+
+  // 2. Une autre séance était prévue ce jour-là (ou c'était un jour de repos) :
+  //    l'athlète a fait autre chose à la place, la séance prévue est remplacée.
+  const prevues = duJour.filter((s) => s.status !== "faite");
+  const remplacee = prevues.sort((a, b) => Math.abs(a.dureeMin - dureeMin) - Math.abs(b.dureeMin - dureeMin))[0];
+  if (remplacee) {
     await prisma.session.update({
-      where: { id: existante.id },
+      where: { id: remplacee.id },
       data: {
-        status: "faite",
-        dureeReelleMin: dureeMin,
-        ...(ressenti ? { ressenti } : {}),
-        completedAt: new Date(),
+        ...realise,
+        sport,
+        titre: titre || `${LIBELLE_SPORT[sport]} libre`,
+        dureeMin,
+        distanceKm: distanceKm ?? null,
+        description: `Séance déclarée au coach dans le chat, à la place de « ${remplacee.titre} ».`,
+        objectif: null,
+        structure: Prisma.DbNull,
       },
     });
     return {
-      message: `Séance du ${date} (${sport}) marquée comme faite, ${dureeMin} min. Elle était déjà au programme.`,
+      message: `Séance du ${date} (${sport}, ${dureeMin} min) enregistrée à la place de « ${remplacee.titre} » qui était prévue ce jour-là. Dis-le à l'athlète.`,
       enregistree: true,
     };
   }
@@ -149,7 +195,7 @@ export async function enregistrerSeanceDeclaree(
       userId,
       date: jour,
       sport,
-      titre: titre || `${sport} libre`,
+      titre: titre || `${LIBELLE_SPORT[sport]} libre`,
       dureeMin,
       dureeReelleMin: dureeMin,
       distanceKm: distanceKm ?? null,
