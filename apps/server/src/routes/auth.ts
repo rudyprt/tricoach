@@ -379,6 +379,16 @@ authRouter.patch(
       return;
     }
 
+    // Un abonnement payé par Stripe se résilie chez Stripe : repasser le compte
+    // en gratuit ici laisserait le prélèvement courir.
+    const actuel = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { stripeSubscriptionId: true, abonnementStatut: true },
+    });
+    if (actuel?.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(actuel.abonnementStatut ?? "")) {
+      throw new HttpError(409, "Votre abonnement est géré par le paiement en ligne : résiliez-le depuis la page Abonnement.");
+    }
+
     // Passer à une offre payante doit être la conséquence d'un paiement, jamais
     // d'un simple appel authentifié. La résiliation, elle, reste libre.
     if (isPaidPlan(parsed.data.plan) && !canSelfActivatePaidPlan()) {

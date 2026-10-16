@@ -40,6 +40,19 @@ model User {
   /// Rappels par e-mail (semaine à générer, séances oubliées, fin d'essai).
   /// Désactivable en un clic depuis chaque message, sans se connecter.
   rappelsEmail      Boolean   @default(true)
+  /// Abonnement Stripe. Tant que le paiement n'est ouvert qu'en mode test,
+  /// seuls les comptes désignés par STRIPE_TESTEURS en ont un.
+  stripeCustomerId           String?   @unique
+  stripeSubscriptionId       String?   @unique
+  /// Statut Stripe de l'abonnement : active, past_due, canceled...
+  abonnementStatut           String?
+  abonnementFinPeriode       DateTime?
+  /// Résiliation demandée : l'accès court jusqu'à la fin de la période payée.
+  abonnementAnnulationPrevue Boolean   @default(false)
+  /// Acceptation des conditions de vente et demande d'accès immédiat
+  /// (renonciation partielle au délai de rétractation), au dernier paiement.
+  conditionsVenteAccepteesLe DateTime?
+  accesImmediatDemandeLe     DateTime?
   createdAt         DateTime  @default(now())
 
   profile                AthleteProfile?

@@ -9,6 +9,7 @@ import { serializeSession } from "../lib/session.js";
 import { computeTrainingZones } from "../lib/training.js";
 import { parseZoneOverrides } from "../lib/zoneOverrides.js";
 import { CONSENT_VERSION } from "../lib/consent.js";
+import { stripe } from "../lib/stripe.js";
 import { passwordResetRateLimit } from "../lib/rateLimit.js";
 import { emailVerificationMail, sendMail } from "../lib/mailer.js";
 import { isProduction } from "../lib/env.js";
@@ -260,6 +261,16 @@ privacyRouter.delete(
           400,
           "Vous êtes le dernier administrateur. Nommez quelqu'un d'autre avant de supprimer votre compte."
         );
+      }
+    }
+
+    // Un compte supprimé ne doit plus être prélevé.
+    const client = stripe();
+    if (client && user.stripeSubscriptionId && user.abonnementStatut !== "canceled") {
+      try {
+        await client.subscriptions.cancel(user.stripeSubscriptionId);
+      } catch (err) {
+        console.error("[stripe] Annulation impossible à la suppression du compte :", err);
       }
     }
 
