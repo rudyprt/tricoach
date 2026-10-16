@@ -262,9 +262,9 @@ export function Plans() {
               <span>
                 J'accepte les{" "}
                 <a href="/conditions" target="_blank" rel="noopener" className="text-rose-400 hover:underline">
-                  conditions d'utilisation
-                </a>{" "}
-                et l'abonnement mensuel, résiliable à tout moment.
+                  conditions générales d'utilisation et de vente
+                </a>
+                .
               </span>
             </label>
             <label className="flex items-start gap-2 text-xs leading-relaxed text-doux">
@@ -275,8 +275,10 @@ export function Plans() {
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-rose-500"
               />
               <span>
-                Je demande l'accès immédiat au service. Si je me rétracte dans les 14 jours, je paierai le service déjà
-                fourni, au prorata.
+                {/* Exécution immédiate (art. L221-25) : sans cette demande expresse, le
+                    service ne pourrait pas démarrer avant la fin du délai de rétractation. */}
+                Je demande que mon abonnement démarre immédiatement. Si je me rétracte dans les 14 jours, je paierai la
+                part du mois déjà écoulée.
               </span>
             </label>
             <div className="flex gap-2 pt-1">

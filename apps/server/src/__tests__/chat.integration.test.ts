@@ -518,8 +518,29 @@ describeIfDb("chat", () => {
       });
     }
 
+    /** Le ressenti est une donnée de santé : il n'est gardé qu'avec ce consentement. */
+    function avecConsentementSante(userId: string) {
+      return prisma.athleteProfile.create({
+        data: { userId, objectif: "Half Ironman", objectifDate: new Date(Date.now() + 120 * 24 * 3600 * 1000), heuresSemaine: 8, consentSanteAt: new Date() },
+      });
+    }
+
+    it("ne garde pas le ressenti sans consentement aux données de santé", async () => {
+      const { agent, user } = await signUp("declare-sans-consentement@example.com");
+      await avecProgramme(user.id);
+      askClaude
+        .mockResolvedValueOnce(claudeOutilSeance({ date: hier(), sport: "course", dureeMin: 40, ressenti: "mal au genou" }))
+        .mockResolvedValueOnce(claudeReply("Noté."));
+
+      await agent.post("/api/chat").send({ content: "J'ai couru 40 min hier, mal au genou." });
+
+      const [seance] = await prisma.session.findMany({ where: { userId: user.id } });
+      expect(seance).toMatchObject({ status: "faite", dureeReelleMin: 40, ressenti: null });
+    });
+
     it("marque faite la séance déjà au programme ce jour-là", async () => {
       const { agent, user } = await signUp("declare-planifiee@example.com");
+      await avecConsentementSante(user.id);
       const plan = await avecProgramme(user.id);
       const seance = await prisma.session.create({
         data: {
@@ -608,6 +629,7 @@ describeIfDb("chat", () => {
 
     it("met à jour une séance racontée deux fois au lieu de la dupliquer", async () => {
       const { agent, user } = await signUp("declare-deux-fois@example.com");
+      await avecConsentementSante(user.id);
       await avecProgramme(user.id);
 
       askClaude

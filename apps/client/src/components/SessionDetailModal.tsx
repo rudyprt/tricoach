@@ -7,6 +7,7 @@ import { SeanceGuidee } from "./SeanceGuidee";
 import { RavitaillementCard } from "./RavitaillementCard";
 import { CaptureSeance } from "./CaptureSeance";
 import { FelicitationsSeance } from "./FelicitationsSeance";
+import { ConsentementSante } from "./ConsentementSante";
 import { FaPlay, FaDownload, FaUpload } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
@@ -130,6 +131,47 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   const [retourImport, setRetourImport] = useState<{ ok: boolean; texte: string } | null>(null);
   /** Bilan de la séance faite, d'après le fichier de la montre. */
   const [bilan, setBilan] = useState<Bilan | null>(null);
+  /**
+   * Le ressenti parle souvent d'une douleur : c'est une donnée de santé. Sans
+   * consentement, la case s'affiche sous le champ ; null = état inconnu, le
+   * serveur tranche.
+   */
+  const [consentSante, setConsentSante] = useState<boolean | null>(null);
+  const [caseSante, setCaseSante] = useState(false);
+  const [erreurRessenti, setErreurRessenti] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (session.sport === "repos") return;
+    let actif = true;
+    api
+      .get<{ consenti: boolean }>("/privacy/sante")
+      .then(({ data }) => {
+        if (actif && typeof data?.consenti === "boolean") setConsentSante(data.consenti);
+      })
+      .catch(() => undefined);
+    return () => {
+      actif = false;
+    };
+  }, [session.sport]);
+
+  /** Le ressenti à envoyer ; false si la case de consentement manque. */
+  async function ressentiAEnvoyer(): Promise<string | undefined | false> {
+    setErreurRessenti(null);
+    const texte = ressenti.trim();
+    if (!texte || consentSante !== false) return texte || undefined;
+    if (!caseSante) {
+      setErreurRessenti("Cochez la case de consentement pour que votre ressenti soit enregistré, ou videz le champ.");
+      return false;
+    }
+    try {
+      await api.post("/privacy/sante");
+      setConsentSante(true);
+      return texte;
+    } catch (err) {
+      setErreurRessenti(apiErrorMessage(err, "Consentement impossible à enregistrer."));
+      return false;
+    }
+  }
 
   useEffect(() => {
     if (session.status !== "faite") return;
@@ -175,7 +217,8 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
       } else if (premier?.statut?.startsWith("importe")) {
         setRetourImport({ ok: true, texte: `Séance enregistrée — ${premier.detail ?? "importée"}.` });
         if (premier.bilan) setBilan(premier.bilan);
-        await onUpdate(session.id, "faite", ressenti || undefined, dureeCorrigee());
+        const texte = await ressentiAEnvoyer();
+        await onUpdate(session.id, "faite", texte === false ? undefined : texte, dureeCorrigee());
         setJusteFaite(true);
       } else {
         setRetourImport({ ok: false, texte: premier?.detail ?? "Fichier non reconnu." });
@@ -197,7 +240,9 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   async function updateStatus(status: Session["status"]) {
     setSaving(true);
     try {
-      await onUpdate(session.id, status, ressenti || undefined, dureeCorrigee());
+      const texte = await ressentiAEnvoyer();
+      if (texte === false) return;
+      await onUpdate(session.id, status, texte, dureeCorrigee());
       // Une séance faite mérite un mot : la fenêtre reste ouverte sur le bravo.
       if (status === "faite") setJusteFaite(true);
       else onClose();
@@ -209,7 +254,9 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
   async function saveRessenti() {
     setSaving(true);
     try {
-      await onUpdate(session.id, session.status, ressenti || undefined, dureeCorrigee());
+      const texte = await ressentiAEnvoyer();
+      if (texte === false) return;
+      await onUpdate(session.id, session.status, texte, dureeCorrigee());
       onClose();
     } finally {
       setSaving(false);
@@ -358,7 +405,8 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
                 setRetourImport({ ok: true, texte: `Séance enregistrée depuis la capture — ${dureeMin} min.` });
                 if (bilanCapture) setBilan(bilanCapture);
                 setDureeReelle(String(dureeMin));
-                await onUpdate(session.id, "faite", ressenti || undefined, dureeMin);
+                const texte = await ressentiAEnvoyer();
+                await onUpdate(session.id, "faite", texte === false ? undefined : texte, dureeMin);
                 setJusteFaite(true);
               }}
             />
@@ -427,6 +475,14 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
               placeholder="Comment s'est passée la séance ?"
               className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
             />
+            {consentSante === false && ressenti.trim() !== "" && (
+              <ConsentementSante coche={caseSante} onChange={setCaseSante} />
+            )}
+            {erreurRessenti && (
+              <p role="alert" className="text-xs text-accent-clair">
+                {erreurRessenti}
+              </p>
+            )}
           </div>
         )}
 

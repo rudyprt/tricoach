@@ -10,6 +10,7 @@ import { computeTrainingZones } from "../lib/training.js";
 import { parseZoneOverrides } from "../lib/zoneOverrides.js";
 import { CONSENT_VERSION } from "../lib/consent.js";
 import { stripe } from "../lib/stripe.js";
+import { consentementSante, donnerConsentementSante, retirerConsentementSante } from "../lib/consentSante.js";
 import { passwordResetRateLimit } from "../lib/rateLimit.js";
 import { emailVerificationMail, sendMail } from "../lib/mailer.js";
 import { isProduction } from "../lib/env.js";
@@ -283,6 +284,39 @@ privacyRouter.delete(
 /* ------------------------------------------------------------------ */
 /* Rappels par e-mail                                                  */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* Consentement aux données de santé                                   */
+/* ------------------------------------------------------------------ */
+
+privacyRouter.get(
+  "/sante",
+  requireAuth,
+  ah(async (req: AuthedRequest, res) => {
+    const depuis = await consentementSante(req.userId!);
+    res.json({ consenti: Boolean(depuis), depuis: depuis?.toISOString() ?? null });
+  })
+);
+
+privacyRouter.post(
+  "/sante",
+  requireAuth,
+  ah(async (req: AuthedRequest, res) => {
+    const depuis = await donnerConsentementSante(req.userId!);
+    if (!depuis) throw new HttpError(409, "Complétez d'abord votre profil d'athlète.");
+    res.json({ consenti: true, depuis: depuis.toISOString() });
+  })
+);
+
+/** Retrait du consentement : les données de santé déjà enregistrées sont effacées. */
+privacyRouter.delete(
+  "/sante",
+  requireAuth,
+  ah(async (req: AuthedRequest, res) => {
+    const efface = await retirerConsentementSante(req.userId!);
+    res.json({ consenti: false, depuis: null, efface });
+  })
+);
 
 /**
  * Désabonnement sans connexion. Un lien de désinscription qui exige de se

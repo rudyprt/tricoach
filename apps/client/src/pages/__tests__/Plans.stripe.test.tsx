@@ -54,7 +54,7 @@ describe("paiement des offres", () => {
     expect(payer).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText(/J'accepte les/));
-    fireEvent.click(screen.getByLabelText(/Je demande l'accès immédiat/));
+    fireEvent.click(screen.getByLabelText(/Je demande que mon abonnement démarre immédiatement/));
     fireEvent.click(payer);
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test_1"));

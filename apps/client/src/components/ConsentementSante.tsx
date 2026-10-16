@@ -1,5 +1,5 @@
 /**
- * Consentement au traitement des blessures et douleurs.
+ * Consentement au traitement des blessures, douleurs et ressentis.
  *
  * Ces informations sont des données de santé : le règlement européen en fait
  * une catégorie particulière, qui exige un consentement explicite et séparé —
@@ -13,10 +13,21 @@
 export function ConsentementSante({
   coche,
   onChange,
+  acquisLe,
 }: {
   coche: boolean;
   onChange: (valeur: boolean) => void;
+  /** Date du consentement déjà donné : il se retire depuis « Mon compte », pas ici. */
+  acquisLe?: string | null;
 }) {
+  if (acquisLe) {
+    return (
+      <p className="mt-2 text-xs leading-relaxed text-tres-doux">
+        Consentement aux données de santé donné le {new Date(acquisLe).toLocaleDateString("fr-FR")}. Vous pouvez le
+        retirer depuis Mon compte : ces données seront alors effacées.
+      </p>
+    );
+  }
   return (
     <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs leading-relaxed text-doux">
       <input
@@ -26,8 +37,8 @@ export function ConsentementSante({
         className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-rose-500"
       />
       <span>
-        J'accepte que TriCoach utilise les informations sur mes blessures ou douleurs pour adapter mon
-        programme. Je peux retirer mon consentement à tout moment en vidant ce champ.
+        J'accepte que TriCoach enregistre mes blessures, douleurs et ressentis après séance, et les transmette à son
+        prestataire d'IA, pour adapter mes programmes. Je peux retirer ce consentement à tout moment depuis Mon compte.
       </span>
     </label>
   );

@@ -153,7 +153,7 @@ function conditions(e: Editeur = EDITEUR): string {
       ),
       section(
         "Droit de rétractation",
-        `<p>Conformément à l'article L221-18 du code de la consommation, vous disposerez d'un délai de 14 jours à compter de la souscription d'un abonnement pour vous rétracter. Si vous demandez expressément l'accès immédiat au service, vous serez redevable, en cas de rétractation, d'un montant proportionnel au service fourni jusqu'à celle-ci (article L221-25).</p>`
+        `<p>Conformément à l'article L221-18 du code de la consommation, vous disposerez d'un délai de 14 jours à compter de la souscription d'un abonnement pour vous rétracter. Au moment du paiement, vous demandez expressément que votre abonnement démarre immédiatement. En cas de rétractation, vous payez alors uniquement la part du mois déjà écoulée jusqu'à votre demande (article L221-25).</p>`
       ),
       section(
         "Avertissement — santé",
@@ -217,7 +217,7 @@ function confidentialite(e: Editeur = EDITEUR): string {
         "Finalités et bases légales",
         `<ul>
 <li>Fournir le service, générer vos programmes, analyses et repères — exécution du contrat.</li>
-<li>Traiter vos données de santé déclarées — votre consentement explicite, donné par une case distincte sous le champ des blessures, et retirable à tout moment en vidant ce champ. Sans ce consentement, ces informations ne sont pas enregistrées.</li>
+<li>Traiter vos données de santé déclarées — votre consentement explicite, donné par une case distincte sous le champ des blessures ou du ressenti. Sans ce consentement, ces informations ne sont pas enregistrées et le service reste utilisable. Vous pouvez le retirer à tout moment depuis « Mon compte » : les données de santé déjà enregistrées sont alors effacées.</li>
 <li>Traiter vos données physiologiques et de nutrition — votre consentement, exprimé en les saisissant vous-même : elles sont facultatives, et vous pouvez les modifier ou les effacer à tout moment depuis la page Nutrition.</li>
 <li>Sécuriser les accès et prévenir les abus — intérêt légitime.</li>
 <li>Gérer les abonnements — exécution du contrat et obligations comptables.</li>
@@ -251,10 +251,11 @@ function confidentialite(e: Editeur = EDITEUR): string {
       ),
       section(
         "Vos droits",
-        `<p>Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité, et du droit de retirer votre consentement à tout moment. Deux d'entre eux s'exercent directement dans l'application, sans démarche :</p>
+        `<p>Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité, et du droit de retirer votre consentement à tout moment. Trois d'entre eux s'exercent directement dans l'application, sans démarche :</p>
 <ul>
 <li><strong>Portabilité et accès</strong> — téléchargez l'intégralité de vos données au format JSON depuis ${lien("/compte", "Mon compte")}.</li>
 <li><strong>Effacement</strong> — ${lien("/compte#supprimer", "supprimez définitivement votre compte")} et toutes vos données.</li>
+<li><strong>Retrait du consentement santé</strong> — depuis ${lien("/compte", "Mon compte")}, retirez-le : vos blessures, douleurs et ressentis sont aussitôt effacés.</li>
 </ul>
 <p>Vous pouvez également introduire une réclamation auprès de la CNIL (<span class="fort">www.cnil.fr</span>).</p>
 <p>Pour les autres droits, écrivez à ${champ(e.email, "l'adresse de contact de l'éditeur")}.</p>`

@@ -80,7 +80,7 @@ describeIfDb("durée réellement effectuée", () => {
     await agent.patch(`/api/sessions/${seance.id}`).send({ status: "faite", dureeReelleMin: 55 });
 
     // Champ absent : la correction reste.
-    await agent.patch(`/api/sessions/${seance.id}`).send({ status: "faite", ressenti: "Jambes lourdes" });
+    await agent.patch(`/api/sessions/${seance.id}`).send({ status: "faite", ressenti: "" });
     expect((await prisma.session.findUniqueOrThrow({ where: { id: seance.id } })).dureeReelleMin).toBe(55);
 
     // Null explicite : la correction est effacée.

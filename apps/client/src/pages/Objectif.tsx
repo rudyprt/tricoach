@@ -36,6 +36,7 @@ export function Objectif() {
   const [materiel, setMateriel] = useState<Materiel>(MATERIEL_PAR_DEFAUT);
   const [contraintes, setContraintes] = useState("");
   const [consentSante, setConsentSante] = useState(false);
+  const [consentSanteLe, setConsentSanteLe] = useState<string | null>(null);
   const [ftpWatts, setFtpWatts] = useState("");
   // Valeurs de seuil : saisies en texte lisible, converties en secondes pour l'API.
   const [seuilCourse, setSeuilCourse] = useState("");
@@ -71,6 +72,7 @@ export function Objectif() {
         // Un consentement déjà donné reste coché : le redemander à chaque
         // visite reviendrait à le faire redonner sans raison.
         setConsentSante(Boolean(data.consentSanteAt));
+        setConsentSanteLe(data.consentSanteAt ?? null);
         setFtpWatts(data.ftpWatts ? String(data.ftpWatts) : "");
         setSeuilCourse(data.seuilCourseSecParKm ? secondesVersAllure(data.seuilCourseSecParKm) : "");
         setCss(data.cssSecPer100m ? secondesVersAllure(data.cssSecPer100m) : "");
@@ -382,7 +384,7 @@ export function Objectif() {
             rows={3}
             className="w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-rose-500"
           />
-          <ConsentementSante coche={consentSante} onChange={setConsentSante} />
+          <ConsentementSante coche={consentSante} onChange={setConsentSante} acquisLe={consentSanteLe} />
         </div>
 
         <div className="flex gap-2">

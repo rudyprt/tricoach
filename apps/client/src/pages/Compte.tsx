@@ -8,6 +8,7 @@ import { StravaCard } from "../components/StravaCard";
 import { ImportSeances } from "../components/ImportSeances";
 import { FraicheurDonnees } from "../components/FraicheurDonnees";
 import { RappelsCard } from "../components/RappelsCard";
+import { DonneesSanteCard } from "../components/DonneesSanteCard";
 
 function Card({ children, id }: { children: React.ReactNode; id?: string }) {
   return (
@@ -222,6 +223,8 @@ export function Compte() {
           Télécharger mes données
         </button>
       </Card>
+
+      <DonneesSanteCard />
 
       {/*
         L'ancre rend la suppression atteignable d'un clic depuis l'endroit où
