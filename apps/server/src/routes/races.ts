@@ -31,6 +31,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { ah, HttpError } from "../lib/http.js";
+import { santeAutorisee } from "../lib/consentSante.js";
 import {
   DISCIPLINES_COURSE,
   FORMATS,
@@ -338,7 +339,11 @@ racesRouter.post(
 
     const parsed = resultatSchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Résultat invalide.");
-    const resultat = parsed.data;
+    // Le ressenti d'une course est une donnée de santé : gardé seulement avec le consentement.
+    const resultat =
+      parsed.data.ressenti?.trim() && !(await santeAutorisee(userId, (req.body as { consentSante?: unknown }).consentSante))
+        ? { ...parsed.data, ressenti: "" }
+        : parsed.data;
 
     // Le résultat est conservé même si l'analyse échoue : l'athlète ne le
     // ressaisira pas pour réessayer.

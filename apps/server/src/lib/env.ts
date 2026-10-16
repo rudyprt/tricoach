@@ -22,6 +22,18 @@ const envSchema = z.object({
    * développement ou pour une démo permet de tester les offres sans facturation.
    */
   BILLING_MODE: z.enum(["disabled", "open"]).default("disabled"),
+  /**
+   * Paiement Stripe, en MODE TEST uniquement : une clé « sk_live_ » est
+   * refusée tant que l'activité n'est pas déclarée. Sans clé, rien ne change.
+   */
+  STRIPE_SECRET_KEY: z.string().trim().default(""),
+  STRIPE_WEBHOOK_SECRET: z.string().trim().default(""),
+  /**
+   * Adresses e-mail (séparées par des virgules) qui voient le paiement test.
+   * Les autres comptes gardent l'écran actuel : les testeurs ne sont pas
+   * dérangés. Les administrateurs le voient aussi.
+   */
+  STRIPE_TESTEURS: z.string().default(""),
   APP_URL: z.string().default("http://localhost:5173"),
   /**
    * Amorçage du premier administrateur sans accès à une ligne de commande :

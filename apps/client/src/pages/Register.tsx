@@ -231,14 +231,13 @@ export function Register() {
                     sinon rien n'atteste que l'athlète l'a déclaré. */}
                 J'ai 18 ans ou plus et j'accepte les{" "}
                 <a href="/conditions" target="_blank" rel="noopener" className="text-rose-400 hover:underline">
-                  conditions d'utilisation
+                  conditions générales d'utilisation et de vente
                 </a>{" "}
-                et la{" "}
+                ainsi que la{" "}
                 <a href="/confidentialite" target="_blank" rel="noopener" className="text-rose-400 hover:underline">
                   politique de confidentialité
                 </a>
-                . TriCoach enregistre mes données d'entraînement, y compris mes blessures et ressentis, pour
-                construire mes programmes.
+                .
               </span>
             </label>
 

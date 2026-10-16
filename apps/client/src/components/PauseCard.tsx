@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { FaBandage, FaPlay, FaArrowTrendUp } from "react-icons/fa6";
 import { api, apiErrorMessage, type EtatEntrainement, type RaisonPause } from "../lib/api";
+import { useConsentementSante } from "../lib/useConsentementSante";
+import { ConsentementSante } from "./ConsentementSante";
 
 const RAISONS: { valeur: RaisonPause; label: string }[] = [
   { valeur: "blessure", label: "Blessure" },
@@ -22,6 +24,10 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
   const [detail, setDetail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const consenti = useConsentementSante(formulaire);
+  const [caseSante, setCaseSante] = useState(false);
+  /** Motif médical ou précision : des données de santé, gardées seulement avec l'accord. */
+  const demandeSante = consenti === false && (raison !== "indisponibilite" || detail.trim() !== "");
 
   async function load() {
     try {
@@ -40,7 +46,7 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/pauses", { raison, detail });
+      await api.post("/pauses", { raison, detail, ...(demandeSante && caseSante ? { consentSante: true } : {}) });
       setFormulaire(false);
       setDetail("");
       await load();
@@ -149,6 +155,17 @@ export function PauseCard({ onChange }: { onChange?: () => void }) {
           placeholder={raison === "blessure" ? "Où avez-vous mal ? (facultatif)" : "Précision (facultatif)"}
           className="mb-2 w-full rounded-lg border border-bordure bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-amber-700"
         />
+
+        {demandeSante && (
+          <div className="mb-2">
+            <ConsentementSante coche={caseSante} onChange={setCaseSante} />
+            {!caseSante && (
+              <p className="mt-1 text-xs text-tres-doux">
+                Sans cette case, la pause est enregistrée sans son motif ni sa précision.
+              </p>
+            )}
+          </div>
+        )}
 
         {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
 

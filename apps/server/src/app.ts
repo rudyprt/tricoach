@@ -23,6 +23,7 @@ import { partageRouter } from "./routes/partage.js";
 import { consignesRouter } from "./routes/consignes.js";
 import { nutritionRouter } from "./routes/nutrition.js";
 import { capturesRouter } from "./routes/captures.js";
+import { billingRouter, billingWebhook } from "./routes/billing.js";
 import { errorHandler, notFoundHandler } from "./lib/http.js";
 import { env, isProduction } from "./lib/env.js";
 
@@ -81,6 +82,9 @@ export function createApp() {
   );
 
   app.use(cors({ origin: env().CLIENT_ORIGIN, credentials: true }));
+  // Le webhook Stripe lit le corps brut pour vérifier sa signature : il passe
+  // avant le décodage JSON.
+  app.post("/api/billing/webhook", ...billingWebhook);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
 
@@ -103,6 +107,7 @@ export function createApp() {
   app.use("/api/partage", partageRouter);
   app.use("/api/consignes", consignesRouter);
   app.use("/api/nutrition", nutritionRouter);
+  app.use("/api/billing", billingRouter);
 
   /*
    * La version déployée, lisible sans outil ni connexion.

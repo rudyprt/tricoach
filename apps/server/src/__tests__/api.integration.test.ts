@@ -300,20 +300,6 @@ describeIfDb("API", () => {
         expect(put.body.consentSanteAt).not.toBeNull();
       });
 
-      it("efface le consentement quand l'athlète vide le champ", async () => {
-        // C'est le retrait annoncé dans la politique : vider le champ suffit.
-        const { agent } = await signUp("retrait@example.com");
-        await agent
-          .put("/api/profile")
-          .send({ ...profilDeBase, contraintes: "lombalgie", consentSante: true });
-
-        const apres = await agent.put("/api/profile").send({ ...profilDeBase, contraintes: "" });
-
-        expect(apres.status).toBe(200);
-        expect(apres.body.contraintes).toBe("");
-        expect(apres.body.consentSanteAt).toBeNull();
-      });
-
       it("accepte un profil sans blessures, sans rien demander", async () => {
         const { agent } = await signUp("riendutout@example.com");
 

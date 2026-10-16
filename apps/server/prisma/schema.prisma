@@ -40,6 +40,19 @@ model User {
   /// Rappels par e-mail (semaine à générer, séances oubliées, fin d'essai).
   /// Désactivable en un clic depuis chaque message, sans se connecter.
   rappelsEmail      Boolean   @default(true)
+  /// Abonnement Stripe. Tant que le paiement n'est ouvert qu'en mode test,
+  /// seuls les comptes désignés par STRIPE_TESTEURS en ont un.
+  stripeCustomerId           String?   @unique
+  stripeSubscriptionId       String?   @unique
+  /// Statut Stripe de l'abonnement : active, past_due, canceled...
+  abonnementStatut           String?
+  abonnementFinPeriode       DateTime?
+  /// Résiliation demandée : l'accès court jusqu'à la fin de la période payée.
+  abonnementAnnulationPrevue Boolean   @default(false)
+  /// Acceptation des conditions de vente et demande d'accès immédiat
+  /// (renonciation partielle au délai de rétractation), au dernier paiement.
+  conditionsVenteAccepteesLe DateTime?
+  accesImmediatDemandeLe     DateTime?
   createdAt         DateTime  @default(now())
 
   profile                AthleteProfile?
@@ -62,6 +75,7 @@ model User {
   races                  Race[]
   consignesCoach         ConsigneCoach[]
   resumeChat             ResumeChat?
+  consentements          ConsentementJournal[]
   profilNutrition        ProfilNutrition?
   testsSudation          TestSudation[]
 
@@ -631,4 +645,23 @@ model TestSudation {
   createdAt    DateTime @default(now())
 
   @@index([userId, date])
+}
+
+/// Preuve des consentements : chaque accord et chaque retrait, horodaté, avec
+/// la version du texte affiché. Le RGPD demande de pouvoir démontrer qu'un
+/// consentement a été donné ; une seule date sur le profil, écrasée au
+/// prochain accord, ne le permettait pas.
+model ConsentementJournal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "sante" (données de santé) | "conditions" (CGU et politique de confidentialité)
+  objet     String
+  /// "donne" | "retire"
+  action    String
+  /// Version du texte accepté ; voir TEXTES_CONSENTEMENT_SANTE et CONSENT_VERSION.
+  version   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, objet, createdAt])
 }

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { FaCheck, FaBolt, FaCrown, FaClock } from "react-icons/fa6";
 import { api, apiErrorMessage, isBillingUnavailableError, type Plan } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
@@ -24,6 +24,18 @@ const PREMIUM_FEATURES = [
 // n'est pas encore implémentée.
 const PREMIUM_SOON = ["Connexion directe Strava / Garmin"];
 
+/** État du paiement Stripe pour ce compte (mode test, comptes désignés). */
+interface EtatPaiement {
+  disponible: boolean;
+  mode: "test";
+  tarifs: { standard: number; premium: number };
+  abonnement: { statut: string | null; plan: string; finPeriode: string | null; annulationPrevue: boolean } | null;
+}
+
+const ACTIFS = ["active", "trialing", "past_due"];
+const euros = (centimes: number) => `${(centimes / 100).toFixed(2).replace(".", ",")} €`;
+const dateFr = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
 function daysRemaining(dateStr: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -39,8 +51,89 @@ export function Plans() {
   const isIntro = location.pathname === "/plans-intro";
   const [loadingPlan, setLoadingPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paiement, setPaiement] = useState<EtatPaiement | null>(null);
+  /** Offre en cours de paiement : les deux accords sont demandés avant Stripe. */
+  const [aPayer, setAPayer] = useState<"standard" | "premium" | null>(null);
+  const [accordConditions, setAccordConditions] = useState(false);
+  const [accordAcces, setAccordAcces] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+
+  function chargerPaiement() {
+    return api
+      .get<EtatPaiement>("/billing")
+      .then(({ data }) => setPaiement(data))
+      .catch(() => setPaiement(null));
+  }
+
+  useEffect(() => {
+    void chargerPaiement();
+  }, []);
+
+  // Retour de la page de paiement Stripe : l'offre s'active quand Stripe le
+  // confirme au serveur, quelques secondes plus tard.
+  useEffect(() => {
+    const retour = params.get("paiement");
+    if (!retour) return;
+    params.delete("paiement");
+    setParams(params, { replace: true });
+    if (retour === "annule") {
+      setInfo("Paiement annulé : rien n'a été prélevé.");
+      return;
+    }
+    setInfo("Paiement test validé : votre offre s'active dans quelques secondes.");
+    let essais = 0;
+    const minuterie = setInterval(() => {
+      essais += 1;
+      void refresh();
+      void chargerPaiement();
+      if (essais >= 4) clearInterval(minuterie);
+    }, 2500);
+    return () => clearInterval(minuterie);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const abonnementStripe = paiement?.abonnement && ACTIFS.includes(paiement.abonnement.statut ?? "") ? paiement.abonnement : null;
+
+  async function payer() {
+    if (!aPayer) return;
+    setError(null);
+    setLoadingPlan(aPayer);
+    try {
+      const { data } = await api.post<{ url: string }>("/billing/checkout", {
+        plan: aPayer,
+        conditions: accordConditions,
+        accesImmediat: accordAcces,
+      });
+      window.location.assign(data.url);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Impossible d'ouvrir la page de paiement."));
+      setLoadingPlan(null);
+    }
+  }
+
+  async function gererAbonnement(action: "resilier" | "reprendre") {
+    setError(null);
+    setLoadingPlan("free");
+    try {
+      await api.post(`/billing/${action}`);
+      await chargerPaiement();
+      await refresh();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Opération impossible."));
+    } finally {
+      setLoadingPlan(null);
+    }
+  }
 
   async function choosePlan(plan: Plan) {
+    // Comptes désignés : le paiement passe par Stripe (mode test).
+    if (paiement?.disponible && plan !== "free") {
+      setAccordConditions(false);
+      setAccordAcces(false);
+      setAPayer(plan);
+      return;
+    }
     setError(null);
     setLoadingPlan(plan);
     try {
@@ -117,7 +210,97 @@ export function Plans() {
           <p className="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-400">{error}</p>
         )}
 
-        {user && !user.selfServeBilling && (
+        {info && (
+          <p className="mb-4 rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{info}</p>
+        )}
+
+        {paiement?.disponible && (
+          <div className="mb-4 rounded-md border border-sky-900/60 bg-sky-950/30 px-3 py-2 text-xs text-sky-200">
+            <p className="font-semibold">🧪 Paiement en mode test — aucun prélèvement réel</p>
+            <p className="mt-0.5">
+              Carte de test : 4242 4242 4242 4242, une date d'expiration future, n'importe quel code. Visible uniquement par
+              les comptes testeurs.
+            </p>
+          </div>
+        )}
+
+        {abonnementStripe && (
+          <div className="mb-4 rounded-2xl border border-bordure bg-zinc-950/80 p-4 text-sm">
+            <p className="font-semibold text-white">
+              Abonnement {abonnementStripe.plan === "premium" ? "Premium" : "Standard"}
+              {abonnementStripe.statut === "past_due" && <span className="ml-2 text-amber-300">— paiement en retard</span>}
+            </p>
+            {abonnementStripe.finPeriode && (
+              <p className="mt-0.5 text-doux">
+                {abonnementStripe.annulationPrevue
+                  ? `Résilié : votre accès reste ouvert jusqu'au ${dateFr(abonnementStripe.finPeriode)}.`
+                  : `Renouvelé automatiquement le ${dateFr(abonnementStripe.finPeriode)}.`}
+              </p>
+            )}
+            <button
+              onClick={() => void gererAbonnement(abonnementStripe.annulationPrevue ? "reprendre" : "resilier")}
+              disabled={loadingPlan !== null}
+              className="mt-2 rounded-lg border border-bordure px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-bordure-forte disabled:opacity-50"
+            >
+              {abonnementStripe.annulationPrevue ? "Reprendre mon abonnement" : "Résilier mon abonnement"}
+            </button>
+          </div>
+        )}
+
+        {aPayer && paiement && (
+          <div className="mb-4 space-y-2 rounded-2xl border border-rose-800/60 bg-zinc-950/90 p-4">
+            <p className="text-sm font-semibold text-white">
+              {aPayer === "premium" ? "Premium" : "Standard"} — {euros(paiement.tarifs[aPayer])} TTC par mois
+            </p>
+            <label className="flex items-start gap-2 text-xs leading-relaxed text-doux">
+              <input
+                type="checkbox"
+                checked={accordConditions}
+                onChange={(e) => setAccordConditions(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-rose-500"
+              />
+              <span>
+                J'accepte les{" "}
+                <a href="/conditions" target="_blank" rel="noopener" className="text-rose-400 hover:underline">
+                  conditions générales d'utilisation et de vente
+                </a>
+                .
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-xs leading-relaxed text-doux">
+              <input
+                type="checkbox"
+                checked={accordAcces}
+                onChange={(e) => setAccordAcces(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-rose-500"
+              />
+              <span>
+                {/* Exécution immédiate (art. L221-25) : sans cette demande expresse, le
+                    service ne pourrait pas démarrer avant la fin du délai de rétractation. */}
+                Je demande que mon abonnement démarre immédiatement. Si je me rétracte dans les 14 jours, je paierai la
+                part du mois déjà écoulée.
+              </span>
+            </label>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => void payer()}
+                disabled={!accordConditions || !accordAcces || loadingPlan !== null}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-500 px-3 py-2 text-sm font-semibold text-black hover:bg-rose-400 disabled:opacity-50"
+              >
+                {loadingPlan === aPayer && <Spinner className="border-black/30 border-t-black" />}
+                Payer {euros(paiement.tarifs[aPayer])} (test)
+              </button>
+              <button
+                onClick={() => setAPayer(null)}
+                className="rounded-lg border border-bordure px-3 py-2 text-sm text-doux hover:text-zinc-200"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+
+        {user && !user.selfServeBilling && !paiement?.disponible && (
           <p className="mb-4 rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-300">
             Le paiement en ligne arrive bientôt. Ces offres sont présentées à titre indicatif : contactez-nous pour
             activer un abonnement.
@@ -193,7 +376,7 @@ export function Plans() {
           <button onClick={continueWithFree} className="text-sm text-doux underline-offset-4 hover:text-zinc-300 hover:underline">
             {isIntro ? "Continuer avec la semaine gratuite" : "Retour"}
           </button>
-          {!isIntro && user && user.plan !== "free" && (
+          {!isIntro && user && user.plan !== "free" && !abonnementStripe && (
             <div>
               <button
                 onClick={cancelSubscription}

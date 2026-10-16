@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "./prisma.js";
 import { addDays, localCalendarDate } from "./week.js";
+import { consentementSante } from "./consentSante.js";
 
 /**
  * Une séance racontée au coach dans le chat.
@@ -108,7 +109,9 @@ export async function enregistrerSeanceDeclaree(
       enregistree: false,
     };
   }
-  const { date, sport, dureeMin, distanceKm, ressenti, titre } = parsed.data;
+  const { date, sport, dureeMin, distanceKm, titre } = parsed.data;
+  // Le ressenti est une donnée de santé : sans consentement, il n'est pas gardé.
+  const ressenti = parsed.data.ressenti && (await consentementSante(userId)) ? parsed.data.ressenti : undefined;
 
   const aujourdHui = localCalendarDate(new Date(), timezone);
   if (date > aujourdHui) {

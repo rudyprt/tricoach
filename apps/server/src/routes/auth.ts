@@ -16,6 +16,7 @@ import { syncBootstrapAdmin } from "../lib/adminBootstrap.js";
 import { CONSENT_VERSION, hasCurrentConsent } from "../lib/consent.js";
 import { clearFailedLogins, isLocked, minutesUntilUnlock, recordFailedLogin } from "../lib/loginProtection.js";
 import { sendEmailVerification } from "./privacy.js";
+import { journaliserConsentement } from "../lib/consentSante.js";
 
 export const authRouter = Router();
 
@@ -144,6 +145,7 @@ authRouter.post(
       },
       select: USER_SELECT,
     });
+    await journaliserConsentement(prisma, user.id, "conditions", "donne", CONSENT_VERSION);
 
     // L'envoi ne doit pas faire échouer l'inscription : l'athlète peut demander
     // un nouvel envoi depuis son compte.
@@ -377,6 +379,16 @@ authRouter.patch(
     if (!parsed.success) {
       res.status(400).json({ error: "Offre invalide." });
       return;
+    }
+
+    // Un abonnement payé par Stripe se résilie chez Stripe : repasser le compte
+    // en gratuit ici laisserait le prélèvement courir.
+    const actuel = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { stripeSubscriptionId: true, abonnementStatut: true },
+    });
+    if (actuel?.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(actuel.abonnementStatut ?? "")) {
+      throw new HttpError(409, "Votre abonnement est géré par le paiement en ligne : résiliez-le depuis la page Abonnement.");
     }
 
     // Passer à une offre payante doit être la conséquence d'un paiement, jamais

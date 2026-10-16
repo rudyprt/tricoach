@@ -13,6 +13,7 @@ import {
   pauseEnCours,
 } from "../lib/pause.js";
 import { startOfWeek } from "../lib/week.js";
+import { santeAutorisee } from "../lib/consentSante.js";
 
 export const pausesRouter = Router();
 pausesRouter.use(requireAuth);
@@ -75,7 +76,18 @@ pausesRouter.post(
       throw new HttpError(400, "Une interruption est déjà en cours. Reprenez-la avant d'en déclarer une nouvelle.");
     }
 
-    const { raison, detail, finPrevue } = parsed.data;
+    const { finPrevue } = parsed.data;
+    /*
+     * Le motif médical et la précision sont des données de santé. Sans
+     * consentement, la pause est enregistrée quand même — c'est elle qui
+     * protège l'athlète à la reprise — mais sans eux.
+     */
+    const avecSante =
+      parsed.data.raison === "indisponibilite" && !parsed.data.detail.trim()
+        ? true
+        : await santeAutorisee(userId, (req.body as { consentSante?: unknown }).consentSante);
+    const raison = avecSante ? parsed.data.raison : "indisponibilite";
+    const detail = avecSante ? parsed.data.detail.trim() : "";
     const debut = new Date();
     const finPrevueDate = finPrevue ? new Date(`${finPrevue}T00:00:00.000Z`) : null;
     if (finPrevueDate && Number.isNaN(finPrevueDate.getTime())) {

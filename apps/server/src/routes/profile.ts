@@ -11,6 +11,7 @@ import { precisionDesZones } from "../lib/precisionZones.js";
 import { startOfWeek, safeTimeZone } from "../lib/week.js";
 import { disponibilitesSchema, materielSchema, parseDisponibilites } from "../lib/disponibilites.js";
 import { libererJoursIndisponibles } from "../lib/reposDeclare.js";
+import { CONSENT_SANTE_VERSION, journaliserConsentement } from "../lib/consentSante.js";
 
 export const profileRouter = Router();
 profileRouter.use(requireAuth);
@@ -91,14 +92,6 @@ profileRouter.put(
      * prouve rien, et un appel direct à l'API la contournerait.
      */
     const contraintes = rest.contraintes.trim();
-    if (contraintes && !consentSante) {
-      res.status(400).json({
-        error:
-          "Cochez la case de consentement sous le champ des blessures pour que ces informations puissent être enregistrées.",
-      });
-      return;
-    }
-
     const [profilActuel, utilisateur] = await Promise.all([
       prisma.athleteProfile.findUnique({
         where: { userId: req.userId! },
@@ -109,10 +102,18 @@ profileRouter.put(
 
     /*
      * La date du premier consentement est conservée tant qu'il n'est pas
-     * retiré : c'est elle qui prouve quand l'athlète a accepté. Vider le champ
-     * ou décocher la case retire le consentement, et l'horodatage avec.
+     * retiré : c'est elle qui prouve quand l'athlète a accepté. Le retrait se
+     * fait depuis « Mon compte », où il efface aussi les données déjà
+     * enregistrées : ni vider le champ ni enregistrer le profil ne le retire.
      */
-    const consentSanteAt = contraintes && consentSante ? (profilActuel?.consentSanteAt ?? new Date()) : null;
+    const consentSanteAt = profilActuel?.consentSanteAt ?? (consentSante ? new Date() : null);
+    if (contraintes && !consentSanteAt) {
+      res.status(400).json({
+        error:
+          "Cochez la case de consentement sous le champ des blessures pour que ces informations puissent être enregistrées.",
+      });
+      return;
+    }
     /*
      * Les deux intentions s'excluent : viser un temps, ou viser l'arrivée.
      * Garder un chrono sous une case « juste finir » cochée donnerait au coach
@@ -142,6 +143,9 @@ profileRouter.put(
       create: { ...data, userId: req.userId! },
       update: data,
     });
+    if (consentSanteAt && !profilActuel?.consentSanteAt) {
+      await journaliserConsentement(prisma, req.userId!, "sante", "donne", CONSENT_SANTE_VERSION);
+    }
 
     /*
      * Déclarer un jour indisponible doit libérer la séance déjà posée ce

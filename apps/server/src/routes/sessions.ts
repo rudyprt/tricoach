@@ -15,6 +15,7 @@ import { calculerRavitaillement, intensiteSeance } from "../lib/nutrition.js";
 import { chargerProfilRavito } from "../lib/nutritionDonnees.js";
 import { isPremium } from "../lib/subscription.js";
 import { addDays } from "../lib/week.js";
+import { santeAutorisee } from "../lib/consentSante.js";
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
@@ -85,6 +86,8 @@ const completeSchema = z.object({
    * ou on rallonge une séance pour mille raisons.
    */
   dureeReelleMin: z.number().int().min(1).max(1440, "Durée invalide.").nullable().optional(),
+  /** Case de consentement cochée sous le ressenti, quand il n'était pas encore donné. */
+  consentSante: z.boolean().optional(),
 });
 
 sessionsRouter.patch(
@@ -96,13 +99,23 @@ sessionsRouter.patch(
       return;
     }
 
+    /*
+     * Un ressenti parle souvent d'une douleur : c'est une donnée de santé, qui
+     * n'est enregistrée qu'avec le consentement de l'athlète.
+     */
+    if (parsed.data.ressenti?.trim()) {
+      if (!(await santeAutorisee(req.userId!, parsed.data.consentSante))) {
+        throw new HttpError(400, "Cochez la case de consentement pour que votre ressenti puisse être enregistré.");
+      }
+    }
+
     // La mise à jour porte sur l'identifiant ET le propriétaire : impossible de
     // modifier la séance d'un autre athlète, même en cas de course entre requêtes.
     const { count } = await prisma.session.updateMany({
       where: { id: req.params.id, userId: req.userId! },
       data: {
         status: parsed.data.status,
-        ressenti: parsed.data.ressenti,
+        ressenti: parsed.data.ressenti === undefined ? undefined : parsed.data.ressenti.trim() || null,
         // `undefined` laisse la valeur en place ; seul un null explicite
         // l'efface, ce qui distingue « je ne corrige pas » de « je reviens au
         // prévu ».
