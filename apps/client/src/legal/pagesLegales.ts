@@ -24,7 +24,7 @@ export interface PageLegale {
   html: (e?: Editeur) => string;
 }
 
-const VERSION = "2026-09";
+const VERSION = "2026-10";
 
 function esc(texte: string): string {
   return texte
@@ -127,11 +127,15 @@ function conditions(e: Editeur = EDITEUR): string {
     [
       section(
         "Objet",
-        `<p>TriCoach met à disposition un service de génération de programmes d'entraînement en triathlon, assisté par intelligence artificielle, ainsi qu'un suivi de séances et un espace de discussion avec un coach virtuel.</p>`
+        `<p>TriCoach met à disposition un service de génération de programmes d'entraînement en triathlon, assisté par intelligence artificielle, ainsi qu'un suivi de séances, un espace de discussion avec un coach virtuel et, selon l'offre, des analyses de course et des repères de nutrition autour de l'effort.</p>`
       ),
       section(
         "Éditeur",
         `<p>Le service est édité par ${champ(e.nom, "l'éditeur")}. ${lien("/mentions-legales", "Voir les mentions légales complètes")}.</p>`
+      ),
+      section(
+        "Accès au service",
+        `<p>Le service est réservé aux personnes <strong>âgées de 18 ans ou plus</strong>. En créant un compte, vous déclarez remplir cette condition.</p>`
       ),
       section(
         "Compte",
@@ -139,14 +143,27 @@ function conditions(e: Editeur = EDITEUR): string {
       ),
       section(
         "Offres et essai",
-        `<p>Chaque nouveau compte bénéficie d'une période d'essai de 14 jours donnant accès à la génération de programmes. Au-delà, l'accès aux fonctions de programmation nécessite une offre payante. Les tarifs affichés dans l'application s'entendent toutes taxes comprises, par mois.</p>
-<p>L'abonnement est mensuel et sans engagement de durée : il peut être résilié à tout moment depuis la page « Mon abonnement », la résiliation prenant effet à la fin de la période en cours.</p>
-<p>Conformément à l'article L221-28 du code de la consommation, vous disposez d'un délai de rétractation de 14 jours à compter de la souscription. En demandant l'accès immédiat au service, vous acceptez que son exécution commence avant la fin de ce délai.</p>`
+        `<p>Chaque nouveau compte bénéficie d'une période d'essai gratuite de 14 jours donnant accès aux fonctions de l'offre Standard. Au-delà, ces fonctions nécessitent une offre payante :</p>
+<ul>
+<li><strong>Standard</strong> — génération et ajustement des programmes hebdomadaires, suivi des séances, coach virtuel (nombre de messages quotidien limité).</li>
+<li><strong>Premium</strong> — l'offre Standard, plus un quota de messages plus élevé, l'analyse des courses disputées, la répartition du temps par zone, la détection de surentraînement et la nutrition d'entraînement et de course.</li>
+</ul>
+<p>Les tarifs affichés dans l'application s'entendent toutes taxes comprises, par mois. Le contenu de chaque offre est celui décrit sur la page « Mon abonnement » au moment de la souscription.</p>
+<p><strong>Le paiement en ligne n'est pas encore ouvert.</strong> Lorsqu'il le sera, il sera opéré par la société Stripe, et des conditions générales de vente préciseront les modalités de paiement, de renouvellement et de résiliation avant toute souscription.</p>`
+      ),
+      section(
+        "Droit de rétractation",
+        `<p>Conformément à l'article L221-18 du code de la consommation, vous disposerez d'un délai de 14 jours à compter de la souscription d'un abonnement pour vous rétracter. Si vous demandez expressément l'accès immédiat au service, vous serez redevable, en cas de rétractation, d'un montant proportionnel au service fourni jusqu'à celle-ci (article L221-25).</p>`
       ),
       section(
         "Avertissement — santé",
-        `<p class="fort">Les programmes proposés sont générés automatiquement à partir des informations que vous déclarez. Ils ne constituent ni un avis médical, ni un diagnostic, ni une prescription. Ils ne remplacent pas l'avis d'un médecin, d'un kinésithérapeute ou d'un entraîneur diplômé.</p>
-<p class="fort">Consultez un médecin avant de reprendre ou d'intensifier une activité sportive, en particulier en cas de douleur, de blessure, de pathologie connue ou de reprise après une interruption prolongée. Interrompez toute séance en cas de douleur inhabituelle.</p>`
+        `<p class="fort">Les programmes, conseils du coach, analyses de course et repères de nutrition sont générés automatiquement à partir des informations que vous déclarez. Ils ne constituent ni un avis médical ou diététique, ni un diagnostic, ni une prescription. Ils ne remplacent pas l'avis d'un médecin, d'un kinésithérapeute, d'un diététicien ou d'un entraîneur diplômé.</p>
+<p class="fort">Consultez un médecin avant de reprendre ou d'intensifier une activité sportive, en particulier en cas de douleur, de blessure, de pathologie connue, de trouble alimentaire ou de reprise après une interruption prolongée. Interrompez toute séance en cas de douleur inhabituelle.</p>`
+      ),
+      section(
+        "Contenus que vous envoyez",
+        `<p>Vous pouvez transmettre au service des fichiers de montre, des captures d'écran et des photos. N'envoyez que des contenus qui vous concernent et que vous avez le droit de partager ; évitez d'y faire figurer des tiers. Les captures et photos sont lues pour en extraire les informations utiles, puis ne sont pas conservées.</p>
+<p>Le lien de partage d'une semaine rend votre programme consultable, sans compte, par toute personne à qui vous le transmettez, jusqu'à son expiration. Votre ressenti et votre journal de nutrition n'y figurent pas.</p>`
       ),
       section(
         "Limites du service",
@@ -155,6 +172,10 @@ function conditions(e: Editeur = EDITEUR): string {
       section(
         "Résiliation",
         `<p>Vous pouvez ${lien("/compte#supprimer", "supprimer votre compte")} à tout moment. La suppression est définitive et entraîne l'effacement de vos données, dans les conditions décrites par la ${lien("/confidentialite", "politique de confidentialité")}.</p>`
+      ),
+      section(
+        "Évolution des conditions",
+        `<p>Ces conditions peuvent évoluer avec le service. Toute nouvelle version vous est signalée dans l'application, et votre accord vous est redemandé.</p>`
       ),
     ].join("\n")
   );
@@ -180,31 +201,44 @@ function confidentialite(e: Editeur = EDITEUR): string {
         "Données collectées",
         `<p>Le service enregistre uniquement les données que vous fournissez ou qui découlent de votre usage :</p>
 <ul>
-<li><strong>Compte</strong> — adresse e-mail, nom d'utilisateur, photo de profil si vous en ajoutez une, fuseau horaire, mot de passe (conservé sous forme chiffrée irréversible).</li>
-<li><strong>Profil sportif</strong> — objectif et sa date, temps de référence par discipline, FTP, heures disponibles, zones d'entraînement.</li>
-<li><strong>Données de santé déclarées</strong> — blessures, douleurs et contraintes que vous signalez, ressenti après chaque séance. Ces informations sont sensibles : elles ne sont enregistrées que parce que vous les saisissez, et uniquement pour adapter vos programmes.</li>
-<li><strong>Entraînement</strong> — programmes générés, séances, statut et historique.</li>
-<li><strong>Échanges</strong> — messages envoyés au coach virtuel et ses réponses.</li>
-<li><strong>Usage</strong> — date de dernière connexion et volume de sollicitation du modèle, à des fins de suivi technique et de facturation interne.</li>
+<li><strong>Compte</strong> — adresse e-mail, nom d'utilisateur, photo de profil si vous en ajoutez une, fuseau horaire, mot de passe (conservé sous forme chiffrée irréversible), date et version de votre accord aux présentes conditions.</li>
+<li><strong>Profil sportif</strong> — objectif et sa date, temps visé, temps de référence par discipline et fréquences cardiaques relevées sur ces courses, valeurs de seuil (FTP, allure, FC), heures et créneaux disponibles, matériel, zones d'entraînement.</li>
+<li><strong>Données de santé déclarées</strong> — blessures, douleurs et contraintes que vous signalez, interruptions d'entraînement et leur motif, ressenti après chaque séance.</li>
+<li><strong>Données physiologiques et de nutrition</strong> (offre Premium) — poids, tests de sudation (pesées avant et après une séance), préférences de ravitaillement, journal de ce que vous prenez pendant l'effort et de votre tolérance digestive.</li>
+<li><strong>Entraînement</strong> — programmes générés, séances, statut, durée réelle, activités importées (fichiers de montre, Strava si vous le connectez, valeurs lues sur vos captures d'écran : durée, distance, allure, fréquence cardiaque, puissance, dénivelé), tests de terrain.</li>
+<li><strong>Courses</strong> — calendrier de vos courses, plans de course, résultats que vous saisissez (temps, classement, conditions, récit) et analyses produites.</li>
+<li><strong>Échanges avec le coach</strong> — messages, réponses, résumé automatique des échanges plus anciens, consignes que le coach retient pour vos programmes. Les photos jointes à un message sont transmises au modèle pour être lues, puis ne sont pas conservées : seule la mention de leur envoi reste dans le fil.</li>
+<li><strong>Notifications</strong> — si vous les activez, l'adresse technique d'abonnement de votre navigateur.</li>
+<li><strong>Usage</strong> — date de dernière connexion et volume de sollicitation du modèle, à des fins de suivi technique et de maîtrise des coûts.</li>
 </ul>
-<p>Aucun traceur publicitaire n'est utilisé. Le seul cookie déposé est celui de votre session, nécessaire au fonctionnement du service.</p>`
+<p>Aucun traceur publicitaire ni outil de mesure d'audience n'est utilisé. Le seul cookie déposé est celui de votre session, nécessaire au fonctionnement du service ; l'application conserve aussi dans votre navigateur quelques préférences d'affichage.</p>`
       ),
       section(
         "Finalités et bases légales",
         `<ul>
-<li>Fournir le service et générer vos programmes — exécution du contrat.</li>
+<li>Fournir le service, générer vos programmes, analyses et repères — exécution du contrat.</li>
 <li>Traiter vos données de santé déclarées — votre consentement explicite, donné par une case distincte sous le champ des blessures, et retirable à tout moment en vidant ce champ. Sans ce consentement, ces informations ne sont pas enregistrées.</li>
+<li>Traiter vos données physiologiques et de nutrition — votre consentement, exprimé en les saisissant vous-même : elles sont facultatives, et vous pouvez les modifier ou les effacer à tout moment depuis la page Nutrition.</li>
 <li>Sécuriser les accès et prévenir les abus — intérêt légitime.</li>
 <li>Gérer les abonnements — exécution du contrat et obligations comptables.</li>
 </ul>`
       ),
       section(
         "Destinataires",
-        `<p>Vos données ne sont ni vendues ni cédées. Elles sont transmises aux seuls prestataires techniques nécessaires au fonctionnement :</p>
+        `<p>Vos données ne sont ni vendues ni cédées. Elles sont transmises aux seuls prestataires techniques nécessaires au fonctionnement, chacun pour ce qui le concerne :</p>
 <ul>
-<li><strong>Anthropic</strong> — les éléments de votre profil et de votre historique utiles à la génération sont transmis au modèle Claude pour produire vos programmes et les réponses du coach.</li>
-<li><strong>Hébergeur</strong> — ${champ(e.hebergeur, "hébergeur à préciser")}.</li>
+<li><strong>Anthropic</strong> (États-Unis) — les éléments de votre profil, de votre historique et de vos messages utiles à la réponse, ainsi que les captures et photos que vous envoyez, sont transmis au modèle Claude pour produire vos programmes, analyses et réponses du coach.</li>
+<li><strong>Hébergement de l'application</strong> — ${champ(e.hebergeur, "hébergeur à préciser")}.</li>
+<li><strong>Base de données</strong> — Neon, qui héberge la base où sont enregistrées vos données.</li>
+<li><strong>Envoi d'e-mails</strong> — le prestataire d'envoi des e-mails du service (vérification d'adresse, réinitialisation du mot de passe, rappels), qui reçoit votre adresse e-mail et le contenu du message.</li>
+<li><strong>Strava</strong> — uniquement si vous connectez votre compte : TriCoach y lit vos activités.</li>
+<li><strong>Services de notification</strong> de votre navigateur ou de votre téléphone — uniquement si vous activez les notifications.</li>
+<li><strong>Stripe</strong> — lorsque le paiement en ligne sera ouvert, pour encaisser les abonnements : vos coordonnées de paiement sont saisies chez Stripe et ne transitent pas par TriCoach.</li>
 </ul>`
+      ),
+      section(
+        "Transferts hors de l'Union européenne",
+        `<p>Certains de ces prestataires, dont Anthropic et l'hébergeur de l'application, sont établis aux États-Unis. Ces transferts sont encadrés par les clauses contractuelles types de la Commission européenne ou par le cadre de protection des données UE–États-Unis (Data Privacy Framework) auquel ces prestataires adhèrent.</p>`
       ),
       // L'application supprime réellement les comptes inactifs : la page doit
       // le dire, faute de quoi l'effacement reposerait sur une règle que
@@ -213,11 +247,11 @@ function confidentialite(e: Editeur = EDITEUR): string {
         "Durée de conservation",
         `<p>Vos données sont conservées tant que votre compte est actif. Elles sont effacées dans les trente jours suivant sa suppression.</p>
 <p>Un compte resté <strong>deux ans sans connexion</strong> est supprimé automatiquement, avec l'ensemble de son historique. Un e-mail vous prévient trente jours avant : il suffit de vous reconnecter une fois pour conserver votre compte.</p>
-<p>Les jetons de réinitialisation et de vérification expirent automatiquement.</p>`
+<p>Les captures d'écran et photos ne sont pas conservées après leur lecture. Effacer la conversation avec le coach efface aussi son résumé. Les liens de partage expirent automatiquement, tout comme les jetons de réinitialisation et de vérification.</p>`
       ),
       section(
         "Vos droits",
-        `<p>Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité. Deux d'entre eux s'exercent directement dans l'application, sans démarche :</p>
+        `<p>Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité, et du droit de retirer votre consentement à tout moment. Deux d'entre eux s'exercent directement dans l'application, sans démarche :</p>
 <ul>
 <li><strong>Portabilité et accès</strong> — téléchargez l'intégralité de vos données au format JSON depuis ${lien("/compte", "Mon compte")}.</li>
 <li><strong>Effacement</strong> — ${lien("/compte#supprimer", "supprimez définitivement votre compte")} et toutes vos données.</li>
@@ -285,7 +319,7 @@ function mentionsLegales(e: Editeur = EDITEUR): string {
       ),
       section(
         "Médiation de la consommation",
-        `<p>En cas de litige non résolu avec le service, vous pouvez recourir gratuitement à un médiateur de la consommation, ou à la plateforme européenne de règlement en ligne des litiges.</p>`
+        `<p>En cas de litige non résolu avec le service, vous pouvez recourir gratuitement à un médiateur de la consommation. Le médiateur compétent sera désigné ici avant l'ouverture du paiement en ligne.</p>`
       ),
       section(
         "Documents liés",

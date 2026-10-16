@@ -3,7 +3,7 @@
  * L'incrémenter oblige les athlètes à re-consentir : une modification
  * substantielle des conditions ne peut pas s'appliquer sans nouvel accord.
  */
-export const CONSENT_VERSION = "2026-09";
+export const CONSENT_VERSION = "2026-10";
 
 export interface ConsentState {
   consentAcceptedAt: Date | null;
