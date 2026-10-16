@@ -8,6 +8,7 @@ import { RavitaillementCard } from "./RavitaillementCard";
 import { CaptureSeance } from "./CaptureSeance";
 import { FelicitationsSeance } from "./FelicitationsSeance";
 import { ConsentementSante } from "./ConsentementSante";
+import { useConsentementSante } from "../lib/useConsentementSante";
 import { FaPlay, FaDownload, FaUpload } from "react-icons/fa6";
 
 const SPORT_ICON: Record<Session["sport"], string> = {
@@ -136,23 +137,11 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
    * consentement, la case s'affiche sous le champ ; null = état inconnu, le
    * serveur tranche.
    */
-  const [consentSante, setConsentSante] = useState<boolean | null>(null);
+  const consentInitial = useConsentementSante(session.sport !== "repos");
+  const [consentDonne, setConsentDonne] = useState(false);
+  const consentSante = consentDonne || consentInitial;
   const [caseSante, setCaseSante] = useState(false);
   const [erreurRessenti, setErreurRessenti] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (session.sport === "repos") return;
-    let actif = true;
-    api
-      .get<{ consenti: boolean }>("/privacy/sante")
-      .then(({ data }) => {
-        if (actif && typeof data?.consenti === "boolean") setConsentSante(data.consenti);
-      })
-      .catch(() => undefined);
-    return () => {
-      actif = false;
-    };
-  }, [session.sport]);
 
   /** Le ressenti à envoyer ; false si la case de consentement manque. */
   async function ressentiAEnvoyer(): Promise<string | undefined | false> {
@@ -165,7 +154,7 @@ export function SessionDetailModal({ session, onClose, onUpdate, allSessions, on
     }
     try {
       await api.post("/privacy/sante");
-      setConsentSante(true);
+      setConsentDonne(true);
       return texte;
     } catch (err) {
       setErreurRessenti(apiErrorMessage(err, "Consentement impossible à enregistrer."));

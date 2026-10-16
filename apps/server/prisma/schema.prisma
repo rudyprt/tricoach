@@ -75,6 +75,7 @@ model User {
   races                  Race[]
   consignesCoach         ConsigneCoach[]
   resumeChat             ResumeChat?
+  consentements          ConsentementJournal[]
   profilNutrition        ProfilNutrition?
   testsSudation          TestSudation[]
 
@@ -644,4 +645,23 @@ model TestSudation {
   createdAt    DateTime @default(now())
 
   @@index([userId, date])
+}
+
+/// Preuve des consentements : chaque accord et chaque retrait, horodaté, avec
+/// la version du texte affiché. Le RGPD demande de pouvoir démontrer qu'un
+/// consentement a été donné ; une seule date sur le profil, écrasée au
+/// prochain accord, ne le permettait pas.
+model ConsentementJournal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "sante" (données de santé) | "conditions" (CGU et politique de confidentialité)
+  objet     String
+  /// "donne" | "retire"
+  action    String
+  /// Version du texte accepté ; voir TEXTES_CONSENTEMENT_SANTE et CONSENT_VERSION.
+  version   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, objet, createdAt])
 }

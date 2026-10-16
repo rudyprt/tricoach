@@ -11,6 +11,7 @@ import { precisionDesZones } from "../lib/precisionZones.js";
 import { startOfWeek, safeTimeZone } from "../lib/week.js";
 import { disponibilitesSchema, materielSchema, parseDisponibilites } from "../lib/disponibilites.js";
 import { libererJoursIndisponibles } from "../lib/reposDeclare.js";
+import { CONSENT_SANTE_VERSION, journaliserConsentement } from "../lib/consentSante.js";
 
 export const profileRouter = Router();
 profileRouter.use(requireAuth);
@@ -142,6 +143,9 @@ profileRouter.put(
       create: { ...data, userId: req.userId! },
       update: data,
     });
+    if (consentSanteAt && !profilActuel?.consentSanteAt) {
+      await journaliserConsentement(prisma, req.userId!, "sante", "donne", CONSENT_SANTE_VERSION);
+    }
 
     /*
      * Déclarer un jour indisponible doit libérer la séance déjà posée ce

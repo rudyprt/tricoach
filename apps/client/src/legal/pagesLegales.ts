@@ -203,11 +203,11 @@ function confidentialite(e: Editeur = EDITEUR): string {
 <ul>
 <li><strong>Compte</strong> — adresse e-mail, nom d'utilisateur, photo de profil si vous en ajoutez une, fuseau horaire, mot de passe (conservé sous forme chiffrée irréversible), date et version de votre accord aux présentes conditions.</li>
 <li><strong>Profil sportif</strong> — objectif et sa date, temps visé, temps de référence par discipline et fréquences cardiaques relevées sur ces courses, valeurs de seuil (FTP, allure, FC), heures et créneaux disponibles, matériel, zones d'entraînement.</li>
-<li><strong>Données de santé déclarées</strong> — blessures, douleurs et contraintes que vous signalez, interruptions d'entraînement et leur motif, ressenti après chaque séance.</li>
+<li><strong>Données de santé déclarées</strong> — blessures, douleurs et contraintes que vous signalez, motif médical de vos interruptions d'entraînement, ressenti après chaque séance et récit de vos courses. Elles ne sont enregistrées qu'avec votre consentement explicite, dont nous gardons la preuve : date, heure et version du texte accepté, puis date du retrait s'il a lieu.</li>
 <li><strong>Données physiologiques et de nutrition</strong> (offre Premium) — poids, tests de sudation (pesées avant et après une séance), préférences de ravitaillement, journal de ce que vous prenez pendant l'effort et de votre tolérance digestive.</li>
 <li><strong>Entraînement</strong> — programmes générés, séances, statut, durée réelle, activités importées (fichiers de montre, Strava si vous le connectez, valeurs lues sur vos captures d'écran : durée, distance, allure, fréquence cardiaque, puissance, dénivelé), tests de terrain.</li>
 <li><strong>Courses</strong> — calendrier de vos courses, plans de course, résultats que vous saisissez (temps, classement, conditions, récit) et analyses produites.</li>
-<li><strong>Échanges avec le coach</strong> — messages, réponses, résumé automatique des échanges plus anciens, consignes que le coach retient pour vos programmes. Les photos jointes à un message sont transmises au modèle pour être lues, puis ne sont pas conservées : seule la mention de leur envoi reste dans le fil.</li>
+<li><strong>Échanges avec le coach</strong> — messages, réponses, résumé automatique des échanges plus anciens, consignes que le coach retient pour vos programmes. Les photos jointes à un message sont transmises au modèle pour être lues, puis ne sont pas conservées : seule la mention de leur envoi reste dans le fil. Ce que vous écrivez au coach peut parler de votre santé (« j'ai mal au genou ») : l'historique est conservé jusqu'à ce que vous l'effaciez depuis le chat, que vous retiriez votre consentement aux données de santé, ou que vous supprimiez votre compte.</li>
 <li><strong>Notifications</strong> — si vous les activez, l'adresse technique d'abonnement de votre navigateur.</li>
 <li><strong>Usage</strong> — date de dernière connexion et volume de sollicitation du modèle, à des fins de suivi technique et de maîtrise des coûts.</li>
 </ul>
@@ -217,7 +217,7 @@ function confidentialite(e: Editeur = EDITEUR): string {
         "Finalités et bases légales",
         `<ul>
 <li>Fournir le service, générer vos programmes, analyses et repères — exécution du contrat.</li>
-<li>Traiter vos données de santé déclarées — votre consentement explicite, donné par une case distincte sous le champ des blessures ou du ressenti. Sans ce consentement, ces informations ne sont pas enregistrées et le service reste utilisable. Vous pouvez le retirer à tout moment depuis « Mon compte » : les données de santé déjà enregistrées sont alors effacées.</li>
+<li>Traiter vos données de santé déclarées — votre consentement explicite, donné par une case distincte sous le champ des blessures ou du ressenti. Sans ce consentement, ces informations ne sont pas enregistrées et le service reste utilisable. Vous pouvez le retirer à tout moment depuis « Mon compte » : les données de santé déjà enregistrées sont alors effacées, avec l'historique du chat et les consignes que le coach en avait retenues, et plus aucune n'est transmise au modèle.</li>
 <li>Traiter vos données physiologiques et de nutrition — votre consentement, exprimé en les saisissant vous-même : elles sont facultatives, et vous pouvez les modifier ou les effacer à tout moment depuis la page Nutrition.</li>
 <li>Sécuriser les accès et prévenir les abus — intérêt légitime.</li>
 <li>Gérer les abonnements — exécution du contrat et obligations comptables.</li>
@@ -247,7 +247,7 @@ function confidentialite(e: Editeur = EDITEUR): string {
         "Durée de conservation",
         `<p>Vos données sont conservées tant que votre compte est actif. Elles sont effacées dans les trente jours suivant sa suppression.</p>
 <p>Un compte resté <strong>deux ans sans connexion</strong> est supprimé automatiquement, avec l'ensemble de son historique. Un e-mail vous prévient trente jours avant : il suffit de vous reconnecter une fois pour conserver votre compte.</p>
-<p>Les captures d'écran et photos ne sont pas conservées après leur lecture. Effacer la conversation avec le coach efface aussi son résumé. Les liens de partage expirent automatiquement, tout comme les jetons de réinitialisation et de vérification.</p>`
+<p>Les captures d'écran et photos ne sont pas conservées après leur lecture. Effacer la conversation avec le coach efface aussi son résumé. Retirer le consentement aux données de santé efface ces données et tout l'historique du chat. La preuve de vos consentements (dates et versions acceptées) est conservée tant que le compte existe. Les liens de partage expirent automatiquement, tout comme les jetons de réinitialisation et de vérification.</p>`
       ),
       section(
         "Vos droits",
@@ -255,7 +255,7 @@ function confidentialite(e: Editeur = EDITEUR): string {
 <ul>
 <li><strong>Portabilité et accès</strong> — téléchargez l'intégralité de vos données au format JSON depuis ${lien("/compte", "Mon compte")}.</li>
 <li><strong>Effacement</strong> — ${lien("/compte#supprimer", "supprimez définitivement votre compte")} et toutes vos données.</li>
-<li><strong>Retrait du consentement santé</strong> — depuis ${lien("/compte", "Mon compte")}, retirez-le : vos blessures, douleurs et ressentis sont aussitôt effacés.</li>
+<li><strong>Retrait du consentement santé</strong> — depuis ${lien("/compte", "Mon compte")}, retirez-le : vos blessures, douleurs, ressentis et l'historique du chat sont aussitôt effacés.</li>
 </ul>
 <p>Vous pouvez également introduire une réclamation auprès de la CNIL (<span class="fort">www.cnil.fr</span>).</p>
 <p>Pour les autres droits, écrivez à ${champ(e.email, "l'adresse de contact de l'éditeur")}.</p>`

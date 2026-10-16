@@ -15,7 +15,7 @@ import { calculerRavitaillement, intensiteSeance } from "../lib/nutrition.js";
 import { chargerProfilRavito } from "../lib/nutritionDonnees.js";
 import { isPremium } from "../lib/subscription.js";
 import { addDays } from "../lib/week.js";
-import { consentementSante, donnerConsentementSante } from "../lib/consentSante.js";
+import { santeAutorisee } from "../lib/consentSante.js";
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
@@ -104,9 +104,7 @@ sessionsRouter.patch(
      * n'est enregistrée qu'avec le consentement de l'athlète.
      */
     if (parsed.data.ressenti?.trim()) {
-      const consenti =
-        (await consentementSante(req.userId!)) ?? (parsed.data.consentSante ? await donnerConsentementSante(req.userId!) : null);
-      if (!consenti) {
+      if (!(await santeAutorisee(req.userId!, parsed.data.consentSante))) {
         throw new HttpError(400, "Cochez la case de consentement pour que votre ressenti puisse être enregistré.");
       }
     }

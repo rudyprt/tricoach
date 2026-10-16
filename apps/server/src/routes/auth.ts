@@ -16,6 +16,7 @@ import { syncBootstrapAdmin } from "../lib/adminBootstrap.js";
 import { CONSENT_VERSION, hasCurrentConsent } from "../lib/consent.js";
 import { clearFailedLogins, isLocked, minutesUntilUnlock, recordFailedLogin } from "../lib/loginProtection.js";
 import { sendEmailVerification } from "./privacy.js";
+import { journaliserConsentement } from "../lib/consentSante.js";
 
 export const authRouter = Router();
 
@@ -144,6 +145,7 @@ authRouter.post(
       },
       select: USER_SELECT,
     });
+    await journaliserConsentement(prisma, user.id, "conditions", "donne", CONSENT_VERSION);
 
     // L'envoi ne doit pas faire échouer l'inscription : l'athlète peut demander
     // un nouvel envoi depuis son compte.

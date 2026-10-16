@@ -11,6 +11,8 @@ import {
 } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Spinner } from "./Spinner";
+import { useConsentementSante } from "../lib/useConsentementSante";
+import { ConsentementSante } from "./ConsentementSante";
 
 const VIDE: ResultatCourse = {
   natation: "",
@@ -59,6 +61,8 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
   const [fc, setFc] = useState({ natation: "", velo: "", course: "" });
   const [distances, setDistances] = useState({ natationM: "", veloKm: "", courseKm: "" });
   const [edition, setEdition] = useState(false);
+  const consenti = useConsentementSante();
+  const [caseSante, setCaseSante] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,6 +131,7 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
         fcNatation: nombreOuNull(fc.natation),
         fcVelo: nombreOuNull(fc.velo),
         fcCourse: nombreOuNull(fc.course),
+        ...(caseSante ? { consentSante: true } : {}),
       });
       setDonnees(data);
       setEdition(false);
@@ -298,6 +303,14 @@ export function AnalyseCourseCard({ course, onAnalysee }: { course: Course; onAn
               className={`mt-0.5 ${champ}`}
             />
           </label>
+          {consenti === false && saisie.ressenti.trim() !== "" && (
+            <div>
+              <ConsentementSante coche={caseSante} onChange={setCaseSante} />
+              {!caseSante && (
+                <p className="mt-1 text-xs text-tres-doux">Sans cette case, ce récit n'est ni enregistré ni analysé.</p>
+              )}
+            </div>
+          )}
 
           <button
             type="submit"

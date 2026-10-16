@@ -6,7 +6,12 @@ import { Spinner } from "./Spinner";
 interface EtatSante {
   consenti: boolean;
   depuis: string | null;
+  version?: string | null;
+  retireLe?: string | null;
 }
+
+const dateHeure = (iso: string) =>
+  new Date(iso).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
 
 /**
  * Consentement aux données de santé, depuis « Mon compte ».
@@ -14,7 +19,8 @@ interface EtatSante {
  * La politique de confidentialité promet que ce consentement se retire ici et
  * que les données déjà enregistrées sont alors effacées : blessures et
  * douleurs du profil, ressentis après séance et après course, motif médical
- * des interruptions. Le geste demande une confirmation, puisqu'il ne se
+ * des interruptions, et l'historique du chat avec le coach, où l'athlète a pu
+ * parler de ses douleurs. Le geste demande une confirmation, puisqu'il ne se
  * rattrape pas.
  */
 export function DonneesSanteCard() {
@@ -42,9 +48,9 @@ export function DonneesSanteCard() {
     setError(null);
     try {
       const { data } = await api.delete<EtatSante>("/privacy/sante");
-      setEtat({ consenti: data.consenti, depuis: data.depuis });
+      setEtat({ consenti: data.consenti, depuis: data.depuis, retireLe: data.retireLe ?? null });
       setConfirmer(false);
-      setMessage("Consentement retiré : vos données de santé ont été effacées.");
+      setMessage("Consentement retiré : vos données de santé et l'historique du chat ont été effacés.");
     } catch (err) {
       setError(apiErrorMessage(err, "Impossible de retirer le consentement."));
     } finally {
@@ -63,8 +69,9 @@ export function DonneesSanteCard() {
       ) : etat.consenti ? (
         <>
           <p className="mb-3 text-sm text-doux">
-            Vous avez accepté le {new Date(etat.depuis!).toLocaleDateString("fr-FR")} que TriCoach enregistre vos
-            blessures, douleurs et ressentis pour adapter vos programmes.
+            Vous avez accepté le {dateHeure(etat.depuis!)}
+            {etat.version ? ` (texte version ${etat.version})` : ""} que TriCoach enregistre vos blessures, douleurs
+            et ressentis pour adapter vos programmes.
           </p>
           {!confirmer ? (
             <button
@@ -79,8 +86,10 @@ export function DonneesSanteCard() {
           ) : (
             <div className="space-y-2 rounded-xl border border-red-900/60 bg-red-950/20 p-3">
               <p className="text-sm text-zinc-200">
-                Vos blessures, douleurs, ressentis après séance et après course, et le motif médical de vos
-                interruptions seront effacés définitivement. Vos programmes et vos séances restent.
+                Seront effacés définitivement : vos blessures et douleurs, vos ressentis après séance et après
+                course (et l'analyse de course qui en découle), le motif médical de vos interruptions, et tout
+                l'historique du chat avec le coach, avec les consignes qu'il en avait retenues. Vos programmes et vos
+                séances restent.
               </p>
               <div className="flex gap-2">
                 <button
@@ -103,8 +112,9 @@ export function DonneesSanteCard() {
         </>
       ) : (
         <p className="text-sm text-doux">
-          Vous n'avez pas donné votre consentement : aucune donnée de santé n'est enregistrée. Vous pouvez le donner
-          sous le champ des blessures ou du ressenti d'une séance.
+          {etat.retireLe ? `Consentement retiré le ${dateHeure(etat.retireLe)}. ` : "Vous n'avez pas donné votre consentement : "}
+          aucune donnée de santé n'est enregistrée. Vous pouvez le donner sous le champ des blessures ou du ressenti
+          d'une séance.
         </p>
       )}
       {message && (

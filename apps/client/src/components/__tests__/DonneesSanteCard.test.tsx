@@ -23,7 +23,7 @@ describe("données de santé dans Mon compte", () => {
 
   it("retire le consentement après confirmation", async () => {
     get.mockResolvedValue({ data: { consenti: true, depuis: "2026-09-01T10:00:00.000Z" } });
-    del.mockResolvedValue({ data: { consenti: false, depuis: null } });
+    del.mockResolvedValue({ data: { consenti: false, depuis: null, retireLe: "2026-10-17T09:00:00.000Z" } });
     render(<DonneesSanteCard />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Retirer mon consentement" }));
@@ -31,8 +31,9 @@ describe("données de santé dans Mon compte", () => {
     fireEvent.click(screen.getByRole("button", { name: /Retirer et effacer/ }));
 
     await waitFor(() => expect(del).toHaveBeenCalledWith("/privacy/sante"));
-    expect(await screen.findByRole("status")).toHaveTextContent("données de santé ont été effacées");
+    expect(await screen.findByRole("status")).toHaveTextContent("données de santé et l'historique du chat ont été effacés");
     expect(screen.queryByRole("button", { name: "Retirer mon consentement" })).toBeNull();
+    expect(screen.getByText(/Consentement retiré le/)).toBeInTheDocument();
   });
 
   it("dit qu'aucune donnée de santé n'est enregistrée sans consentement", async () => {

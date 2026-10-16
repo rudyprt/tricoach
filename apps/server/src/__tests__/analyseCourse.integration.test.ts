@@ -92,6 +92,8 @@ describeIfDb("analyse de course", () => {
         objectifDate: new Date("2027-06-01T00:00:00.000Z"),
         heuresSemaine: 8,
         tempsCourse: "10km en 45min",
+        // Le récit de course est une donnée de santé : analysé avec l'accord de l'athlète.
+        consentSanteAt: new Date(),
       },
     });
     const date = new Date(`${new Date(Date.now() - ilYAJours * 86400000).toISOString().slice(0, 10)}T00:00:00.000Z`);
@@ -125,6 +127,18 @@ describeIfDb("analyse de course", () => {
     expect(relue.body.resultat.velo).toBe("1:10:00");
     expect((await agent.get("/api/races")).body.courses[0].analysee).toBe(true);
     expect(await prisma.aiCall.count({ where: { kind: "analyse_course" } })).toBe(1);
+  });
+
+  it("n'envoie ni ne garde le récit de course sans consentement santé", async () => {
+    const { agent, user, course } = await athlete("sans-recit@example.com", "premium");
+    await prisma.athleteProfile.update({ where: { userId: user.id }, data: { consentSanteAt: null } });
+    askClaude.mockResolvedValue(reponse(JSON.stringify(ANALYSE)));
+
+    expect((await agent.post(`/api/races/${course.id}/analyse`).send(RESULTAT)).status).toBe(200);
+
+    expect(askClaude.mock.calls[0][0].messages[0].content as string).not.toContain("Crampes");
+    const enBase = await prisma.race.findUniqueOrThrow({ where: { id: course.id } });
+    expect((enBase.resultat as { ressenti: string }).ressenti).toBe("");
   });
 
   it("analyse aussi une épreuve de course à pied seule", async () => {

@@ -10,7 +10,14 @@ import { computeTrainingZones } from "../lib/training.js";
 import { parseZoneOverrides } from "../lib/zoneOverrides.js";
 import { CONSENT_VERSION } from "../lib/consent.js";
 import { stripe } from "../lib/stripe.js";
-import { consentementSante, donnerConsentementSante, retirerConsentementSante } from "../lib/consentSante.js";
+import {
+  CONSENT_SANTE_VERSION,
+  consentementSante,
+  donnerConsentementSante,
+  historiqueConsentements,
+  journaliserConsentement,
+  retirerConsentementSante,
+} from "../lib/consentSante.js";
 import { passwordResetRateLimit } from "../lib/rateLimit.js";
 import { emailVerificationMail, sendMail } from "../lib/mailer.js";
 import { isProduction } from "../lib/env.js";
@@ -107,6 +114,7 @@ privacyRouter.post(
       data: { consentAcceptedAt: new Date(), consentVersion: CONSENT_VERSION },
       select: { consentAcceptedAt: true, consentVersion: true },
     });
+    await journaliserConsentement(prisma, req.userId!, "conditions", "donne", CONSENT_VERSION);
     res.json(user);
   })
 );
@@ -145,7 +153,7 @@ privacyRouter.get(
     });
     if (!user) throw new HttpError(404, "Utilisateur introuvable.");
 
-    const [plans, sessions, messages, aiCalls, consignes, resumeConversation, courses, profilNutrition, testsSudation] = await Promise.all([
+    const [plans, sessions, messages, aiCalls, consignes, resumeConversation, courses, profilNutrition, testsSudation, consentements] = await Promise.all([
       prisma.trainingPlan.findMany({
         where: { userId: user.id },
         orderBy: { weekStart: "asc" },
@@ -183,6 +191,7 @@ privacyRouter.get(
       }),
       prisma.profilNutrition.findUnique({ where: { userId: user.id } }),
       prisma.testSudation.findMany({ where: { userId: user.id }, orderBy: { date: "asc" } }),
+      historiqueConsentements(user.id),
     ]);
 
     const zones = user.profile
@@ -212,6 +221,7 @@ privacyRouter.get(
           nutrition: { profil: profilNutrition, testsSudation },
           consignesAuCoach: consignes,
           appelsAuCoachIa: aiCalls,
+          consentements,
         },
         null,
         2
@@ -293,8 +303,16 @@ privacyRouter.get(
   "/sante",
   requireAuth,
   ah(async (req: AuthedRequest, res) => {
-    const depuis = await consentementSante(req.userId!);
-    res.json({ consenti: Boolean(depuis), depuis: depuis?.toISOString() ?? null });
+    const [depuis, historique] = await Promise.all([consentementSante(req.userId!), historiqueConsentements(req.userId!)]);
+    const sante = historique.filter((h) => h.objet === "sante");
+    res.json({
+      consenti: Boolean(depuis),
+      depuis: depuis?.toISOString() ?? null,
+      version: depuis ? (sante.find((h) => h.action === "donne")?.version ?? null) : null,
+      versionActuelle: CONSENT_SANTE_VERSION,
+      retireLe: sante.find((h) => h.action === "retire")?.createdAt.toISOString() ?? null,
+      historique: sante.map((h) => ({ action: h.action, version: h.version, le: h.createdAt.toISOString() })),
+    });
   })
 );
 
@@ -314,7 +332,7 @@ privacyRouter.delete(
   requireAuth,
   ah(async (req: AuthedRequest, res) => {
     const efface = await retirerConsentementSante(req.userId!);
-    res.json({ consenti: false, depuis: null, efface });
+    res.json({ consenti: false, depuis: null, retireLe: new Date().toISOString(), efface });
   })
 );
 

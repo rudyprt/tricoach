@@ -135,4 +135,38 @@ describeIfDb("consentement aux données de santé", () => {
     const p = await prisma.athleteProfile.findUnique({ where: { userId: user.id } });
     expect(p?.consentSanteAt).not.toBeNull();
   });
+
+  it("garde la preuve : date, heure et version de l'accord, puis date du retrait", async () => {
+    const { agent, user } = await athlete("preuve@example.com");
+    await agent.delete("/api/privacy/sante").expect(200);
+
+    const journal = await prisma.consentementJournal.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } });
+    expect(journal.map((j) => [j.objet, j.action, j.version])).toEqual([
+      ["conditions", "donne", "2026-10"],
+      ["sante", "donne", "2026-10"],
+      ["sante", "retire", "2026-10"],
+    ]);
+
+    const etat = await agent.get("/api/privacy/sante").expect(200);
+    expect(etat.body.consenti).toBe(false);
+    expect(etat.body.retireLe).not.toBeNull();
+    expect(etat.body.historique.map((h: { action: string }) => h.action)).toEqual(["retire", "donne"]);
+
+    const exportJson = JSON.parse((await agent.get("/api/privacy/export").buffer(true)).text);
+    expect(exportJson.consentements).toHaveLength(3);
+  });
+
+  it("enregistre une pause sans son motif médical quand le consentement manque", async () => {
+    const { agent, user } = await athlete("pausesans@example.com", false);
+    await agent.post("/api/pauses").send({ raison: "blessure", detail: "entorse" }).expect(201);
+    const pause = await prisma.trainingPause.findFirst({ where: { userId: user.id } });
+    expect(pause).toMatchObject({ raison: "indisponibilite", detail: "" });
+  });
+
+  it("garde le motif de la pause quand la case est cochée avec", async () => {
+    const { agent, user } = await athlete("pauseavec@example.com", false);
+    await agent.post("/api/pauses").send({ raison: "blessure", detail: "entorse", consentSante: true }).expect(201);
+    const pause = await prisma.trainingPause.findFirst({ where: { userId: user.id } });
+    expect(pause).toMatchObject({ raison: "blessure", detail: "entorse" });
+  });
 });
